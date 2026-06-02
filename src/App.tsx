@@ -576,7 +576,10 @@ function ActiveStockBoard({
                   latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
                 )}
               >
-                {latest ? latest.close.toFixed(2) : "--"}
+                <AnimatedDigits
+                  key={`price-${stock.code}:${liveResetKey}`}
+                  value={latest ? latest.close.toFixed(2) : "--"}
+                />
               </span>
               <span
                 className={cn(
@@ -584,7 +587,10 @@ function ActiveStockBoard({
                   latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
                 )}
               >
-                {latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
+                <AnimatedDigits
+                  key={`change-${stock.code}:${liveResetKey}`}
+                  value={latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
+                />
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -814,6 +820,24 @@ function StockBoardLoading({
         </div>
       </div>
     </section>
+  );
+}
+
+function AnimatedDigits({ value }: { value: string }) {
+  return (
+    <span className="stock-digit-pop">
+      <span className="sr-only">{value}</span>
+      {value.split("").map((char, index) => (
+        <span
+          key={index}
+          aria-hidden="true"
+          className="stock-digit-pop__char"
+          style={{ animationDelay: `${Math.min(index, 10) * 42}ms` }}
+        >
+          {char === " " ? "\u00a0" : char}
+        </span>
+      ))}
+    </span>
   );
 }
 

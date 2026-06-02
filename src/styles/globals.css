@@ -158,3 +158,35 @@ body {
 button {
   font: inherit;
 }
+
+@keyframes stock-digit-pop-in {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+    filter: blur(2px);
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.stock-digit-pop {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: pre;
+}
+
+.stock-digit-pop__char {
+  display: inline-block;
+  animation: stock-digit-pop-in 500ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stock-digit-pop__char {
+    animation: none;
+  }
+}
