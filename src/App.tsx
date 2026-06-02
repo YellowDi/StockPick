@@ -4,9 +4,11 @@ import {
   CheckCircle2,
   Database,
   ListFilter,
+  Moon,
   RefreshCcw,
   ShieldCheck,
   ShieldX,
+  Sun,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -47,6 +49,9 @@ const dayRangeOptions = [
   { id: "prev-7", label: "前7日", offset: 7 },
 ] as const;
 type ChartRangeId = "realtime" | (typeof dayRangeOptions)[number]["id"] | "week";
+type ThemeMode = "light" | "dark";
+
+const themeStorageKey = "stockpick-theme";
 
 const listIcons = {
   initial: ListFilter,
@@ -59,7 +64,26 @@ function App() {
   const allStocks = useMemo(() => listOrder.flatMap((key) => mockStockGroups[key]), []);
   const [selectedCode, setSelectedCode] = useState(allStocks[0]?.code ?? "");
   const [loadingKey, setLoadingKey] = useState(0);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    try {
+      const storedTheme = window.localStorage.getItem(themeStorageKey);
+
+      return storedTheme === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const selectedStock = allStocks.find((stock) => stock.code === selectedCode) ?? allStocks[0];
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", themeMode === "light");
+
+    try {
+      window.localStorage.setItem(themeStorageKey, themeMode);
+    } catch {
+      // Keep theme switching usable if browser storage is unavailable.
+    }
+  }, [themeMode]);
 
   function selectStock(code: string) {
     setSelectedCode(code);
@@ -72,6 +96,8 @@ function App() {
         <StockBoard
           stock={selectedStock}
           loadingKey={loadingKey}
+          themeMode={themeMode}
+          onThemeToggle={() => setThemeMode((mode) => (mode === "dark" ? "light" : "dark"))}
           onReload={() => setLoadingKey((key) => key + 1)}
         />
 
@@ -94,10 +120,14 @@ function App() {
 function StockBoard({
   stock,
   loadingKey,
+  themeMode,
+  onThemeToggle,
   onReload,
 }: {
   stock: StockCandidate;
   loadingKey: number;
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
   onReload: () => void;
 }) {
   const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("realtime");
@@ -115,7 +145,9 @@ function StockBoard({
   const changePct = previous ? (change / previous.close) * 100 : 0;
   const chartLiveCandle = chartView.candles.at(-1);
   const closedCandles = chartLiveCandle ? chartView.candles.slice(0, -1) : chartView.candles;
-  const chartColor = change >= 0 ? "#ef4444" : "#22c55e";
+  const chartColor = change >= 0
+    ? themeMode === "light" ? "#b94545" : "#ef4444"
+    : themeMode === "light" ? "#2f7f59" : "#22c55e";
   const momentum = change > 0 ? "up" : change < 0 ? "down" : "flat";
   const chartRangeOptions = useMemo(() => {
     const weekDays = getCurrentWeekTradingDayCount(live.historicalRecords);
@@ -168,6 +200,17 @@ function StockBoard({
         <div className="flex flex-wrap items-center gap-2">
           <TrendBadge change={change} changePct={changePct} />
           <Badge variant="outline">{stockListMeta[stock.list].label}</Badge>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+            title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+            onClick={onThemeToggle}
+          >
+            {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+            {themeMode === "dark" ? "亮色" : "暗色"}
+          </Button>
           <Button type="button" variant="outline" size="sm" disabled={isLoading} onClick={onReload}>
             <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
             {isLoading ? "加载中" : "重载"}
@@ -189,7 +232,7 @@ function StockBoard({
               lineData={chartView.lineData}
               lineValue={latest?.close}
               onModeChange={(mode) => setChartMode(mode)}
-              theme="dark"
+              theme={themeMode}
               color={chartColor}
               window={selectedRange.secs}
               windows={chartRangeOptions}
