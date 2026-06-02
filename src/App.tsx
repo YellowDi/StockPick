@@ -699,7 +699,7 @@ function StockDetailsPanel({
     <div
       id={id}
       className={cn(
-        "pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 w-full max-w-[820px] transition-[opacity,transform] duration-200 ease-out",
+        "pointer-events-none absolute left-4 top-[calc(100%+8px)] z-30 w-[calc(100%-2rem)] max-w-[820px] transition-[opacity,transform] duration-200 ease-out sm:left-6 sm:w-[calc(100%-3rem)] lg:left-8 lg:w-[820px]",
         open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
       )}
       aria-hidden={!open}
