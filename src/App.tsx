@@ -21,8 +21,10 @@ import {
   ScanLine,
   ShieldCheck,
   ShieldX,
+  SlidersHorizontal,
   Sun,
   UserRound,
+  X,
 } from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +70,51 @@ const dayRangeOptions = [
 type ChartRangeId = "realtime" | (typeof dayRangeOptions)[number]["id"] | "week";
 type ThemeMode = "light" | "dark";
 type ChartMode = "line" | "candle";
+const strategyBaseDateOptions = [
+  { id: "today", label: "今天" },
+  { id: "prev-1", label: "前一交易日" },
+  { id: "prev-2", label: "前二交易日" },
+] as const;
+const strategyLimitPriceOptions = [
+  { id: "auto", label: "自动识别" },
+  { id: "ten-percent", label: "10% 涨停" },
+  { id: "twenty-percent", label: "20% 涨停" },
+] as const;
+const strategyMa5RatioOptions = [
+  { id: "0", label: "0%" },
+  { id: "1", label: "1%" },
+  { id: "2", label: "2%" },
+  { id: "3", label: "3%" },
+] as const;
+const strategyOptions = [
+  {
+    id: "limit-up",
+    label: "只看涨停",
+    description: "筛选基准日出现涨停的股票",
+  },
+  {
+    id: "limit-up-break-retrace",
+    label: "涨停后冲高回落",
+    description: "涨停后，下一交易日突破 P 并回落",
+  },
+  {
+    id: "limit-up-pullback-confirm",
+    label: "涨停后回踩确认",
+    description: "涨停后冲高回落，再观察回踩是否仍保持强势",
+  },
+] as const;
+type StrategyBaseDate = (typeof strategyBaseDateOptions)[number]["id"];
+type StrategyLimitPrice = (typeof strategyLimitPriceOptions)[number]["id"];
+type StrategyMa5Ratio = (typeof strategyMa5RatioOptions)[number]["id"];
+type StrategyId = (typeof strategyOptions)[number]["id"];
+type StrategyConfig = {
+  name: string;
+  enabled: boolean;
+  baseDate: StrategyBaseDate;
+  limitPrice: StrategyLimitPrice;
+  ma5Ratio: StrategyMa5Ratio;
+  strategyId: StrategyId;
+};
 type DraggedStock = {
   code: string;
   fromList: StockListKey;
@@ -79,6 +126,14 @@ const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
 ];
+const defaultStrategyConfig: StrategyConfig = {
+  name: "涨停回踩确认",
+  enabled: true,
+  baseDate: "today",
+  limitPrice: "auto",
+  ma5Ratio: "2",
+  strategyId: "limit-up-pullback-confirm",
+};
 
 const listIcons = {
   initial: ListFilter,
@@ -95,6 +150,7 @@ function App() {
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
   const [mobileListKey, setMobileListKey] = useState<StockListKey>("selected");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>(defaultStrategyConfig);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const storedTheme = window.localStorage.getItem(themeStorageKey);
@@ -305,6 +361,11 @@ function App() {
         </div>
 
         <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
+          <StrategySwitchButton
+            config={strategyConfig}
+            onSave={setStrategyConfig}
+          />
+
           <MobileStockTabs
             activeListKey={mobileListKey}
             stockGroups={stockGroups}
@@ -971,6 +1032,322 @@ function ChartRangeControls({
       </div>
     </div>
   );
+}
+
+function StrategySwitchButton({
+  config,
+  onSave,
+}: {
+  config: StrategyConfig;
+  onSave: (config: StrategyConfig) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<StrategyConfig>(config);
+  const activeStrategy = getStrategyOption(config.strategyId);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  function openDialog() {
+    setDraft(config);
+    setOpen(true);
+  }
+
+  function saveStrategy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSave({
+      ...draft,
+      name: draft.name.trim() || defaultStrategyConfig.name,
+    });
+    setOpen(false);
+  }
+
+  return (
+    <section className="mt-4 flex justify-center">
+      <Button
+        type="button"
+        variant="outline"
+        className="h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={openDialog}
+      >
+        <SlidersHorizontal data-icon="inline-start" />
+        策略切换
+        <span className="hidden rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground sm:inline-flex">
+          {config.enabled ? "启用" : "停用"} · {activeStrategy.label}
+        </span>
+      </Button>
+
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/70 px-4 py-6 backdrop-blur-sm sm:items-center sm:py-10"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setOpen(false);
+            }
+          }}
+        >
+          <form
+            className="w-full max-w-[640px] overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-[0_28px_90px_rgba(0,0,0,0.42)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="strategy-dialog-title"
+            onSubmit={saveStrategy}
+          >
+            <div className="flex items-start justify-between gap-4 px-5 py-5">
+              <div className="min-w-0">
+                <h2 id="strategy-dialog-title" className="text-xl font-semibold text-balance">
+                  策略切换
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  选择一个筛选逻辑作为当前主策略
+                </p>
+              </div>
+              <button
+                type="button"
+                className="flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.96]"
+                aria-label="关闭策略切换"
+                onClick={() => setOpen(false)}
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[min(72vh,720px)] overflow-y-auto px-5 pb-5">
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <label className="flex min-w-0 flex-col gap-2 text-sm font-medium">
+                  策略名称
+                  <input
+                    className="h-11 rounded-md border bg-background/55 px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35"
+                    value={draft.name}
+                    onChange={(event) => setDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+                  />
+                </label>
+
+                <div className="flex flex-col gap-2 text-sm font-medium">
+                  是否启用
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={draft.enabled}
+                    className={cn(
+                      "flex h-11 min-w-[132px] items-center justify-between gap-3 rounded-md border bg-background/55 px-3 text-sm transition-[background-color,border-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.96]",
+                      draft.enabled && "border-ring bg-secondary text-secondary-foreground",
+                    )}
+                    onClick={() => setDraft((current) => ({ ...current, enabled: !current.enabled }))}
+                  >
+                    <span>{draft.enabled ? "已启用" : "已停用"}</span>
+                    <span
+                      className={cn(
+                        "relative h-6 w-10 rounded-full bg-muted transition-colors",
+                        draft.enabled && "bg-primary/80",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute left-1 top-1 size-4 rounded-full bg-background shadow-sm transition-transform",
+                          draft.enabled && "translate-x-4",
+                        )}
+                      />
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <section className="mt-5">
+                <h3 className="text-sm font-semibold">基础参数</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <StrategySelectField
+                    label="基准日"
+                    value={draft.baseDate}
+                    options={strategyBaseDateOptions}
+                    onChange={(baseDate) => setDraft((current) => ({ ...current, baseDate }))}
+                  />
+                  <StrategySelectField
+                    label="涨停价 P"
+                    value={draft.limitPrice}
+                    options={strategyLimitPriceOptions}
+                    onChange={(limitPrice) => setDraft((current) => ({ ...current, limitPrice }))}
+                  />
+                  <StrategySelectField
+                    label="高于 5 日线比例"
+                    value={draft.ma5Ratio}
+                    options={strategyMa5RatioOptions}
+                    onChange={(ma5Ratio) => setDraft((current) => ({ ...current, ma5Ratio }))}
+                  />
+                </div>
+              </section>
+
+              <fieldset className="mt-5">
+                <legend className="text-sm font-semibold">主策略</legend>
+                <div className="mt-3 grid gap-2">
+                  {strategyOptions.map((option) => {
+                    const selected = draft.strategyId === option.id;
+
+                    return (
+                      <label
+                        key={option.id}
+                        className={cn(
+                          "flex cursor-pointer gap-3 rounded-lg border bg-background/45 p-3 transition-[background-color,border-color,box-shadow]",
+                          selected
+                            ? "border-ring bg-secondary/70 shadow-[0_10px_34px_rgba(0,0,0,0.16)] ring-2 ring-ring/25"
+                            : "hover:border-border hover:bg-accent/60",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          className="sr-only"
+                          name="mainStrategy"
+                          value={option.id}
+                          checked={selected}
+                          onChange={() => setDraft((current) => ({ ...current, strategyId: option.id }))}
+                        />
+                        <span
+                          className={cn(
+                            "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
+                            selected ? "border-primary bg-primary" : "border-muted-foreground/70",
+                          )}
+                          aria-hidden="true"
+                        >
+                          {selected ? <span className="size-2 rounded-full bg-primary-foreground" /> : null}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-foreground">
+                            {option.label}
+                          </span>
+                          <span className="mt-1 block text-sm text-muted-foreground text-pretty">
+                            {option.description}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <section className="mt-5">
+                <h3 className="text-sm font-semibold">规则说明</h3>
+                <blockquote className="mt-3 rounded-lg bg-background/50 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                  冲高：下一交易日最高价突破 P；回落：收盘价低于 P；站上 5 日线：收盘价高于 MA5 指定比例；区间内：收盘价位于基准日最高价和最低价之间。
+                </blockquote>
+              </section>
+
+              <section className="mt-5">
+                <h3 className="text-sm font-semibold">策略预览</h3>
+                <p className="mt-3 rounded-lg bg-background/50 px-4 py-3 text-sm leading-6 text-foreground text-pretty">
+                  当前策略会筛选：{createStrategyPreview(draft)}
+                </p>
+              </section>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                className="bg-background/55 transition-transform active:scale-[0.96]"
+                onClick={() => setDraft(defaultStrategyConfig)}
+              >
+                恢复默认
+              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-background/55 transition-transform active:scale-[0.96]"
+                  onClick={() => setOpen(false)}
+                >
+                  取消
+                </Button>
+                <Button type="submit" className="transition-transform active:scale-[0.96]">
+                  保存为主策略
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function StrategySelectField<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly { id: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-2 text-sm font-medium">
+      {label}
+      <span className="relative">
+        <select
+          className="h-11 w-full appearance-none rounded-md border bg-background/55 px-3 pr-9 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35"
+          value={value}
+          onChange={(event) => onChange(event.currentTarget.value as T)}
+        >
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      </span>
+    </label>
+  );
+}
+
+function getStrategyOption(strategyId: StrategyId) {
+  return strategyOptions.find((option) => option.id === strategyId) ?? strategyOptions[0];
+}
+
+function createStrategyPreview(config: StrategyConfig) {
+  const baseDate = getOptionLabel(strategyBaseDateOptions, config.baseDate);
+  const limitPrice = config.limitPrice === "auto"
+    ? "自动识别的涨停价"
+    : `${getOptionLabel(strategyLimitPriceOptions, config.limitPrice)}价`;
+  const ma5Ratio = getOptionLabel(strategyMa5RatioOptions, config.ma5Ratio);
+
+  if (config.strategyId === "limit-up") {
+    return `${baseDate}出现涨停的股票。`;
+  }
+
+  if (config.strategyId === "limit-up-break-retrace") {
+    return `${baseDate}出现涨停的股票；下一交易日最高价突破${limitPrice}后回落。`;
+  }
+
+  return `${baseDate}出现涨停的股票；下一交易日最高价突破${limitPrice}后回落；再下一交易日收盘价高于 5 日线 ${ma5Ratio}，并且收盘价位于${baseDate}的最高价和最低价之间。`;
+}
+
+function getOptionLabel<T extends string>(
+  options: readonly { id: T; label: string }[],
+  id: T,
+) {
+  return options.find((option) => option.id === id)?.label ?? "";
 }
 
 function MobileStockTabs({
