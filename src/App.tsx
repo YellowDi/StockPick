@@ -115,7 +115,7 @@ function StockBoard({
   const changePct = previous ? (change / previous.close) * 100 : 0;
   const chartLiveCandle = chartView.candles.at(-1);
   const closedCandles = chartLiveCandle ? chartView.candles.slice(0, -1) : chartView.candles;
-  const chartColor = change >= 0 ? "#22c55e" : "#ef4444";
+  const chartColor = change >= 0 ? "#ef4444" : "#22c55e";
   const momentum = change > 0 ? "up" : change < 0 ? "down" : "flat";
   const chartRangeOptions = useMemo(() => {
     const weekDays = getCurrentWeekTradingDayCount(live.historicalRecords);
