@@ -347,78 +347,36 @@ function StockBoard({
       </div>
 
       <div className="relative z-20 mx-auto -mt-32 w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1.1fr_1fr_1.35fr]">
-          <OverviewCard stock={stock} latest={latest} records={records} />
-          <ReasonCard stock={stock} />
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr_1.8fr]">
           <MarketStatusCard
+            stock={stock}
             latest={latest}
+            records={records}
             change={change}
             changePct={changePct}
             chartRangeLabel={selectedRange.label}
             chartModeLabel={chartMode === "candle" ? "K线" : "折线"}
           />
           <KeyMetricsCard latest={latest} change={change} changePct={changePct} loading={isLoading} />
+          <RecentRecordsCard records={records} />
         </div>
-
-        <RecentRecordsCard records={records} />
       </div>
     </section>
   );
 }
 
-function OverviewCard({
+function MarketStatusCard({
   stock,
   latest,
   records,
-}: {
-  stock: StockCandidate;
-  latest?: StockDailyRecord;
-  records: StockDailyRecord[];
-}) {
-  return (
-    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
-      <CardHeader>
-        <CardTitle className="text-sm">基本信息</CardTitle>
-        <CardDescription>{stock.name}</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3 pb-5">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-2xl font-semibold leading-none">{stock.code}</span>
-          <Badge variant="outline">{stockListMeta[stock.list].label}</Badge>
-        </div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-3">
-          <InfoPair label="最新日期" value={latest?.date ?? "--"} />
-          <InfoPair label="样本天数" value={`${records.length} 日`} />
-          <InfoPair label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
-          <InfoPair label="状态" value={latest ? "可用" : "无数据"} tone={latest ? "default" : "danger"} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ReasonCard({ stock }: { stock: StockCandidate }) {
-  return (
-    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
-      <CardHeader>
-        <CardTitle className="text-sm">筛选理由</CardTitle>
-        <CardDescription>{stockListMeta[stock.list].description}</CardDescription>
-      </CardHeader>
-      <CardContent className="pb-5">
-        <p className="text-sm leading-6 text-muted-foreground text-pretty">{stock.reason}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MarketStatusCard({
-  latest,
   change,
   changePct,
   chartRangeLabel,
   chartModeLabel,
 }: {
+  stock: StockCandidate;
   latest?: StockDailyRecord;
+  records: StockDailyRecord[];
   change: number;
   changePct: number;
   chartRangeLabel: string;
@@ -444,12 +402,24 @@ function MarketStatusCard({
     <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-sm">行情状态</CardTitle>
-        <CardDescription>{latest ? "模拟实时行情" : "等待数据"}</CardDescription>
+        <CardDescription className="flex flex-wrap items-center gap-2">
+          <span>{stock.name}</span>
+          <span>{stock.code}</span>
+          <Badge variant="outline" className="bg-background/35">
+            {stockListMeta[stock.list].label}
+          </Badge>
+        </CardDescription>
       </CardHeader>
       <CardContent className="pb-5">
+        <div className="border-b border-border/60 pb-3">
+          <div className="text-xs text-muted-foreground">筛选理由</div>
+          <p className="mt-1 text-sm leading-6 text-foreground/88 text-pretty">{stock.reason}</p>
+        </div>
         <MetricLine label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
         <MetricLine label="涨跌额" value={latest ? formatSigned(change) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
         <MetricLine label="强度" value={strength} />
+        <MetricLine label="最新日期" value={latest?.date ?? "--"} />
+        <MetricLine label="样本天数" value={`${records.length} 日`} />
         <MetricLine label="窗口" value={chartRangeLabel} />
         <MetricLine label="模式" value={chartModeLabel} />
       </CardContent>
@@ -479,6 +449,8 @@ function KeyMetricsCard({
       <CardContent className={cn("grid grid-cols-2 gap-x-7 pb-5", loading && "animate-pulse")}>
         <MetricLine label="最新价" value={latest ? latest.close.toFixed(2) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
         <MetricLine label="涨跌幅" value={latest ? `${formatSigned(changePct)}%` : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
+        <MetricLine label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
+        <MetricLine label="状态" value={latest ? "可用" : "无数据"} tone={latest ? undefined : "down"} />
         <MetricLine label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
         <MetricLine label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
         <MetricLine label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
@@ -492,7 +464,7 @@ function RecentRecordsCard({ records }: { records: StockDailyRecord[] }) {
   const visibleRecords = records.slice(-7);
 
   return (
-    <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
       <CardHeader className="gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
         <div>
           <CardTitle className="text-sm">最近 7 日 OHLC</CardTitle>
@@ -545,25 +517,6 @@ function RecentRecordsCard({ records }: { records: StockDailyRecord[] }) {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function InfoPair({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "danger";
-}) {
-  return (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 text-sm font-medium tabular-nums", tone === "danger" && "text-destructive")}>
-        {value}
-      </div>
-    </div>
   );
 }
 
