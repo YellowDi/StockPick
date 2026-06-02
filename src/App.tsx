@@ -54,6 +54,7 @@ type DraggedStock = {
   fromList: StockListKey;
 };
 
+const logoSrc = "/stockpick-logo.png";
 const themeStorageKey = "stockpick-theme";
 
 const listIcons = {
@@ -96,7 +97,12 @@ function App() {
     }
   }, [themeMode]);
 
-  function openSelectedStock(code: string) {
+  function toggleSelectedStock(code: string) {
+    if (selectedChartCode === code) {
+      setSelectedChartCode(null);
+      return;
+    }
+
     setSelectedChartCode(code);
     setLoadingKey((key) => key + 1);
   }
@@ -246,7 +252,7 @@ function App() {
                 selectedStockCodes={selectedStockCodes}
                 canDrop={canDropStock(key)}
                 isDropTarget={dropTarget === key}
-                onOpenChart={openSelectedStock}
+                onToggleChart={toggleSelectedStock}
                 onAddToSelected={addToSelected}
                 onDragStart={handleStockDragStart}
                 onDragEnd={handleDragEnd}
@@ -294,6 +300,22 @@ function StockBoard({
       onThemeToggle={onThemeToggle}
       onReload={onReload}
     />
+  );
+}
+
+function BrandLockup() {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2">
+      <img
+        src={logoSrc}
+        alt=""
+        className="size-7 shrink-0"
+      />
+      <span className="text-sm font-semibold text-foreground">StockPick</span>
+      <Badge variant="outline" className="bg-background/35 backdrop-blur">
+        股票筛选看板
+      </Badge>
+    </div>
   );
 }
 
@@ -393,12 +415,7 @@ function ActiveStockBoard({
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">StockPick</span>
-              <Badge variant="outline" className="bg-background/35 backdrop-blur">
-                股票筛选看板
-              </Badge>
-            </div>
+            <BrandLockup />
             <button
               type="button"
               className="group flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left transition-[color,transform] active:scale-[0.96]"
@@ -602,12 +619,7 @@ function StockBoardLoading({
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">StockPick</span>
-              <Badge variant="outline" className="bg-background/35 backdrop-blur">
-                股票筛选看板
-              </Badge>
-            </div>
+            <BrandLockup />
             <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
               StockPick
             </h1>
@@ -1014,7 +1026,7 @@ function StockColumn({
   selectedStockCodes,
   canDrop,
   isDropTarget,
-  onOpenChart,
+  onToggleChart,
   onAddToSelected,
   onDragStart,
   onDragEnd,
@@ -1028,7 +1040,7 @@ function StockColumn({
   selectedStockCodes: Set<string>;
   canDrop: boolean;
   isDropTarget: boolean;
-  onOpenChart: (code: string) => void;
+  onToggleChart: (code: string) => void;
   onAddToSelected: (stock: StockCandidate) => void;
   onDragStart: (
     stock: StockCandidate,
@@ -1076,7 +1088,7 @@ function StockColumn({
             onDragEnd={onDragEnd}
             onClick={() => {
               if (opensChart) {
-                onOpenChart(stock.code);
+                onToggleChart(stock.code);
                 return;
               }
 
@@ -1116,7 +1128,9 @@ function StockListButton({
       variant={active ? "secondary" : "ghost"}
       className={cn(
         "h-auto justify-start rounded-lg border px-3 py-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96]",
-        active ? "border-ring bg-secondary" : "border-transparent bg-background/40 hover:border-border",
+        active
+          ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
+          : "border-transparent bg-background/40 hover:border-border",
         !disabled && "cursor-grab active:cursor-grabbing",
       )}
       aria-pressed={active}
@@ -1154,7 +1168,7 @@ function StockListButton({
         )}
       >
         {action === "add" ? <Plus className="size-3" /> : null}
-        {action === "added" ? "已选" : action === "add" ? "加入" : "图表"}
+        {active ? "显示中" : action === "added" ? "已选" : action === "add" ? "加入" : "图表"}
       </span>
     </Button>
   );
