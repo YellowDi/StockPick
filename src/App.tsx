@@ -379,6 +379,8 @@ function LoginPage({
           enableMouseInteraction
         />
       </div>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,oklch(0.74_0.11_190/0.18),transparent_30rem),radial-gradient(circle_at_78%_66%,oklch(0.58_0.13_28/0.13),transparent_32rem)]" />
+      <div className="pointer-events-none absolute inset-0 bg-background/10 backdrop-blur-[1px]" />
 
       <header className="relative z-10 mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-5 sm:px-6 lg:px-8">
         <BrandLockup className="mb-0" />
