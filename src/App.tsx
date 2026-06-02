@@ -470,9 +470,6 @@ function ActiveStockBoard({
               <HeroMetric label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
               <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
             </div>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground text-pretty">
-              {stock.reason}
-            </p>
           </div>
 
           <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
@@ -621,13 +618,8 @@ function StockBoardLoading({
           <div className="min-w-0">
             <BrandLockup />
             <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
-              StockPick
+              欢迎回来
             </h1>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <HeroMetric label="状态" value="加载中" />
-              <HeroMetric label="图表" value="待载入" />
-              <HeroMetric label="来源" value="已选列表" />
-            </div>
           </div>
 
           <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
@@ -1140,24 +1132,24 @@ function StockListButton({
       onDragEnd={onDragEnd}
       onClick={onClick}
     >
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-center justify-between gap-3">
+      <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+        <span className="flex min-w-0 flex-col gap-1">
           <span className="truncate font-medium">{stock.name}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">{stock.code}</span>
+          <span className="truncate text-xs tabular-nums text-muted-foreground">{stock.code}</span>
         </span>
-        <span className="flex items-center justify-between gap-3 text-xs">
-          <span className="truncate text-muted-foreground">{stock.reason}</span>
-          {latest ? (
-            <span className={cn("shrink-0 tabular-nums", positive ? "text-stock-up" : "text-stock-down")}>
+        {latest ? (
+          <span className="flex shrink-0 flex-col items-end gap-1">
+            <span className="text-sm font-semibold tabular-nums text-foreground">{latest.close.toFixed(2)}</span>
+            <span className={cn("text-xs tabular-nums", positive ? "text-stock-up" : "text-stock-down")}>
               {formatSigned(changePct)}%
             </span>
-          ) : (
-            <span className="flex shrink-0 items-center gap-1 text-destructive">
-              <Ban className="size-3" />
-              无数据
-            </span>
-          )}
-        </span>
+          </span>
+        ) : (
+          <span className="flex shrink-0 items-center gap-1 text-xs text-destructive">
+            <Ban className="size-3" />
+            无数据
+          </span>
+        )}
       </span>
       <span
         className={cn(

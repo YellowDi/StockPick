@@ -17,7 +17,6 @@ const stockSeeds = [
     base: 198.4,
     trend: 0.74,
     volatility: 3.8,
-    reason: "放量突破 20 日高点",
   },
   {
     code: "601138",
@@ -26,7 +25,6 @@ const stockSeeds = [
     base: 38.6,
     trend: 0.28,
     volatility: 1.35,
-    reason: "算力链成交持续放大",
   },
   {
     code: "300308",
@@ -35,7 +33,6 @@ const stockSeeds = [
     base: 167.2,
     trend: 0.91,
     volatility: 4.65,
-    reason: "强势整理后重回均线上方",
   },
   {
     code: "600519",
@@ -44,7 +41,6 @@ const stockSeeds = [
     base: 1538,
     trend: -1.6,
     volatility: 18.5,
-    reason: "高流动性核心观察标的",
   },
   {
     code: "600036",
@@ -53,7 +49,6 @@ const stockSeeds = [
     base: 36.8,
     trend: 0.08,
     volatility: 0.7,
-    reason: "低波动修复趋势",
   },
   {
     code: "000858",
@@ -62,7 +57,6 @@ const stockSeeds = [
     base: 146.2,
     trend: -0.16,
     volatility: 2.1,
-    reason: "估值回落到跟踪区间",
   },
   {
     code: "002371",
@@ -71,7 +65,6 @@ const stockSeeds = [
     base: 341.5,
     trend: 1.24,
     volatility: 7.4,
-    reason: "设备订单预期稳定",
   },
   {
     code: "002594",
@@ -80,7 +73,6 @@ const stockSeeds = [
     base: 226.3,
     trend: -0.58,
     volatility: 4.2,
-    reason: "短线跌破跟踪止损位",
   },
   {
     code: "000001",
@@ -89,7 +81,6 @@ const stockSeeds = [
     base: 10.3,
     trend: -0.03,
     volatility: 0.24,
-    reason: "量能不足，暂不跟踪",
   },
   {
     code: "688999",
@@ -98,7 +89,6 @@ const stockSeeds = [
     base: 0,
     trend: 0,
     volatility: 0,
-    reason: "模拟后端返回无数据",
     noData: true,
   },
 ] satisfies Array<{
@@ -108,7 +98,6 @@ const stockSeeds = [
   base: number;
   trend: number;
   volatility: number;
-  reason: string;
   noData?: boolean;
 }>;
 
@@ -121,7 +110,6 @@ export const mockStockGroups = stockSeeds.reduce(
       records: seed.noData
         ? [createNoDataRecord(seed.code, seed.name)]
         : createHistory(seed, index + 3),
-      reason: seed.reason,
     });
 
     return groups;
