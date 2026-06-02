@@ -125,7 +125,7 @@ export function StrategySwitchButton({
             </Badge>
         </DialogTrigger>
 
-        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[640px] gap-0 overflow-hidden p-0">
+        <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
           <form onSubmit={saveStrategy}>
             <DialogHeader className="px-5 py-5 pr-12">
               <DialogTitle className="text-xl text-balance">策略切换</DialogTitle>
