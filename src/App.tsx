@@ -37,6 +37,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -49,14 +57,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import Threads from "@/components/threads";
@@ -125,16 +125,13 @@ const strategyOptions = [
     description: "涨停后冲高回落，再观察回踩是否仍保持强势",
   },
 ] as const;
-type StrategyBaseDate = (typeof strategyBaseDateOptions)[number]["id"];
-type StrategyLimitPrice = (typeof strategyLimitPriceOptions)[number]["id"];
-type StrategyMa5Ratio = (typeof strategyMa5RatioOptions)[number]["id"];
 type StrategyId = (typeof strategyOptions)[number]["id"];
 type StrategyConfig = {
   name: string;
   enabled: boolean;
-  baseDate: StrategyBaseDate;
-  limitPrice: StrategyLimitPrice;
-  ma5Ratio: StrategyMa5Ratio;
+  baseDate: string;
+  limitPrice: string;
+  ma5Ratio: string;
   strategyId: StrategyId;
 };
 type DraggedStock = {
@@ -579,7 +576,7 @@ function LoginPage({
               </label>
             </CardContent>
             <CardFooter>
-              <Button type="submit" className="w-full">
+              <Button type="submit" size="lg" className="h-11 w-full text-base">
                 <LogIn data-icon="inline-start" />
                 进入看板
               </Button>
@@ -1138,19 +1135,19 @@ function StrategySwitchButton({
               <section>
                 <h3 className="text-sm font-semibold">基础参数</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <StrategySelectField
+                  <StrategyComboboxField
                     label="基准日"
                     value={draft.baseDate}
                     options={strategyBaseDateOptions}
                     onChange={(baseDate) => setDraft((current) => ({ ...current, baseDate }))}
                   />
-                  <StrategySelectField
+                  <StrategyComboboxField
                     label="涨停价 P"
                     value={draft.limitPrice}
                     options={strategyLimitPriceOptions}
                     onChange={(limitPrice) => setDraft((current) => ({ ...current, limitPrice }))}
                   />
-                  <StrategySelectField
+                  <StrategyComboboxField
                     label="高于 5 日线比例"
                     value={draft.ma5Ratio}
                     options={strategyMa5RatioOptions}
@@ -1220,7 +1217,7 @@ function StrategySwitchButton({
             </div>
 
             <Separator />
-            <DialogFooter className="px-5 py-4 sm:justify-between">
+            <DialogFooter className="mx-0 mb-0 rounded-none border-t-0 bg-transparent px-5 py-5 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
@@ -1239,7 +1236,7 @@ function StrategySwitchButton({
                     />
                   }
                 >
-                    取消
+                  取消
                 </DialogClose>
                 <Button type="submit" className="transition-transform active:scale-[0.96]">
                   保存为主策略
@@ -1253,43 +1250,49 @@ function StrategySwitchButton({
   );
 }
 
-function StrategySelectField<T extends string>({
+function StrategyComboboxField({
   label,
   value,
   options,
   onChange,
 }: {
   label: string;
-  value: T;
-  options: readonly { id: T; label: string }[];
-  onChange: (value: T) => void;
+  value: string;
+  options: readonly { id: string; label: string }[];
+  onChange: (value: string) => void;
 }) {
-  const selectItems = options.map((option) => ({
-    label: option.label,
-    value: option.id,
-  }));
+  const comboboxItems = options.map((option) => option.id);
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <Label>{label}</Label>
-      <Select
-        items={selectItems}
+      <Combobox
+        items={comboboxItems}
         value={value}
-        onValueChange={(nextValue) => onChange(nextValue as T)}
+        inputValue={getOptionLabel(options, value)}
+        itemToStringLabel={(item) => getOptionLabel(options, item)}
+        onInputValueChange={(nextValue) => {
+          const matchedOption = options.find((option) => option.label === nextValue);
+          onChange(matchedOption?.id ?? nextValue);
+        }}
+        onValueChange={(nextValue) => {
+          if (typeof nextValue === "string") {
+            onChange(nextValue);
+          }
+        }}
       >
-        <SelectTrigger className="h-11 w-full bg-background/55">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {options.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+        <ComboboxInput className="h-11 w-full bg-background/55" showClear />
+        <ComboboxContent>
+          <ComboboxList>
+            {(item: string) => (
+              <ComboboxItem key={item} value={item}>
+                {getOptionLabel(options, item)}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+          <ComboboxEmpty>无匹配，可直接输入</ComboboxEmpty>
+        </ComboboxContent>
+      </Combobox>
     </div>
   );
 }
@@ -1300,9 +1303,12 @@ function getStrategyOption(strategyId: StrategyId) {
 
 function createStrategyPreview(config: StrategyConfig) {
   const baseDate = getOptionLabel(strategyBaseDateOptions, config.baseDate);
-  const limitPrice = config.limitPrice === "auto"
+  const limitPriceLabel = getOptionLabel(strategyLimitPriceOptions, config.limitPrice);
+  const limitPrice = config.limitPrice === "auto" || limitPriceLabel === "自动识别"
     ? "自动识别的涨停价"
-    : `${getOptionLabel(strategyLimitPriceOptions, config.limitPrice)}价`;
+    : limitPriceLabel.includes("涨停") || limitPriceLabel.includes("价")
+      ? limitPriceLabel
+      : `${limitPriceLabel}涨停价`;
   const ma5Ratio = getOptionLabel(strategyMa5RatioOptions, config.ma5Ratio);
 
   if (config.strategyId === "limit-up") {
@@ -1316,11 +1322,11 @@ function createStrategyPreview(config: StrategyConfig) {
   return `${baseDate}出现涨停的股票；下一交易日最高价突破${limitPrice}后回落；再下一交易日收盘价高于 5 日线 ${ma5Ratio}，并且收盘价位于${baseDate}的最高价和最低价之间。`;
 }
 
-function getOptionLabel<T extends string>(
-  options: readonly { id: T; label: string }[],
-  id: T,
+function getOptionLabel(
+  options: readonly { id: string; label: string }[],
+  id: string,
 ) {
-  return options.find((option) => option.id === id)?.label ?? "";
+  return options.find((option) => option.id === id)?.label ?? id;
 }
 
 function MobileStockTabs({
