@@ -9,8 +9,6 @@ import {
   ShieldCheck,
   ShieldX,
   Sun,
-  TrendingDown,
-  TrendingUp,
 } from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
 import { cn } from "@/lib/utils";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
@@ -91,8 +88,8 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-4 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
+    <main className="min-h-screen overflow-x-hidden text-foreground">
+      <div className="flex flex-col">
         <StockBoard
           stock={selectedStock}
           loadingKey={loadingKey}
@@ -101,17 +98,19 @@ function App() {
           onReload={() => setLoadingKey((key) => key + 1)}
         />
 
-        <section className="grid gap-4 xl:grid-cols-4">
-          {listOrder.map((key) => (
-            <StockColumn
-              key={key}
-              listKey={key}
-              stocks={mockStockGroups[key]}
-              selectedCode={selectedStock.code}
-              onSelect={selectStock}
-            />
-          ))}
-        </section>
+        <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
+          <section className="mt-4 grid gap-4 xl:grid-cols-4">
+            {listOrder.map((key) => (
+              <StockColumn
+                key={key}
+                listKey={key}
+                stocks={mockStockGroups[key]}
+                selectedCode={selectedStock.code}
+                onSelect={selectStock}
+              />
+            ))}
+          </section>
+        </div>
       </div>
     </main>
   );
@@ -184,42 +183,125 @@ function StockBoard({
     setChartMode("candle");
   }, [stock.code]);
 
-  return (
-    <Card className="overflow-hidden bg-card/92">
-      <CardHeader className="gap-4 lg:flex lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-2xl tracking-normal">{stock.name}</CardTitle>
-            <Badge variant="outline">{stock.code}</Badge>
-            <Badge variant={latest ? "secondary" : "destructive"}>
-              {latest ? "行情正常" : "无数据"}
-            </Badge>
-          </div>
-          <CardDescription className="mt-2">{stock.reason}</CardDescription>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <TrendBadge change={change} changePct={changePct} />
-          <Badge variant="outline">{stockListMeta[stock.list].label}</Badge>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-            title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-            onClick={onThemeToggle}
-          >
-            {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-            {themeMode === "dark" ? "亮色" : "暗色"}
-          </Button>
-          <Button type="button" variant="outline" size="sm" disabled={isLoading} onClick={onReload}>
-            <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-            {isLoading ? "加载中" : "重载"}
-          </Button>
-        </div>
-      </CardHeader>
+  const positive = change >= 0;
+  const chartModeOptions = [
+    { id: "candle" as const, label: "K线" },
+    { id: "line" as const, label: "折线" },
+  ];
 
-      <CardContent className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="h-[420px] overflow-hidden rounded-lg border bg-background/80 lg:h-[480px]">
+  return (
+    <section className="relative">
+      <div
+        className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
+        style={{ background: "var(--chart-hero-background)" }}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-64 bg-gradient-to-b from-transparent via-background/78 to-background" />
+
+        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
+                {stock.name}
+              </h1>
+              <span className="text-sm text-muted-foreground">{stock.code}</span>
+              <Badge
+                variant={latest ? "secondary" : "destructive"}
+                className="bg-background/55 backdrop-blur"
+              >
+                {latest ? "行情正常" : "无数据"}
+              </Badge>
+            </div>
+            <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
+              <span
+                className={cn(
+                  "text-4xl font-semibold leading-none tabular-nums sm:text-5xl",
+                  latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
+                )}
+              >
+                {latest ? latest.close.toFixed(2) : "--"}
+              </span>
+              <span
+                className={cn(
+                  "pb-1 text-base font-semibold tabular-nums sm:text-lg",
+                  latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
+                )}
+              >
+                {latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
+              </span>
+            </div>
+          </div>
+
+          <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <div className="flex min-w-max items-center gap-1">
+              {chartRangeOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={cn(
+                    "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                    option.id === chartRangeId
+                      ? "bg-secondary text-secondary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground",
+                  )}
+                  aria-pressed={option.id === chartRangeId}
+                  onClick={() => {
+                    setChartRangeId(option.id);
+                    setChartMode(option.id === "realtime" || option.id === "today" ? "candle" : "line");
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+              {chartModeOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={cn(
+                    "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                    option.id === chartMode
+                      ? "bg-secondary text-secondary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground",
+                  )}
+                  aria-pressed={option.id === chartMode}
+                  onClick={() => setChartMode(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/45 backdrop-blur-xl"
+              aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+              title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+              onClick={onThemeToggle}
+            >
+              {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+              {themeMode === "dark" ? "亮色" : "暗色"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/45 backdrop-blur-xl"
+              disabled={isLoading}
+              onClick={onReload}
+            >
+              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
+              {isLoading ? "加载中" : "重载"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="absolute inset-0 z-0">
           {latest || isLoading ? (
             <Liveline
               data={latest ? chartView.lineData : []}
@@ -231,20 +313,9 @@ function StockBoard({
               lineMode={chartMode === "line"}
               lineData={chartView.lineData}
               lineValue={latest?.close}
-              onModeChange={(mode) => setChartMode(mode)}
               theme={themeMode}
               color={chartColor}
               window={selectedRange.secs}
-              windows={chartRangeOptions}
-              onWindowChange={(secs) => {
-                const nextRange = chartRangeOptions.find((option) => option.secs === secs);
-
-                if (nextRange) {
-                  setChartRangeId(nextRange.id);
-                  setChartMode(nextRange.id === "realtime" || nextRange.id === "today" ? "candle" : "line");
-                }
-              }}
-              windowStyle="rounded"
               grid
               scrub
               badge={true}
@@ -265,7 +336,7 @@ function StockBoard({
               }
               formatValue={(value) => value.toFixed(2)}
               formatTime={formatChartTime}
-              padding={{ top: 18, right: 82, bottom: 34, left: 14 }}
+              padding={{ top: 190, right: 86, bottom: 92, left: 24 }}
               className="size-full"
             />
           ) : (
@@ -273,50 +344,251 @@ function StockBoard({
           )}
         </div>
 
-        <aside className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Metric label="最新价" value={latest ? latest.close.toFixed(2) : "--"} tone={change >= 0 ? "up" : "down"} loading={isLoading} />
-            <Metric label="涨跌幅" value={latest ? `${formatSigned(changePct)}%` : "--"} tone={change >= 0 ? "up" : "down"} loading={isLoading} />
-            <Metric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
-            <Metric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
-            <Metric label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
-            <Metric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
-          </div>
+      </div>
 
-          <Separator />
+      <div className="relative z-20 mx-auto -mt-32 w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1.1fr_1fr_1.35fr]">
+          <OverviewCard stock={stock} latest={latest} records={records} />
+          <ReasonCard stock={stock} />
+          <MarketStatusCard
+            latest={latest}
+            change={change}
+            changePct={changePct}
+            chartRangeLabel={selectedRange.label}
+            chartModeLabel={chartMode === "candle" ? "K线" : "折线"}
+          />
+          <KeyMetricsCard latest={latest} change={change} changePct={changePct} loading={isLoading} />
+        </div>
 
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium">最近 7 日</h2>
-              <span className="text-xs text-muted-foreground">OHLC</span>
-            </div>
-            <div className="overflow-hidden rounded-lg border">
-              <div className="grid grid-cols-[1.1fr_repeat(4,0.8fr)] bg-muted/70 px-3 py-2 text-xs text-muted-foreground">
-                <span>日期</span>
-                <span className="text-right">开</span>
-                <span className="text-right">高</span>
-                <span className="text-right">低</span>
-                <span className="text-right">收</span>
-              </div>
-              {records.slice(-7).map((record) => (
-                <div
-                  key={record.date}
-                  className="grid grid-cols-[1.1fr_repeat(4,0.8fr)] border-t px-3 py-2 text-xs"
-                >
-                  <span className="truncate text-muted-foreground">{record.date.slice(5)}</span>
-                  <span className="text-right tabular-nums">{record.open.toFixed(2)}</span>
-                  <span className="text-right tabular-nums">{record.high.toFixed(2)}</span>
-                  <span className="text-right tabular-nums">{record.low.toFixed(2)}</span>
-                  <span className={cn("text-right tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
-                    {record.close.toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
+        <RecentRecordsCard records={records} />
+      </div>
+    </section>
+  );
+}
+
+function OverviewCard({
+  stock,
+  latest,
+  records,
+}: {
+  stock: StockCandidate;
+  latest?: StockDailyRecord;
+  records: StockDailyRecord[];
+}) {
+  return (
+    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+      <CardHeader>
+        <CardTitle className="text-sm">基本信息</CardTitle>
+        <CardDescription>{stock.name}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 pb-5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-2xl font-semibold leading-none">{stock.code}</span>
+          <Badge variant="outline">{stockListMeta[stock.list].label}</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+          <InfoPair label="最新日期" value={latest?.date ?? "--"} />
+          <InfoPair label="样本天数" value={`${records.length} 日`} />
+          <InfoPair label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
+          <InfoPair label="状态" value={latest ? "可用" : "无数据"} tone={latest ? "default" : "danger"} />
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ReasonCard({ stock }: { stock: StockCandidate }) {
+  return (
+    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+      <CardHeader>
+        <CardTitle className="text-sm">筛选理由</CardTitle>
+        <CardDescription>{stockListMeta[stock.list].description}</CardDescription>
+      </CardHeader>
+      <CardContent className="pb-5">
+        <p className="text-sm leading-6 text-muted-foreground text-pretty">{stock.reason}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MarketStatusCard({
+  latest,
+  change,
+  changePct,
+  chartRangeLabel,
+  chartModeLabel,
+}: {
+  latest?: StockDailyRecord;
+  change: number;
+  changePct: number;
+  chartRangeLabel: string;
+  chartModeLabel: string;
+}) {
+  const positive = change >= 0;
+  const trend = !latest
+    ? "暂无行情"
+    : change > 0
+      ? "多头走强"
+      : change < 0
+        ? "回落整理"
+        : "横盘震荡";
+  const strength = !latest
+    ? "--"
+    : Math.abs(changePct) >= 2
+      ? "强"
+      : Math.abs(changePct) >= 1
+        ? "中"
+        : "弱";
+
+  return (
+    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+      <CardHeader>
+        <CardTitle className="text-sm">行情状态</CardTitle>
+        <CardDescription>{latest ? "模拟实时行情" : "等待数据"}</CardDescription>
+      </CardHeader>
+      <CardContent className="pb-5">
+        <MetricLine label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
+        <MetricLine label="涨跌额" value={latest ? formatSigned(change) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
+        <MetricLine label="强度" value={strength} />
+        <MetricLine label="窗口" value={chartRangeLabel} />
+        <MetricLine label="模式" value={chartModeLabel} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function KeyMetricsCard({
+  latest,
+  change,
+  changePct,
+  loading,
+}: {
+  latest?: StockDailyRecord;
+  change: number;
+  changePct: number;
+  loading: boolean;
+}) {
+  const positive = change >= 0;
+
+  return (
+    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+      <CardHeader>
+        <CardTitle className="text-sm">关键指标</CardTitle>
+        <CardDescription>价格、区间和成交数据</CardDescription>
+      </CardHeader>
+      <CardContent className={cn("grid grid-cols-2 gap-x-7 pb-5", loading && "animate-pulse")}>
+        <MetricLine label="最新价" value={latest ? latest.close.toFixed(2) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
+        <MetricLine label="涨跌幅" value={latest ? `${formatSigned(changePct)}%` : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
+        <MetricLine label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
+        <MetricLine label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
+        <MetricLine label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
+        <MetricLine label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecentRecordsCard({ records }: { records: StockDailyRecord[] }) {
+  const visibleRecords = records.slice(-7);
+
+  return (
+    <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+      <CardHeader className="gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <CardTitle className="text-sm">最近 7 日 OHLC</CardTitle>
+          <CardDescription>用于快速校验当前走势和日线位置</CardDescription>
+        </div>
+        <span className="text-xs text-muted-foreground">数据为模拟行情，仅供参考</span>
+      </CardHeader>
+      <CardContent className="pb-5">
+        {visibleRecords.length > 0 ? (
+          <div className="overflow-x-auto">
+            <div className="min-w-[620px]">
+              <div className="grid grid-cols-[1.1fr_repeat(5,0.8fr)] border-b px-3 py-2 text-xs text-muted-foreground">
+                <span>日期</span>
+                <span className="text-right">开盘</span>
+                <span className="text-right">最高</span>
+                <span className="text-right">最低</span>
+                <span className="text-right">收盘</span>
+                <span className="text-right">涨跌幅</span>
+              </div>
+              {visibleRecords.map((record) => {
+                const recordIndex = records.findIndex((item) => item.date === record.date);
+                const previous = recordIndex > 0 ? records[recordIndex - 1] : undefined;
+                const dailyChangePct = previous ? ((record.close - previous.close) / previous.close) * 100 : 0;
+                const dailyPositive = dailyChangePct >= 0;
+
+                return (
+                  <div
+                    key={record.date}
+                    className="grid grid-cols-[1.1fr_repeat(5,0.8fr)] border-b border-border/60 px-3 py-2.5 text-sm last:border-b-0"
+                  >
+                    <span className="truncate text-muted-foreground">{record.date}</span>
+                    <span className="text-right tabular-nums">{record.open.toFixed(2)}</span>
+                    <span className="text-right tabular-nums">{record.high.toFixed(2)}</span>
+                    <span className="text-right tabular-nums">{record.low.toFixed(2)}</span>
+                    <span className={cn("text-right tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
+                      {record.close.toFixed(2)}
+                    </span>
+                    <span className={cn("text-right tabular-nums", dailyPositive ? "text-stock-up" : "text-stock-down")}>
+                      {previous ? `${formatSigned(dailyChangePct)}%` : "--"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
+            暂无日线数据
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InfoPair({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn("mt-1 text-sm font-medium tabular-nums", tone === "danger" && "text-destructive")}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MetricLine({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "up" | "down";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2.5 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "text-right font-medium tabular-nums",
+          tone === "up" && "text-stock-up",
+          tone === "down" && "text-stock-down",
+        )}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -522,7 +794,7 @@ function StockColumn({
   const meta = stockListMeta[listKey];
 
   return (
-    <Card className="min-h-[360px] bg-card/84">
+    <Card className="min-h-[360px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -566,7 +838,7 @@ function StockListButton({
       type="button"
       variant={active ? "secondary" : "ghost"}
       className={cn(
-        "h-auto justify-start rounded-lg border px-3 py-3 text-left",
+        "h-auto justify-start rounded-lg border px-3 py-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96]",
         active ? "border-ring bg-secondary" : "border-transparent bg-background/40 hover:border-border",
       )}
       aria-pressed={active}
@@ -592,46 +864,6 @@ function StockListButton({
         </span>
       </span>
     </Button>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone,
-  loading,
-}: {
-  label: string;
-  value: string;
-  tone?: "up" | "down";
-  loading?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border bg-background/55 px-3 py-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "mt-1 text-lg font-semibold tabular-nums",
-          loading && "animate-pulse",
-          tone === "up" && "text-stock-up",
-          tone === "down" && "text-stock-down",
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function TrendBadge({ change, changePct }: { change: number; changePct: number }) {
-  const positive = change >= 0;
-  const Icon = positive ? TrendingUp : TrendingDown;
-
-  return (
-    <Badge variant="outline" className={cn(positive ? "text-stock-up" : "text-stock-down")}>
-      <Icon className="mr-1 size-3" />
-      {formatSigned(change)} / {formatSigned(changePct)}%
-    </Badge>
   );
 }
 
