@@ -49,6 +49,7 @@ const dayRangeOptions = [
 ] as const;
 type ChartRangeId = "realtime" | (typeof dayRangeOptions)[number]["id"] | "week";
 type ThemeMode = "light" | "dark";
+type ChartMode = "line" | "candle";
 type DraggedStock = {
   code: string;
   fromList: StockListKey;
@@ -56,6 +57,11 @@ type DraggedStock = {
 
 const logoSrc = "/stockpick-logo.png";
 const themeStorageKey = "stockpick-theme";
+const chartModeOptions = [
+  { id: "candle" as const, label: "K线" },
+  { id: "line" as const, label: "折线" },
+];
+const idleRangeOptions = ["实时", "当日", "前1日", "本周"];
 
 const listIcons = {
   initial: ListFilter,
@@ -69,7 +75,6 @@ function App() {
   const [selectedChartCode, setSelectedChartCode] = useState<string | null>(null);
   const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
-  const [loadingKey, setLoadingKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const storedTheme = window.localStorage.getItem(themeStorageKey);
@@ -104,7 +109,6 @@ function App() {
     }
 
     setSelectedChartCode(code);
-    setLoadingKey((key) => key + 1);
   }
 
   function addToSelected(stock: StockCandidate) {
@@ -235,10 +239,8 @@ function App() {
       <div className="flex flex-col">
         <StockBoard
           stock={selectedStock}
-          loadingKey={loadingKey}
           themeMode={themeMode}
           onThemeToggle={() => setThemeMode((mode) => (mode === "dark" ? "light" : "dark"))}
-          onReload={() => setLoadingKey((key) => key + 1)}
         />
 
         <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
@@ -270,18 +272,14 @@ function App() {
 
 type StockBoardProps = {
   stock: StockCandidate | null;
-  loadingKey: number;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
-  onReload: () => void;
 };
 
 function StockBoard({
   stock,
-  loadingKey,
   themeMode,
   onThemeToggle,
-  onReload,
 }: StockBoardProps) {
   if (!stock) {
     return (
@@ -294,11 +292,10 @@ function StockBoard({
 
   return (
     <ActiveStockBoard
+      key={stock.code}
       stock={stock}
-      loadingKey={loadingKey}
       themeMode={themeMode}
       onThemeToggle={onThemeToggle}
-      onReload={onReload}
     />
   );
 }
@@ -321,18 +318,17 @@ function BrandLockup() {
 
 function ActiveStockBoard({
   stock,
-  loadingKey,
   themeMode,
   onThemeToggle,
-  onReload,
 }: Omit<StockBoardProps, "stock"> & {
   stock: StockCandidate;
 }) {
   const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("realtime");
-  const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
+  const [chartMode, setChartMode] = useState<ChartMode>("candle");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const live = useLiveMockStock(stock, loadingKey, isLoading, chartRangeId === "realtime");
+  const [liveResetKey, setLiveResetKey] = useState(0);
+  const live = useLiveMockStock(stock, liveResetKey, isLoading, chartRangeId === "realtime");
   const chartView = useMemo(
     () => createChartView(live, chartRangeId),
     [chartRangeId, live],
@@ -372,17 +368,19 @@ function ActiveStockBoard({
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
 
   useEffect(() => {
-    setIsLoading(true);
+    if (!isLoading) {
+      return;
+    }
+
     const timer = window.setTimeout(() => setIsLoading(false), 520);
 
     return () => window.clearTimeout(timer);
-  }, [stock.code, loadingKey]);
+  }, [isLoading, liveResetKey]);
 
-  useEffect(() => {
-    setChartRangeId("realtime");
-    setChartMode("candle");
-    setDetailsOpen(false);
-  }, [stock.code]);
+  function reloadStock() {
+    setIsLoading(true);
+    setLiveResetKey((key) => key + 1);
+  }
 
   const positive = change >= 0;
   const trend = !latest
@@ -399,11 +397,6 @@ function ActiveStockBoard({
       : Math.abs(changePct) >= 1
         ? "中"
         : "弱";
-  const chartModeOptions = [
-    { id: "candle" as const, label: "K线" },
-    { id: "line" as const, label: "折线" },
-  ];
-
   return (
     <section className="relative">
       <div
@@ -533,7 +526,7 @@ function ActiveStockBoard({
               size="sm"
               className="bg-background/45 backdrop-blur-xl"
               disabled={isLoading}
-              onClick={onReload}
+              onClick={reloadStock}
             >
               <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
               {isLoading ? "加载中" : "重载"}
@@ -603,7 +596,6 @@ function StockBoardLoading({
   onThemeToggle: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
-  const idleRangeOptions = ["实时", "当日", "前1日", "本周"];
 
   return (
     <section className="relative">
@@ -826,7 +818,7 @@ function RecentRecordsSection({ records }: { records: StockDailyRecord[] }) {
 
 function useLiveMockStock(
   stock: StockCandidate,
-  loadingKey: number,
+  resetKey: number,
   isLoading: boolean,
   shouldStream: boolean,
 ) {
@@ -834,11 +826,23 @@ function useLiveMockStock(
     () => stock.records.filter((record) => record.status === "成功"),
     [stock],
   );
-  const [live, setLive] = useState(() => createLiveSnapshot(sourceRecords));
+  const liveKey = `${stock.code}:${resetKey}`;
+  const [liveState, setLiveState] = useState(() => ({
+    key: liveKey,
+    live: createLiveSnapshot(sourceRecords),
+  }));
 
-  useEffect(() => {
-    setLive(createLiveSnapshot(sourceRecords));
-  }, [sourceRecords, stock.code, loadingKey]);
+  let live = liveState.live;
+
+  if (liveState.key !== liveKey) {
+    const nextLiveState = {
+      key: liveKey,
+      live: createLiveSnapshot(sourceRecords),
+    };
+
+    setLiveState(nextLiveState);
+    live = nextLiveState.live;
+  }
 
   useEffect(() => {
     if (isLoading || !shouldStream || sourceRecords.length === 0) {
@@ -846,11 +850,14 @@ function useLiveMockStock(
     }
 
     const timer = window.setInterval(() => {
-      setLive((current) => advanceLiveSnapshot(current));
+      setLiveState((current) => ({
+        ...current,
+        live: advanceLiveSnapshot(current.live),
+      }));
     }, 850);
 
     return () => window.clearInterval(timer);
-  }, [isLoading, shouldStream, sourceRecords.length, stock.code, loadingKey]);
+  }, [isLoading, shouldStream, sourceRecords.length, liveKey]);
 
   return live;
 }
@@ -1203,11 +1210,20 @@ function createChartView(
   if (rangeId === "week") {
     const latest = history.at(-1);
     const weekStart = latest ? getWeekStartDate(latest.date) : null;
-    const indices = history
-      .map((record, index) => ({ record, index }))
-      .filter(({ record }) => !weekStart || new Date(`${record.date}T12:00:00`) >= weekStart)
-      .map(({ index }) => index)
-      .slice(-7);
+    const indices: number[] = [];
+
+    for (let index = 0; index < history.length; index++) {
+      const record = history[index];
+
+      if (!weekStart || new Date(`${record.date}T12:00:00`) >= weekStart) {
+        indices.push(index);
+
+        if (indices.length > 7) {
+          indices.shift();
+        }
+      }
+    }
+
     const candles = packHistoricalCandles(live.historicalCandles, indices);
 
     return {
@@ -1301,10 +1317,17 @@ function createIntradayClosePath(record: StockDailyRecord, count: number) {
     { index: count - 1, value: record.close },
   ];
   const values: number[] = [];
+  let rightAnchorIndex = 0;
 
   for (let index = 0; index < count; index++) {
-    const rightAnchorIndex = anchors.findIndex((anchor) => anchor.index >= index);
-    const right = anchors[Math.max(0, rightAnchorIndex)];
+    while (
+      rightAnchorIndex < anchors.length - 1
+      && anchors[rightAnchorIndex].index < index
+    ) {
+      rightAnchorIndex += 1;
+    }
+
+    const right = anchors[rightAnchorIndex];
     const left = anchors[Math.max(0, rightAnchorIndex - 1)] ?? right;
     const span = Math.max(1, right.index - left.index);
     const progress = (index - left.index) / span;
