@@ -1,4 +1,11 @@
-import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  type DragEvent,
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Ban,
   ChevronDown,
@@ -45,6 +52,9 @@ const realtimeSeedBars = 2;
 const realtimeWindowBars = 60;
 const weekWindowOffsetSecs = 0.05;
 const heroChartPadding = { top: 260, right: 86, bottom: 72, left: 24 };
+const compactHeroChartPadding = { top: 292, right: 52, bottom: 54, left: 12 };
+const compactViewportQuery = "(max-width: 639px)";
+const mobileViewportQuery = "(max-width: 767px)";
 const dayRangeOptions = [
   { id: "today", label: "当日", offset: 0 },
   { id: "prev-1", label: "前1日", offset: 1 },
@@ -78,10 +88,12 @@ const listIcons = {
 } satisfies Record<StockListKey, typeof ListFilter>;
 
 function App() {
+  const stockBoardRef = useRef<HTMLDivElement>(null);
   const [stockGroups, setStockGroups] = useState(mockStockGroups);
   const [selectedChartCode, setSelectedChartCode] = useState<string | null>(null);
   const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
+  const [mobileListKey, setMobileListKey] = useState<StockListKey>("selected");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -119,6 +131,16 @@ function App() {
     setIsLoggedIn(false);
   }
 
+  function scrollBoardIntoViewOnMobile() {
+    if (!window.matchMedia(mobileViewportQuery).matches) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      stockBoardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   if (!isLoggedIn) {
     return (
       <LoginPage
@@ -132,10 +154,12 @@ function App() {
   function toggleSelectedStock(code: string) {
     if (selectedChartCode === code) {
       setSelectedChartCode(null);
+      scrollBoardIntoViewOnMobile();
       return;
     }
 
     setSelectedChartCode(code);
+    scrollBoardIntoViewOnMobile();
   }
 
   function addToSelected(stock: StockCandidate) {
@@ -261,29 +285,42 @@ function App() {
     setDropTarget(null);
   }
 
+  const sharedStockListProps = {
+    selectedCode: selectedChartCode,
+    selectedStockCodes,
+    onToggleChart: toggleSelectedStock,
+    onAddToSelected: addToSelected,
+  };
+
   return (
     <main className="min-h-screen overflow-x-hidden text-foreground">
       <div className="flex flex-col">
-        <StockBoard
-          stock={selectedStock}
-          themeMode={themeMode}
-          onThemeToggle={toggleThemeMode}
-          onLogout={logout}
-        />
+        <div ref={stockBoardRef}>
+          <StockBoard
+            stock={selectedStock}
+            themeMode={themeMode}
+            onThemeToggle={toggleThemeMode}
+            onLogout={logout}
+          />
+        </div>
 
         <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
-          <section className="mt-4 grid gap-4 xl:grid-cols-4">
+          <MobileStockTabs
+            activeListKey={mobileListKey}
+            stockGroups={stockGroups}
+            onActiveListChange={setMobileListKey}
+            {...sharedStockListProps}
+          />
+
+          <section className="mt-4 hidden gap-4 md:grid xl:grid-cols-4">
             {listOrder.map((key) => (
               <StockColumn
                 key={key}
                 listKey={key}
                 stocks={stockGroups[key]}
-                selectedCode={selectedChartCode}
-                selectedStockCodes={selectedStockCodes}
+                {...sharedStockListProps}
                 canDrop={canDropStock(key)}
                 isDropTarget={dropTarget === key}
-                onToggleChart={toggleSelectedStock}
-                onAddToSelected={addToSelected}
                 onDragStart={handleStockDragStart}
                 onDragEnd={handleDragEnd}
                 onDragOver={handleColumnDragOver}
@@ -292,6 +329,12 @@ function App() {
               />
             ))}
           </section>
+
+          <MobileAccountActions
+            themeMode={themeMode}
+            onThemeToggle={toggleThemeMode}
+            onLogout={logout}
+          />
         </div>
       </div>
     </main>
@@ -330,6 +373,22 @@ function StockBoard({
       onLogout={onLogout}
     />
   );
+}
+
+function useIsCompactViewport() {
+  const [isCompact, setIsCompact] = useState(() => window.matchMedia(compactViewportQuery).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(compactViewportQuery);
+    const handleChange = () => setIsCompact(media.matches);
+
+    handleChange();
+    media.addEventListener("change", handleChange);
+
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  return isCompact;
 }
 
 function BrandLockup({ className }: { className?: string }) {
@@ -500,6 +559,12 @@ function ActiveStockBoard({
     ];
   }, [live.historicalRecords]);
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
+  const chartPadding = useIsCompactViewport() ? compactHeroChartPadding : heroChartPadding;
+
+  function selectChartRange(rangeId: ChartRangeId) {
+    setChartRangeId(rangeId);
+    setChartMode(rangeId === "realtime" || rangeId === "today" ? "candle" : "line");
+  }
 
   useEffect(() => {
     if (!isLoading) {
@@ -532,7 +597,8 @@ function ActiveStockBoard({
         ? "中"
         : "弱";
   return (
-    <section className="relative">
+    <>
+      <section className="relative">
       <div
         className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
         style={{ background: "var(--chart-hero-background)" }}
@@ -540,7 +606,7 @@ function ActiveStockBoard({
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
         <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
 
-        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
+        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
             <BrandLockup />
             <button
@@ -550,7 +616,7 @@ function ActiveStockBoard({
               aria-controls="stock-details-panel"
               onClick={() => setDetailsOpen((open) => !open)}
             >
-              <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
+              <h1 className="text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
                 {stock.name}
               </h1>
               <span className="text-sm text-muted-foreground">{stock.code}</span>
@@ -594,7 +660,7 @@ function ActiveStockBoard({
                 />
               </span>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2 min-[430px]:grid-cols-3 sm:flex sm:flex-wrap">
               <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
               <HeroMetric label="强度" value={strength} />
               <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
@@ -605,29 +671,12 @@ function ActiveStockBoard({
             </div>
           </div>
 
-          <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-            <div className="flex min-w-max items-center gap-1">
-              {chartRangeOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={cn(
-                    "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-                    option.id === chartRangeId
-                      ? "bg-secondary text-secondary-foreground"
-                      : "hover:bg-accent hover:text-accent-foreground",
-                  )}
-                  aria-pressed={option.id === chartRangeId}
-                  onClick={() => {
-                    setChartRangeId(option.id);
-                    setChartMode(option.id === "realtime" || option.id === "today" ? "candle" : "line");
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <ChartRangeControls
+            className="hidden md:block"
+            options={chartRangeOptions}
+            activeId={chartRangeId}
+            onSelect={selectChartRange}
+          />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
@@ -652,7 +701,7 @@ function ActiveStockBoard({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-background/45 backdrop-blur-xl"
+              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
               aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
               title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
               onClick={onThemeToggle}
@@ -664,7 +713,9 @@ function ActiveStockBoard({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-background/45 backdrop-blur-xl"
+              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
+              aria-label="退出登录"
+              title="退出登录"
               onClick={onLogout}
             >
               <LogOut data-icon="inline-start" />
@@ -674,12 +725,14 @@ function ActiveStockBoard({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-background/45 backdrop-blur-xl"
+              className="bg-background/45 backdrop-blur-xl max-[420px]:w-8 max-[420px]:px-0"
+              aria-label={isLoading ? "加载中" : "重载"}
+              title={isLoading ? "加载中" : "重载"}
               disabled={isLoading}
               onClick={reloadStock}
             >
               <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-              {isLoading ? "加载中" : "重载"}
+              <span className="max-[420px]:hidden">{isLoading ? "加载中" : "重载"}</span>
             </Button>
           </div>
 
@@ -725,7 +778,7 @@ function ActiveStockBoard({
               }
               formatValue={(value) => value.toFixed(2)}
               formatTime={formatChartTime}
-              padding={heroChartPadding}
+              padding={chartPadding}
               className="size-full"
             />
           ) : (
@@ -734,7 +787,15 @@ function ActiveStockBoard({
         </div>
 
       </div>
-    </section>
+      </section>
+
+      <ChartRangeControls
+        className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-[1680px] md:hidden"
+        options={chartRangeOptions}
+        activeId={chartRangeId}
+        onSelect={selectChartRange}
+      />
+    </>
   );
 }
 
@@ -748,6 +809,7 @@ function StockBoardLoading({
   onLogout: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
+  const chartPadding = useIsCompactViewport() ? compactHeroChartPadding : heroChartPadding;
 
   return (
     <section className="relative">
@@ -758,10 +820,10 @@ function StockBoardLoading({
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
         <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
 
-        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
+        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
             <BrandLockup />
-            <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
+            <h1 className="text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
               欢迎回来
             </h1>
           </div>
@@ -771,7 +833,7 @@ function StockBoardLoading({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-background/45 backdrop-blur-xl"
+              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
               aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
               title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
               onClick={onThemeToggle}
@@ -783,7 +845,9 @@ function StockBoardLoading({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-background/45 backdrop-blur-xl"
+              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
+              aria-label="退出登录"
+              title="退出登录"
               onClick={onLogout}
             >
               <LogOut data-icon="inline-start" />
@@ -793,7 +857,9 @@ function StockBoardLoading({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-background/45 backdrop-blur-xl"
+              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
+              aria-label="重载"
+              title="重载"
               disabled
             >
               <RefreshCcw data-icon="inline-start" />
@@ -815,7 +881,7 @@ function StockBoardLoading({
             grid
             loading
             momentum="flat"
-            padding={heroChartPadding}
+            padding={chartPadding}
             className="size-full"
           />
         </div>
@@ -852,11 +918,11 @@ function HeroMetric({
   tone?: "up" | "down";
 }) {
   return (
-    <span className="rounded-md bg-background/35 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-xl">
-      {label}
+    <span className="flex min-w-0 items-center justify-between gap-1 rounded-md bg-background/35 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-xl sm:inline-flex sm:justify-start">
+      <span className="shrink-0">{label}</span>
       <span
         className={cn(
-          "ml-1 font-medium text-foreground tabular-nums",
+          "min-w-0 truncate font-medium text-foreground tabular-nums",
           tone === "up" && "text-stock-up",
           tone === "down" && "text-stock-down",
         )}
@@ -864,6 +930,156 @@ function HeroMetric({
         {value}
       </span>
     </span>
+  );
+}
+
+function ChartRangeControls({
+  options,
+  activeId,
+  onSelect,
+  className,
+}: {
+  options: Array<{ id: ChartRangeId; label: string }>;
+  activeId: ChartRangeId;
+  onSelect: (id: ChartRangeId) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "min-w-0 max-w-full overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl [-webkit-overflow-scrolling:touch]",
+        className,
+      )}
+    >
+      <div className="flex min-w-max items-center gap-1">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={cn(
+              "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+              option.id === activeId
+                ? "bg-secondary text-secondary-foreground"
+                : "hover:bg-accent hover:text-accent-foreground",
+            )}
+            aria-pressed={option.id === activeId}
+            onClick={() => onSelect(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileStockTabs({
+  activeListKey,
+  stockGroups,
+  selectedCode,
+  selectedStockCodes,
+  onActiveListChange,
+  onToggleChart,
+  onAddToSelected,
+}: {
+  activeListKey: StockListKey;
+  stockGroups: Record<StockListKey, StockCandidate[]>;
+  selectedCode: string | null;
+  selectedStockCodes: Set<string>;
+  onActiveListChange: (key: StockListKey) => void;
+  onToggleChart: (code: string) => void;
+  onAddToSelected: (stock: StockCandidate) => void;
+}) {
+  const stocks = stockGroups[activeListKey];
+  const meta = stockListMeta[activeListKey];
+  const opensChart = activeListKey === "selected";
+
+  return (
+    <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
+      <CardHeader className="gap-3">
+        <div className="grid grid-cols-4 gap-1 rounded-lg bg-background/45 p-1">
+          {listOrder.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={cn(
+                "h-9 min-w-0 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
+                key === activeListKey
+                  ? "bg-secondary text-secondary-foreground"
+                  : "hover:bg-accent hover:text-accent-foreground",
+              )}
+              aria-pressed={key === activeListKey}
+              onClick={() => onActiveListChange(key)}
+            >
+              <span className="block truncate">{stockListMeta[key].label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <CardDescription>{meta.description}</CardDescription>
+          <Badge variant="secondary">{stocks.length}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pb-5">
+        {stocks.length > 0 ? (
+          stocks.map((stock) => (
+            <StockListButton
+              key={stock.code}
+              stock={stock}
+              active={opensChart && stock.code === selectedCode}
+              action={opensChart ? "open" : selectedStockCodes.has(stock.code) ? "added" : "add"}
+              draggable={false}
+              onClick={() => {
+                if (opensChart) {
+                  onToggleChart(stock.code);
+                  return;
+                }
+
+                onAddToSelected(stock);
+              }}
+            />
+          ))
+        ) : (
+          <div className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
+            暂无股票
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MobileAccountActions({
+  themeMode,
+  onThemeToggle,
+  onLogout,
+}: {
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-2 pb-4 md:hidden">
+      <Button
+        type="button"
+        variant="outline"
+        className="h-10 bg-card/88 backdrop-blur-xl"
+        aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+        onClick={onThemeToggle}
+      >
+        {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+        {themeMode === "dark" ? "亮色模式" : "暗色模式"}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-10 bg-card/88 backdrop-blur-xl"
+        onClick={onLogout}
+      >
+        <LogOut data-icon="inline-start" />
+        退出登录
+      </Button>
+    </div>
   );
 }
 
@@ -888,10 +1104,10 @@ function StockDetailsPanel({
       <div
         className={cn(
           "pointer-events-auto overflow-hidden rounded-lg border bg-card/90 shadow-[0_18px_64px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-[max-height] duration-200 ease-out",
-          open ? "max-h-[430px]" : "max-h-0",
+          open ? "max-h-[360px] sm:max-h-[430px]" : "max-h-0",
         )}
       >
-        <div className="max-h-[430px] overflow-y-auto p-4">
+        <div className="max-h-[360px] overflow-y-auto p-4 sm:max-h-[430px]">
           <RecentRecordsSection records={records} />
         </div>
       </div>
@@ -914,7 +1130,7 @@ function RecentRecordsSection({ records }: { records: StockDailyRecord[] }) {
       <div>
         {visibleRecords.length > 0 ? (
           <div className="overflow-x-auto">
-            <div className="min-w-[620px]">
+            <div className="min-w-[560px] sm:min-w-[620px]">
               <div className="grid grid-cols-[1.1fr_repeat(5,0.8fr)] border-b px-3 py-2 text-xs text-muted-foreground">
                 <span>日期</span>
                 <span className="text-right">开盘</span>
@@ -1201,7 +1417,7 @@ function StockColumn({
   return (
     <Card
       className={cn(
-        "min-h-[360px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl transition-[background-color,border-color,box-shadow]",
+        "min-h-[260px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl transition-[background-color,border-color,box-shadow] sm:min-h-[360px]",
         canDrop && "border-dashed border-ring/60",
         isDropTarget && "bg-secondary/35 shadow-[0_18px_70px_rgba(0,0,0,0.22)] ring-2 ring-ring/35",
       )}
@@ -1247,6 +1463,7 @@ function StockListButton({
   stock,
   active,
   action,
+  draggable = true,
   onDragStart,
   onDragEnd,
   onClick,
@@ -1254,8 +1471,9 @@ function StockListButton({
   stock: StockCandidate;
   active: boolean;
   action: "open" | "add" | "added";
-  onDragStart: (event: DragEvent<HTMLButtonElement>) => void;
-  onDragEnd: () => void;
+  draggable?: boolean;
+  onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
+  onDragEnd?: () => void;
   onClick: () => void;
 }) {
   const latest = latestSuccessRecord(stock);
@@ -1273,13 +1491,13 @@ function StockListButton({
         active
           ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
           : "border-transparent bg-background/40 hover:border-border",
-        !disabled && "cursor-grab active:cursor-grabbing",
+        draggable && !disabled && "cursor-grab active:cursor-grabbing",
       )}
       aria-pressed={active}
       disabled={disabled}
-      draggable={!disabled}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      draggable={draggable && !disabled}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
       onClick={onClick}
     >
       <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
