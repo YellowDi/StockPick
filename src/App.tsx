@@ -44,6 +44,7 @@ const liveTicksPerCandle = 3;
 const realtimeSeedBars = 2;
 const realtimeWindowBars = 60;
 const weekWindowOffsetSecs = 0.05;
+const heroChartPadding = { top: 260, right: 86, bottom: 72, left: 24 };
 const dayRangeOptions = [
   { id: "today", label: "当日", offset: 0 },
   { id: "prev-1", label: "前1日", offset: 1 },
@@ -724,7 +725,7 @@ function ActiveStockBoard({
               }
               formatValue={(value) => value.toFixed(2)}
               formatTime={formatChartTime}
-              padding={{ top: 190, right: 86, bottom: 72, left: 24 }}
+              padding={heroChartPadding}
               className="size-full"
             />
           ) : (
@@ -814,7 +815,7 @@ function StockBoardLoading({
             grid
             loading
             momentum="flat"
-            padding={{ top: 190, right: 86, bottom: 72, left: 24 }}
+            padding={heroChartPadding}
             className="size-full"
           />
         </div>
