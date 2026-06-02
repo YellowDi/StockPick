@@ -1284,7 +1284,6 @@ function StockColumn({
           </div>
           <Badge variant="secondary">{stocks.length}</Badge>
         </div>
-        <CardDescription>{meta.description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 pb-5">
         {stocks.map((stock) => (
