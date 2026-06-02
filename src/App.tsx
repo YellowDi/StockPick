@@ -538,7 +538,7 @@ function ActiveStockBoard({
         style={{ background: "var(--chart-hero-background)" }}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24 bg-gradient-to-b from-transparent via-background/20 to-background" />
+        <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
@@ -756,7 +756,7 @@ function StockBoardLoading({
         style={{ background: "var(--chart-hero-background)" }}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24 bg-gradient-to-b from-transparent via-background/20 to-background" />
+        <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">

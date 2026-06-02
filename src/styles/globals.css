@@ -11,13 +11,14 @@
     sans-serif;
   color-scheme: dark;
   --radius: 0.5rem;
+  --page-background-edge: oklch(0.12 0.012 248);
   --page-background:
-    radial-gradient(circle at 15% 0%, oklch(0.24 0.03 177 / 45%), transparent 34rem),
-    linear-gradient(135deg, oklch(0.12 0 0), oklch(0.17 0.025 250));
+    radial-gradient(circle at 15% 0%, oklch(0.24 0.03 177 / 38%), transparent 34rem),
+    linear-gradient(180deg, var(--page-background-edge), var(--page-background-edge));
   --chart-hero-background:
     radial-gradient(circle at 52% 70%, oklch(0.32 0.09 255 / 42%), transparent 42rem),
     radial-gradient(circle at 8% 20%, oklch(0.22 0.05 184 / 45%), transparent 30rem),
-    linear-gradient(180deg, oklch(0.085 0.025 250), var(--background) 96%);
+    linear-gradient(180deg, oklch(0.085 0.025 250), var(--page-background-edge) 100%);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -55,11 +56,14 @@
 
 .light {
   color-scheme: light;
-  --page-background: linear-gradient(180deg, oklch(0.965 0.003 250), oklch(0.948 0.004 250));
+  --page-background-edge: oklch(0.955 0.004 250);
+  --page-background:
+    radial-gradient(circle at 15% 0%, oklch(0.82 0.045 205 / 35%), transparent 34rem),
+    linear-gradient(180deg, var(--page-background-edge), var(--page-background-edge));
   --chart-hero-background:
     radial-gradient(circle at 52% 70%, oklch(0.82 0.08 245 / 55%), transparent 44rem),
     radial-gradient(circle at 8% 20%, oklch(0.86 0.07 170 / 58%), transparent 30rem),
-    linear-gradient(180deg, oklch(0.96 0.012 248), var(--background) 96%);
+    linear-gradient(180deg, oklch(0.96 0.012 248), var(--page-background-edge) 100%);
   --background: oklch(0.96 0.003 250);
   --foreground: oklch(0.22 0.008 260);
   --card: oklch(0.997 0.001 250);
@@ -153,6 +157,10 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.chart-hero-bottom-mask {
+  background: linear-gradient(to bottom, transparent, var(--page-background-edge));
 }
 
 button {
