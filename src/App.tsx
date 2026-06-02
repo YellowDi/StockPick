@@ -26,23 +26,27 @@ import { cn } from "@/lib/utils";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
-const intradayBarsPerDay = 48;
-const candleWidthSecs = 2;
+const intradayBarsPerDay = 240;
+const candleWidthSecs = 60;
 const tradingSessionSecs = intradayBarsPerDay * candleWidthSecs;
-const mockDaySecs = 120;
-const mockTickStepSecs = 0.65;
-const initialLiveBarCount = 36;
-const weekWindowOffsetSecs = 0.001;
+const dayGapSecs = 900;
+const packedDaySecs = tradingSessionSecs + dayGapSecs;
+const mockDaySecs = 24 * 60 * 60;
+const liveTicksPerCandle = 3;
+const realtimeSeedBars = 2;
+const realtimeWindowBars = 60;
+const weekWindowOffsetSecs = 0.05;
 const dayRangeOptions = [
-  { id: "day-1", label: "本日", days: 1 },
-  { id: "day-2", label: "2日", days: 2 },
-  { id: "day-3", label: "3日", days: 3 },
-  { id: "day-4", label: "4日", days: 4 },
-  { id: "day-5", label: "5日", days: 5 },
-  { id: "day-6", label: "6日", days: 6 },
-  { id: "day-7", label: "7日", days: 7 },
+  { id: "today", label: "当日", offset: 0 },
+  { id: "prev-1", label: "前1日", offset: 1 },
+  { id: "prev-2", label: "前2日", offset: 2 },
+  { id: "prev-3", label: "前3日", offset: 3 },
+  { id: "prev-4", label: "前4日", offset: 4 },
+  { id: "prev-5", label: "前5日", offset: 5 },
+  { id: "prev-6", label: "前6日", offset: 6 },
+  { id: "prev-7", label: "前7日", offset: 7 },
 ] as const;
-type ChartRangeId = (typeof dayRangeOptions)[number]["id"] | "week";
+type ChartRangeId = "realtime" | (typeof dayRangeOptions)[number]["id"] | "week";
 
 const listIcons = {
   initial: ListFilter,
@@ -96,35 +100,44 @@ function StockBoard({
   loadingKey: number;
   onReload: () => void;
 }) {
-  const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("day-1");
+  const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("realtime");
   const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
   const [isLoading, setIsLoading] = useState(true);
-  const live = useLiveMockStock(stock, loadingKey, isLoading);
-  const records = live.records;
+  const live = useLiveMockStock(stock, loadingKey, isLoading, chartRangeId === "realtime");
+  const chartView = useMemo(
+    () => createChartView(live, chartRangeId),
+    [chartRangeId, live],
+  );
+  const records = chartView.records;
   const latest = records.at(-1);
   const previous = records.at(-2);
   const change = latest && previous ? latest.close - previous.close : 0;
   const changePct = previous ? (change / previous.close) * 100 : 0;
-  const liveCandle = live.candles.at(-1);
-  const closedCandles = liveCandle ? live.candles.slice(0, -1) : live.candles;
+  const chartLiveCandle = chartView.candles.at(-1);
+  const closedCandles = chartLiveCandle ? chartView.candles.slice(0, -1) : chartView.candles;
   const chartColor = change >= 0 ? "#22c55e" : "#ef4444";
   const momentum = change > 0 ? "up" : change < 0 ? "down" : "flat";
   const chartRangeOptions = useMemo(() => {
-    const weekDays = getCurrentWeekTradingDayCount(records);
+    const weekDays = getCurrentWeekTradingDayCount(live.historicalRecords);
 
     return [
+      {
+        id: "realtime" as const,
+        label: "实时",
+        secs: realtimeWindowBars * candleWidthSecs,
+      },
       ...dayRangeOptions.map((option) => ({
         id: option.id,
         label: option.label,
-        secs: option.days * mockDaySecs,
+        secs: tradingSessionSecs + (option.offset + 2) * 0.001,
       })),
       {
         id: "week" as const,
         label: "本周",
-        secs: weekDays * mockDaySecs + weekWindowOffsetSecs,
+        secs: getPackedRangeWindowSecs(weekDays) + weekWindowOffsetSecs,
       },
     ];
-  }, [records]);
+  }, [live.historicalRecords]);
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
 
   useEffect(() => {
@@ -135,7 +148,7 @@ function StockBoard({
   }, [stock.code, loadingKey]);
 
   useEffect(() => {
-    setChartRangeId("day-1");
+    setChartRangeId("realtime");
     setChartMode("candle");
   }, [stock.code]);
 
@@ -166,14 +179,14 @@ function StockBoard({
         <div className="h-[420px] overflow-hidden rounded-lg border bg-background/80 lg:h-[480px]">
           {latest || isLoading ? (
             <Liveline
-              data={latest ? live.lineData : []}
+              data={latest ? chartView.lineData : []}
               value={latest?.close ?? 0}
               mode="candle"
               candles={closedCandles}
-              liveCandle={liveCandle}
+              liveCandle={chartLiveCandle}
               candleWidth={candleWidthSecs}
               lineMode={chartMode === "line"}
-              lineData={live.lineData}
+              lineData={chartView.lineData}
               lineValue={latest?.close}
               onModeChange={(mode) => setChartMode(mode)}
               theme="dark"
@@ -185,7 +198,7 @@ function StockBoard({
 
                 if (nextRange) {
                   setChartRangeId(nextRange.id);
-                  setChartMode(nextRange.id === "day-1" ? "candle" : "line");
+                  setChartMode(nextRange.id === "realtime" || nextRange.id === "today" ? "candle" : "line");
                 }
               }}
               windowStyle="rounded"
@@ -268,6 +281,7 @@ function useLiveMockStock(
   stock: StockCandidate,
   loadingKey: number,
   isLoading: boolean,
+  shouldStream: boolean,
 ) {
   const sourceRecords = useMemo(
     () => stock.records.filter((record) => record.status === "成功"),
@@ -280,7 +294,7 @@ function useLiveMockStock(
   }, [sourceRecords, stock.code, loadingKey]);
 
   useEffect(() => {
-    if (isLoading || sourceRecords.length === 0) {
+    if (isLoading || !shouldStream || sourceRecords.length === 0) {
       return;
     }
 
@@ -289,22 +303,32 @@ function useLiveMockStock(
     }, 850);
 
     return () => window.clearInterval(timer);
-  }, [isLoading, sourceRecords.length, stock.code, loadingKey]);
+  }, [isLoading, shouldStream, sourceRecords.length, stock.code, loadingKey]);
 
   return live;
 }
 
 function createLiveSnapshot(records: StockDailyRecord[]) {
-  const currentDayStart = Math.floor(Date.now() / 1000) - initialLiveBarCount * candleWidthSecs;
-  const baseTime = currentDayStart - (records.length - 1) * mockDaySecs;
-  const candles = createIntradayCandles(records, baseTime);
+  const historicalRecords = records.map((record) => ({ ...record }));
+  const liveRecords = createInitialRealtimeRecords(historicalRecords);
+  const baseTime = Math.floor(Date.now() / 1000) - historicalRecords.length * mockDaySecs;
+  const historicalCandles = createIntradayCandles(historicalRecords, baseTime);
+  const latest = liveRecords.at(-1);
+  const now = Date.now() / 1000;
+  const liveCandles = latest
+    ? [
+        ...createRealtimeSeedCandles(now, latest),
+        createLiveCandle(getRealtimeLiveStart(now), latest.open, latest.close, latest),
+      ]
+    : [];
 
   return {
-    records: records.map((record) => ({ ...record })),
-    candles,
-    lineData: createLineDataFromCandles(candles),
-    clock: currentDayStart + initialLiveBarCount * candleWidthSecs,
-    currentDayStart,
+    records: liveRecords,
+    historicalRecords,
+    historicalCandles,
+    liveCandles,
+    lineData: createLineDataFromCandles(liveCandles),
+    liveTickCount: 0,
   };
 }
 
@@ -316,37 +340,17 @@ function advanceLiveSnapshot(live: ReturnType<typeof createLiveSnapshot>) {
   }
 
   const previous = live.records.at(-2);
+  const sourceLatest = live.historicalRecords.at(-1) ?? latest;
   const previousClose = previous?.close ?? latest.last ?? latest.open;
-  const lastCandle = live.candles.at(-1);
-  const nextTime = live.clock + mockTickStepSecs;
-  const drift = (previousClose - latest.close) * 0.018;
-  const noise = latest.close * ((Math.random() - 0.47) * 0.0018);
+  const targetClose = sourceLatest.close;
+  const drift = (targetClose - latest.close) * 0.035 + (previousClose - latest.close) * 0.006;
+  const noise = latest.close * ((Math.random() - 0.48) * 0.0026);
   const nextClose = roundPrice(clampPrice(latest.close + drift + noise, latest));
-  const addedVolume = Math.round(latest.volume * (0.0015 + Math.random() * 0.003));
-  const shouldStartNextDay = nextTime >= live.currentDayStart + tradingSessionSecs;
-
-  if (shouldStartNextDay) {
-    const nextRecord = createNextLiveRecord(latest, nextClose, addedVolume);
-    const nextDayStart = live.currentDayStart + mockDaySecs;
-    const nextCandle = createLiveCandle(nextDayStart, nextRecord.open, nextClose, nextRecord);
-    const records = [...live.records, nextRecord].slice(-42);
-    const candles = [...live.candles, nextCandle].slice(-intradayBarsPerDay * 14);
-    const lineData = [
-      ...live.lineData,
-      { time: nextDayStart, value: nextRecord.open },
-      { time: nextDayStart + mockTickStepSecs, value: nextClose },
-    ].slice(-2000);
-
-    return {
-      records,
-      candles,
-      lineData,
-      clock: nextDayStart + mockTickStepSecs,
-      currentDayStart: nextDayStart,
-    };
-  }
-
-  const shouldStartNextCandle = Boolean(lastCandle && nextTime >= lastCandle.time + candleWidthSecs);
+  const addedVolume = Math.max(
+    1,
+    Math.round((sourceLatest.volume / intradayBarsPerDay) * (0.35 + Math.random() * 1.3)),
+  );
+  const nextTickCount = live.liveTickCount + 1;
 
   const nextRecord: StockDailyRecord = {
     ...latest,
@@ -354,17 +358,110 @@ function advanceLiveSnapshot(live: ReturnType<typeof createLiveSnapshot>) {
     high: roundPrice(Math.max(latest.high, nextClose)),
     low: roundPrice(Math.min(latest.low, nextClose)),
     volume: latest.volume + addedVolume,
-    amount: Math.round((latest.volume + addedVolume) * nextClose * 100),
+    amount: latest.amount + Math.round(addedVolume * nextClose * 100),
   };
   const records = [...live.records.slice(0, -1), nextRecord];
-  const candles = lastCandle && shouldStartNextCandle
-    ? [...live.candles, createLiveCandle(lastCandle.time + candleWidthSecs, lastCandle.close, nextClose, nextRecord)]
-    : lastCandle
-      ? [...live.candles.slice(0, -1), updateLiveCandle(lastCandle, nextClose)]
-      : live.candles;
-  const lineData = [...live.lineData, { time: nextTime, value: nextClose }].slice(-2000);
+  const seedCandles = live.liveCandles.slice(0, realtimeSeedBars);
+  const visibleCandles = live.liveCandles.slice(realtimeSeedBars);
+  const lastCandle = visibleCandles.at(-1);
+  const shouldStartNextCandle = nextTickCount % liveTicksPerCandle === 0;
+  const nextVisibleCandles = createNextRealtimeCandles(
+    visibleCandles,
+    lastCandle,
+    nextClose,
+    nextRecord,
+    shouldStartNextCandle,
+  );
+  const liveCandles = [...seedCandles, ...nextVisibleCandles];
 
-  return { records, candles, lineData, clock: nextTime, currentDayStart: live.currentDayStart };
+  return {
+    records,
+    historicalRecords: live.historicalRecords,
+    historicalCandles: live.historicalCandles,
+    liveCandles,
+    lineData: createLineDataFromCandles(liveCandles),
+    liveTickCount: nextTickCount,
+  };
+}
+
+function createInitialRealtimeRecords(records: StockDailyRecord[]) {
+  return records.map((record, index) => {
+    if (index !== records.length - 1) {
+      return { ...record };
+    }
+
+    return createInitialRealtimeRecord(record);
+  });
+}
+
+function createInitialRealtimeRecord(record: StockDailyRecord): StockDailyRecord {
+  const openingVolume = Math.max(1, Math.round(record.volume * 0.02));
+
+  return {
+    ...record,
+    high: record.open,
+    low: record.open,
+    close: record.open,
+    volume: openingVolume,
+    amount: Math.round(openingVolume * record.open * 100),
+  };
+}
+
+function createRealtimeSeedCandles(now: number, record: StockDailyRecord) {
+  const startTime = now - realtimeWindowBars * candleWidthSecs - (realtimeSeedBars + 3) * candleWidthSecs;
+
+  return Array.from({ length: realtimeSeedBars }, (_, index) => (
+    createLiveCandle(startTime + index * candleWidthSecs, record.open, record.open, record)
+  ));
+}
+
+function createNextRealtimeCandles(
+  visibleCandles: CandlePoint[],
+  lastCandle: CandlePoint | undefined,
+  nextClose: number,
+  nextRecord: StockDailyRecord,
+  shouldStartNextCandle: boolean,
+) {
+  if (!lastCandle) {
+    return [
+      createLiveCandle(getRealtimeLiveStart(Date.now() / 1000), nextRecord.open, nextClose, nextRecord),
+    ];
+  }
+
+  if (!shouldStartNextCandle) {
+    return [
+      ...visibleCandles.slice(0, -1),
+      updateLiveCandle(lastCandle, nextClose),
+    ];
+  }
+
+  const completedCandle = updateLiveCandle(lastCandle, nextClose);
+  const nextLiveCandle = createLiveCandle(
+    getRealtimeLiveStart(Date.now() / 1000),
+    completedCandle.close,
+    completedCandle.close,
+    nextRecord,
+  );
+
+  return rebalanceRealtimeCandles([
+    ...visibleCandles.slice(0, -1),
+    completedCandle,
+    nextLiveCandle,
+  ].slice(-realtimeWindowBars));
+}
+
+function rebalanceRealtimeCandles(candles: CandlePoint[]) {
+  const liveStart = getRealtimeLiveStart(Date.now() / 1000);
+  const startTime = liveStart - Math.max(0, candles.length - 1) * candleWidthSecs;
+
+  return candles.map((candle, index) => ({
+    ...candle,
+    time: startTime + index * candleWidthSecs,
+  }));
+}
+
+function getRealtimeLiveStart(now: number) {
+  return now - candleWidthSecs / 2;
 }
 
 function StockColumn({
@@ -515,11 +612,83 @@ function previousSuccessRecord(stock: StockCandidate) {
   return stock.records.filter((record) => record.status === "成功").at(-2);
 }
 
-function createIntradayCandles(records: StockDailyRecord[], baseTime: number): CandlePoint[] {
+function createChartView(
+  live: ReturnType<typeof createLiveSnapshot>,
+  rangeId: ChartRangeId,
+) {
+  if (rangeId === "realtime") {
+    return {
+      records: live.records,
+      candles: live.liveCandles,
+      lineData: live.lineData,
+    };
+  }
+
+  const history = live.historicalRecords;
+
+  if (rangeId === "week") {
+    const latest = history.at(-1);
+    const weekStart = latest ? getWeekStartDate(latest.date) : null;
+    const indices = history
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => !weekStart || new Date(`${record.date}T12:00:00`) >= weekStart)
+      .map(({ index }) => index)
+      .slice(-7);
+    const candles = packHistoricalCandles(live.historicalCandles, indices);
+
+    return {
+      records: indices.length > 0 ? history.slice(Math.max(0, indices[0] - 1), indices.at(-1)! + 1) : [],
+      candles,
+      lineData: createLineDataFromCandles(candles),
+    };
+  }
+
+  const selectedOption = dayRangeOptions.find((option) => option.id === rangeId);
+  const offset = selectedOption?.offset ?? 0;
+  const dayIndex = Math.max(0, history.length - 1 - offset);
+  const candles = packHistoricalCandles(live.historicalCandles, [dayIndex]);
+
+  return {
+    records: history.slice(Math.max(0, dayIndex - 6), dayIndex + 1),
+    candles,
+    lineData: createLineDataFromCandles(candles),
+  };
+}
+
+function packHistoricalCandles(candles: CandlePoint[], dayIndices: number[]) {
+  const validIndices = dayIndices.filter((index) => index >= 0);
+
+  if (validIndices.length === 0) {
+    return [];
+  }
+
+  const duration = validIndices.length * tradingSessionSecs + Math.max(0, validIndices.length - 1) * dayGapSecs;
+  const startTime = Math.floor(Date.now() / 1000) - duration;
+
+  return validIndices.flatMap((dayIndex, packedIndex) => {
+    const source = getHistoricalDayCandles(candles, dayIndex);
+    const dayStart = startTime + packedIndex * packedDaySecs;
+
+    return source.map((candle, barIndex) => ({
+      ...candle,
+      time: dayStart + barIndex * candleWidthSecs,
+    }));
+  });
+}
+
+function getHistoricalDayCandles(candles: CandlePoint[], dayIndex: number) {
+  const start = dayIndex * intradayBarsPerDay;
+
+  return candles.slice(start, start + intradayBarsPerDay);
+}
+
+function createIntradayCandles(
+  records: StockDailyRecord[],
+  baseTime: number,
+): CandlePoint[] {
   return records.flatMap((record, index) => {
     const dayStart = baseTime + index * mockDaySecs;
-    const barCount = index === records.length - 1 ? initialLiveBarCount : intradayBarsPerDay;
-    const values = createIntradayClosePath(record, barCount);
+    const values = createIntradayClosePath(record, intradayBarsPerDay);
 
     return values.map((close, barIndex) => {
       const open = barIndex === 0 ? record.open : values[barIndex - 1];
@@ -648,6 +817,10 @@ function formatAmount(amount: number) {
   return `${(amount / 10_000).toFixed(1)} 万`;
 }
 
+function getPackedRangeWindowSecs(dayCount: number) {
+  return dayCount * tradingSessionSecs + Math.max(0, dayCount - 1) * dayGapSecs;
+}
+
 function getCurrentWeekTradingDayCount(records: StockDailyRecord[]) {
   const latest = records.at(-1);
 
@@ -670,46 +843,6 @@ function getWeekStartDate(date: string) {
   cursor.setHours(0, 0, 0, 0);
 
   return cursor;
-}
-
-function createNextLiveRecord(
-  latest: StockDailyRecord,
-  close: number,
-  addedVolume: number,
-): StockDailyRecord {
-  const volume = Math.max(addedVolume * 12, Math.round(latest.volume * 0.18));
-
-  return {
-    ...latest,
-    date: nextBusinessDate(latest.date),
-    open: latest.close,
-    high: roundPrice(Math.max(latest.close, close)),
-    low: roundPrice(Math.min(latest.close, close)),
-    close,
-    volume,
-    amount: Math.round(volume * close * 100),
-    last: latest.close,
-    limit_up: latest.limit_pct ? roundPrice(latest.close * (1 + latest.limit_pct / 100)) : latest.limit_up,
-    limit_down: latest.limit_pct ? roundPrice(latest.close * (1 - latest.limit_pct / 100)) : latest.limit_down,
-  };
-}
-
-function nextBusinessDate(date: string) {
-  const cursor = new Date(`${date}T12:00:00`);
-
-  do {
-    cursor.setDate(cursor.getDate() + 1);
-  } while (cursor.getDay() === 0 || cursor.getDay() === 6);
-
-  return formatDate(cursor);
-}
-
-function formatDate(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 }
 
 function clampPrice(value: number, record: StockDailyRecord) {
