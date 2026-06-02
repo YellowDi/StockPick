@@ -61,7 +61,6 @@ const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
 ];
-const idleRangeOptions = ["实时", "当日", "前1日", "本周"];
 
 const listIcons = {
   initial: ListFilter,
@@ -614,44 +613,7 @@ function StockBoardLoading({
             </h1>
           </div>
 
-          <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-            <div className="flex min-w-max items-center gap-1">
-              {idleRangeOptions.map((label, index) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={cn(
-                    "h-8 cursor-not-allowed rounded-md px-3 text-xs font-medium text-muted-foreground",
-                    index === 0 && "bg-secondary text-secondary-foreground",
-                  )}
-                  aria-pressed={index === 0}
-                  disabled
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-              <button
-                type="button"
-                className="h-8 cursor-not-allowed rounded-md bg-secondary px-3 text-xs font-medium text-secondary-foreground"
-                aria-pressed
-                disabled
-              >
-                K线
-              </button>
-              <button
-                type="button"
-                className="h-8 cursor-not-allowed rounded-md px-3 text-xs font-medium text-muted-foreground"
-                aria-pressed={false}
-                disabled
-              >
-                折线
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:col-start-3 lg:justify-end lg:justify-self-end">
             <Button
               type="button"
               variant="outline"
@@ -671,8 +633,8 @@ function StockBoardLoading({
               className="bg-background/45 backdrop-blur-xl"
               disabled
             >
-              <RefreshCcw data-icon="inline-start" className="animate-spin" />
-              加载中
+              <RefreshCcw data-icon="inline-start" />
+              重载
             </Button>
           </div>
         </div>
