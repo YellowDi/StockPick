@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Ban,
+  ChevronDown,
   CheckCircle2,
   Database,
   ListFilter,
@@ -131,6 +132,7 @@ function StockBoard({
 }) {
   const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("realtime");
   const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const live = useLiveMockStock(stock, loadingKey, isLoading, chartRangeId === "realtime");
   const chartView = useMemo(
@@ -181,9 +183,24 @@ function StockBoard({
   useEffect(() => {
     setChartRangeId("realtime");
     setChartMode("candle");
+    setDetailsOpen(false);
   }, [stock.code]);
 
   const positive = change >= 0;
+  const trend = !latest
+    ? "暂无行情"
+    : change > 0
+      ? "多头走强"
+      : change < 0
+        ? "回落整理"
+        : "横盘震荡";
+  const strength = !latest
+    ? "--"
+    : Math.abs(changePct) >= 2
+      ? "强"
+      : Math.abs(changePct) >= 1
+        ? "中"
+        : "弱";
   const chartModeOptions = [
     { id: "candle" as const, label: "K线" },
     { id: "line" as const, label: "折线" },
@@ -200,18 +217,33 @@ function StockBoard({
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="group flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left transition-[color,transform] active:scale-[0.96]"
+              aria-expanded={detailsOpen}
+              aria-controls="stock-details-panel"
+              onClick={() => setDetailsOpen((open) => !open)}
+            >
               <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
                 {stock.name}
               </h1>
               <span className="text-sm text-muted-foreground">{stock.code}</span>
+              <Badge variant="outline" className="bg-background/35 backdrop-blur">
+                {stockListMeta[stock.list].label}
+              </Badge>
               <Badge
                 variant={latest ? "secondary" : "destructive"}
                 className="bg-background/55 backdrop-blur"
               >
                 {latest ? "行情正常" : "无数据"}
               </Badge>
-            </div>
+              <ChevronDown
+                className={cn(
+                  "size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
+                  detailsOpen && "rotate-180",
+                )}
+              />
+            </button>
             <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
               <span
                 className={cn(
@@ -230,6 +262,18 @@ function StockBoard({
                 {latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
               </span>
             </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
+              <HeroMetric label="强度" value={strength} />
+              <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
+              <HeroMetric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
+              <HeroMetric label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
+              <HeroMetric label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
+              <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
+            </div>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground text-pretty">
+              {stock.reason}
+            </p>
           </div>
 
           <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
@@ -299,6 +343,12 @@ function StockBoard({
               {isLoading ? "加载中" : "重载"}
             </Button>
           </div>
+
+          <StockDetailsPanel
+            id="stock-details-panel"
+            open={detailsOpen}
+            records={records}
+          />
         </div>
 
         <div className="absolute inset-0 z-0">
@@ -345,121 +395,80 @@ function StockBoard({
         </div>
 
       </div>
-
-      <div className="relative z-20 mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr_1.8fr]">
-          <MarketStatusCard
-            stock={stock}
-            latest={latest}
-            change={change}
-            changePct={changePct}
-          />
-          <KeyMetricsCard latest={latest} change={change} changePct={changePct} loading={isLoading} />
-          <RecentRecordsCard records={records} />
-        </div>
-      </div>
     </section>
   );
 }
 
-function MarketStatusCard({
-  stock,
-  latest,
-  change,
-  changePct,
+function HeroMetric({
+  label,
+  value,
+  tone,
 }: {
-  stock: StockCandidate;
-  latest?: StockDailyRecord;
-  change: number;
-  changePct: number;
+  label: string;
+  value: string;
+  tone?: "up" | "down";
 }) {
-  const positive = change >= 0;
-  const trend = !latest
-    ? "暂无行情"
-    : change > 0
-      ? "多头走强"
-      : change < 0
-        ? "回落整理"
-        : "横盘震荡";
-  const strength = !latest
-    ? "--"
-    : Math.abs(changePct) >= 2
-      ? "强"
-      : Math.abs(changePct) >= 1
-        ? "中"
-        : "弱";
-
   return (
-    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
-      <CardHeader>
-        <CardTitle className="text-sm">行情状态</CardTitle>
-        <CardDescription className="flex flex-wrap items-center gap-2">
-          <span>{stock.name}</span>
-          <span>{stock.code}</span>
-          <Badge variant="outline" className="bg-background/35">
-            {stockListMeta[stock.list].label}
-          </Badge>
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pb-5">
-        <div className="border-b border-border/60 pb-3">
-          <div className="text-xs text-muted-foreground">筛选理由</div>
-          <p className="mt-1 text-sm leading-6 text-foreground/88 text-pretty">{stock.reason}</p>
+    <span className="rounded-md bg-background/35 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-xl">
+      {label}
+      <span
+        className={cn(
+          "ml-1 font-medium text-foreground tabular-nums",
+          tone === "up" && "text-stock-up",
+          tone === "down" && "text-stock-down",
+        )}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function StockDetailsPanel({
+  id,
+  open,
+  records,
+}: {
+  id: string;
+  open: boolean;
+  records: StockDailyRecord[];
+}) {
+  return (
+    <div
+      id={id}
+      className={cn(
+        "pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 w-full max-w-[820px] transition-[opacity,transform] duration-200 ease-out",
+        open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
+      )}
+      aria-hidden={!open}
+    >
+      <div
+        className={cn(
+          "pointer-events-auto overflow-hidden rounded-lg border bg-card/90 shadow-[0_18px_64px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-[max-height] duration-200 ease-out",
+          open ? "max-h-[430px]" : "max-h-0",
+        )}
+      >
+        <div className="max-h-[430px] overflow-y-auto p-4">
+          <RecentRecordsSection records={records} />
         </div>
-        <MetricLine label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
-        <MetricLine label="涨跌额" value={latest ? formatSigned(change) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
-        <MetricLine label="强度" value={strength} />
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
-function KeyMetricsCard({
-  latest,
-  change,
-  changePct,
-  loading,
-}: {
-  latest?: StockDailyRecord;
-  change: number;
-  changePct: number;
-  loading: boolean;
-}) {
-  const positive = change >= 0;
-
-  return (
-    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
-      <CardHeader>
-        <CardTitle className="text-sm">关键指标</CardTitle>
-        <CardDescription>价格、区间和成交数据</CardDescription>
-      </CardHeader>
-      <CardContent className={cn("grid grid-cols-2 gap-x-7 pb-5", loading && "animate-pulse")}>
-        <MetricLine label="最新价" value={latest ? latest.close.toFixed(2) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
-        <MetricLine label="涨跌幅" value={latest ? `${formatSigned(changePct)}%` : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
-        <MetricLine label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
-        <MetricLine label="状态" value={latest ? "可用" : "无数据"} tone={latest ? undefined : "down"} />
-        <MetricLine label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
-        <MetricLine label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
-        <MetricLine label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
-        <MetricLine label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function RecentRecordsCard({ records }: { records: StockDailyRecord[] }) {
+function RecentRecordsSection({ records }: { records: StockDailyRecord[] }) {
   const visibleRecords = records.slice(-7);
 
   return (
-    <Card className="bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.2)] backdrop-blur-xl">
-      <CardHeader className="gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
+    <section>
+      <div className="mb-3 gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <CardTitle className="text-sm">最近 7 日 OHLC</CardTitle>
-          <CardDescription>用于快速校验当前走势和日线位置</CardDescription>
+          <h2 className="text-sm font-semibold">最近 7 日 OHLC</h2>
+          <p className="mt-1 text-sm text-muted-foreground">用于快速校验当前走势和日线位置</p>
         </div>
         <span className="text-xs text-muted-foreground">数据为模拟行情，仅供参考</span>
-      </CardHeader>
-      <CardContent className="pb-5">
+      </div>
+      <div>
         {visibleRecords.length > 0 ? (
           <div className="overflow-x-auto">
             <div className="min-w-[620px]">
@@ -502,33 +511,8 @@ function RecentRecordsCard({ records }: { records: StockDailyRecord[] }) {
             暂无日线数据
           </div>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MetricLine({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "up" | "down";
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2.5 text-sm last:border-b-0">
-      <span className="text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          "text-right font-medium tabular-nums",
-          tone === "up" && "text-stock-up",
-          tone === "down" && "text-stock-down",
-        )}
-      >
-        {value}
-      </span>
-    </div>
+      </div>
+    </section>
   );
 }
 
