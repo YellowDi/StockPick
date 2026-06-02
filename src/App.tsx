@@ -97,7 +97,6 @@ function StockBoard({
   onReload: () => void;
 }) {
   const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("day-1");
-  const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
   const [isLoading, setIsLoading] = useState(true);
   const live = useLiveMockStock(stock, loadingKey, isLoading);
   const records = live.records;
@@ -126,6 +125,7 @@ function StockBoard({
     ];
   }, [records]);
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
+  const isTodayRange = chartRangeId === "day-1";
 
   useEffect(() => {
     setIsLoading(true);
@@ -171,10 +171,9 @@ function StockBoard({
               candles={closedCandles}
               liveCandle={liveCandle}
               candleWidth={candleWidthSecs}
-              lineMode={chartMode === "line"}
+              lineMode={!isTodayRange}
               lineData={live.lineData}
               lineValue={latest?.close}
-              onModeChange={(mode) => setChartMode(mode)}
               theme="dark"
               color={chartColor}
               window={selectedRange.secs}
@@ -189,7 +188,7 @@ function StockBoard({
               windowStyle="rounded"
               grid
               scrub
-              badge
+              badge={true}
               badgeVariant="minimal"
               badgeTail
               momentum={momentum}
