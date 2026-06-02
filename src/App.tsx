@@ -6,6 +6,7 @@ import {
   Database,
   ListFilter,
   Moon,
+  Plus,
   RefreshCcw,
   ShieldCheck,
   ShieldX,
@@ -59,8 +60,8 @@ const listIcons = {
 } satisfies Record<StockListKey, typeof ListFilter>;
 
 function App() {
-  const allStocks = useMemo(() => listOrder.flatMap((key) => mockStockGroups[key]), []);
-  const [selectedCode, setSelectedCode] = useState(allStocks[0]?.code ?? "");
+  const [stockGroups, setStockGroups] = useState(mockStockGroups);
+  const [selectedChartCode, setSelectedChartCode] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -71,7 +72,13 @@ function App() {
       return "dark";
     }
   });
-  const selectedStock = allStocks.find((stock) => stock.code === selectedCode) ?? allStocks[0];
+  const selectedStock = selectedChartCode
+    ? stockGroups.selected.find((stock) => stock.code === selectedChartCode) ?? null
+    : null;
+  const selectedStockCodes = useMemo(
+    () => new Set(stockGroups.selected.map((stock) => stock.code)),
+    [stockGroups.selected],
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("light", themeMode === "light");
@@ -83,9 +90,28 @@ function App() {
     }
   }, [themeMode]);
 
-  function selectStock(code: string) {
-    setSelectedCode(code);
+  function openSelectedStock(code: string) {
+    setSelectedChartCode(code);
     setLoadingKey((key) => key + 1);
+  }
+
+  function addToSelected(stock: StockCandidate) {
+    setStockGroups((currentGroups) => {
+      if (currentGroups.selected.some((item) => item.code === stock.code)) {
+        return currentGroups;
+      }
+
+      return {
+        ...currentGroups,
+        selected: [
+          ...currentGroups.selected,
+          {
+            ...stock,
+            list: "selected",
+          },
+        ],
+      };
+    });
   }
 
   return (
@@ -105,9 +131,11 @@ function App() {
               <StockColumn
                 key={key}
                 listKey={key}
-                stocks={mockStockGroups[key]}
-                selectedCode={selectedStock.code}
-                onSelect={selectStock}
+                stocks={stockGroups[key]}
+                selectedCode={selectedChartCode}
+                selectedStockCodes={selectedStockCodes}
+                onOpenChart={openSelectedStock}
+                onAddToSelected={addToSelected}
               />
             ))}
           </section>
@@ -117,18 +145,49 @@ function App() {
   );
 }
 
+type StockBoardProps = {
+  stock: StockCandidate | null;
+  loadingKey: number;
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
+  onReload: () => void;
+};
+
 function StockBoard({
   stock,
   loadingKey,
   themeMode,
   onThemeToggle,
   onReload,
-}: {
+}: StockBoardProps) {
+  if (!stock) {
+    return (
+      <StockBoardLoading
+        themeMode={themeMode}
+        onThemeToggle={onThemeToggle}
+      />
+    );
+  }
+
+  return (
+    <ActiveStockBoard
+      stock={stock}
+      loadingKey={loadingKey}
+      themeMode={themeMode}
+      onThemeToggle={onThemeToggle}
+      onReload={onReload}
+    />
+  );
+}
+
+function ActiveStockBoard({
+  stock,
+  loadingKey,
+  themeMode,
+  onThemeToggle,
+  onReload,
+}: Omit<StockBoardProps, "stock"> & {
   stock: StockCandidate;
-  loadingKey: number;
-  themeMode: ThemeMode;
-  onThemeToggle: () => void;
-  onReload: () => void;
 }) {
   const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("realtime");
   const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
@@ -217,6 +276,12 @@ function StockBoard({
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">StockPick</span>
+              <Badge variant="outline" className="bg-background/35 backdrop-blur">
+                股票筛选看板
+              </Badge>
+            </div>
             <button
               type="button"
               className="group flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left transition-[color,transform] active:scale-[0.96]"
@@ -394,6 +459,128 @@ function StockBoard({
           )}
         </div>
 
+      </div>
+    </section>
+  );
+}
+
+function StockBoardLoading({
+  themeMode,
+  onThemeToggle,
+}: {
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
+}) {
+  const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
+  const idleRangeOptions = ["实时", "当日", "前1日", "本周"];
+
+  return (
+    <section className="relative">
+      <div
+        className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
+        style={{ background: "var(--chart-hero-background)" }}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24 bg-gradient-to-b from-transparent via-background/20 to-background" />
+
+        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">StockPick</span>
+              <Badge variant="outline" className="bg-background/35 backdrop-blur">
+                股票筛选看板
+              </Badge>
+            </div>
+            <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground text-balance">
+              StockPick
+            </h1>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <HeroMetric label="状态" value="加载中" />
+              <HeroMetric label="图表" value="待载入" />
+              <HeroMetric label="来源" value="已选列表" />
+            </div>
+          </div>
+
+          <div className="min-w-0 overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <div className="flex min-w-max items-center gap-1">
+              {idleRangeOptions.map((label, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={cn(
+                    "h-8 cursor-not-allowed rounded-md px-3 text-xs font-medium text-muted-foreground",
+                    index === 0 && "bg-secondary text-secondary-foreground",
+                  )}
+                  aria-pressed={index === 0}
+                  disabled
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+              <button
+                type="button"
+                className="h-8 cursor-not-allowed rounded-md bg-secondary px-3 text-xs font-medium text-secondary-foreground"
+                aria-pressed
+                disabled
+              >
+                K线
+              </button>
+              <button
+                type="button"
+                className="h-8 cursor-not-allowed rounded-md px-3 text-xs font-medium text-muted-foreground"
+                aria-pressed={false}
+                disabled
+              >
+                折线
+              </button>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/45 backdrop-blur-xl"
+              aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+              title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+              onClick={onThemeToggle}
+            >
+              {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+              {themeMode === "dark" ? "亮色" : "暗色"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/45 backdrop-blur-xl"
+              disabled
+            >
+              <RefreshCcw data-icon="inline-start" className="animate-spin" />
+              加载中
+            </Button>
+          </div>
+        </div>
+
+        <div className="absolute inset-0 z-0">
+          <Liveline
+            data={[]}
+            value={0}
+            mode="candle"
+            candles={[]}
+            candleWidth={candleWidthSecs}
+            theme={themeMode}
+            color={chartColor}
+            window={realtimeWindowBars * candleWidthSecs}
+            grid
+            loading
+            momentum="flat"
+            padding={{ top: 190, right: 86, bottom: 72, left: 24 }}
+            className="size-full"
+          />
+        </div>
       </div>
     </section>
   );
@@ -707,15 +894,20 @@ function StockColumn({
   listKey,
   stocks,
   selectedCode,
-  onSelect,
+  selectedStockCodes,
+  onOpenChart,
+  onAddToSelected,
 }: {
   listKey: StockListKey;
   stocks: StockCandidate[];
-  selectedCode: string;
-  onSelect: (code: string) => void;
+  selectedCode: string | null;
+  selectedStockCodes: Set<string>;
+  onOpenChart: (code: string) => void;
+  onAddToSelected: (stock: StockCandidate) => void;
 }) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
+  const opensChart = listKey === "selected";
 
   return (
     <Card className="min-h-[360px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
@@ -734,8 +926,16 @@ function StockColumn({
           <StockListButton
             key={stock.code}
             stock={stock}
-            active={stock.code === selectedCode}
-            onClick={() => onSelect(stock.code)}
+            active={opensChart && stock.code === selectedCode}
+            action={opensChart ? "open" : selectedStockCodes.has(stock.code) ? "added" : "add"}
+            onClick={() => {
+              if (opensChart) {
+                onOpenChart(stock.code);
+                return;
+              }
+
+              onAddToSelected(stock);
+            }}
           />
         ))}
       </CardContent>
@@ -746,16 +946,19 @@ function StockColumn({
 function StockListButton({
   stock,
   active,
+  action,
   onClick,
 }: {
   stock: StockCandidate;
   active: boolean;
+  action: "open" | "add" | "added";
   onClick: () => void;
 }) {
   const latest = latestSuccessRecord(stock);
   const previous = previousSuccessRecord(stock);
   const changePct = latest && previous ? ((latest.close - previous.close) / previous.close) * 100 : 0;
   const positive = changePct >= 0;
+  const disabled = action === "added";
 
   return (
     <Button
@@ -766,6 +969,7 @@ function StockListButton({
         active ? "border-ring bg-secondary" : "border-transparent bg-background/40 hover:border-border",
       )}
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -786,6 +990,17 @@ function StockListButton({
             </span>
           )}
         </span>
+      </span>
+      <span
+        className={cn(
+          "ml-2 flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground",
+          active && "border-ring/60 bg-background/35 text-foreground",
+          action === "add" && "border-border/80 bg-background/35",
+          action === "added" && "border-transparent bg-secondary/70 text-secondary-foreground",
+        )}
+      >
+        {action === "add" ? <Plus className="size-3" /> : null}
+        {action === "added" ? "已选" : action === "add" ? "加入" : "图表"}
       </span>
     </Button>
   );

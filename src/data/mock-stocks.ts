@@ -3,7 +3,7 @@ import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/sto
 const dayMs = 24 * 60 * 60 * 1000;
 
 const listLabels: Record<StockListKey, string> = {
-  initial: "初筛",
+  initial: "待选",
   selected: "已选",
   whitelist: "白名单",
   blacklist: "黑名单",
@@ -137,19 +137,19 @@ export const mockStockGroups = stockSeeds.reduce(
 export const stockListMeta = {
   initial: {
     label: listLabels.initial,
-    description: "系统初筛候选",
+    description: "候选待加入",
   },
   selected: {
     label: listLabels.selected,
-    description: "人工确认跟踪",
+    description: "行情图表来源",
   },
   whitelist: {
     label: listLabels.whitelist,
-    description: "长期观察池",
+    description: "可加入已选",
   },
   blacklist: {
     label: listLabels.blacklist,
-    description: "暂不参与",
+    description: "可加入已选",
   },
 } satisfies Record<StockListKey, { label: string; description: string }>;
 
