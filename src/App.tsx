@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Ban,
-  ChartCandlestick,
   CheckCircle2,
   Database,
   ListFilter,
-  LineChart,
   RefreshCcw,
   ShieldCheck,
   ShieldX,
@@ -28,14 +26,20 @@ import { cn } from "@/lib/utils";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
-const daySecs = 24 * 60 * 60;
-const candleWidthSecs = 6.5 * 60 * 60;
-const chartWindows = [
-  { label: "6日", secs: 6 * daySecs },
-  { label: "12日", secs: 12 * daySecs },
-  { label: "20日", secs: 20 * daySecs },
-  { label: "全部", secs: 36 * daySecs },
-];
+const mockDaySecs = 24;
+const candleWidthSecs = 18;
+const mockTickStepSecs = 3;
+const weekWindowOffsetSecs = 0.001;
+const dayRangeOptions = [
+  { id: "day-1", label: "本日", days: 1 },
+  { id: "day-2", label: "2日", days: 2 },
+  { id: "day-3", label: "3日", days: 3 },
+  { id: "day-4", label: "4日", days: 4 },
+  { id: "day-5", label: "5日", days: 5 },
+  { id: "day-6", label: "6日", days: 6 },
+  { id: "day-7", label: "7日", days: 7 },
+] as const;
+type ChartRangeId = (typeof dayRangeOptions)[number]["id"] | "week";
 
 const listIcons = {
   initial: ListFilter,
@@ -89,20 +93,36 @@ function StockBoard({
   loadingKey: number;
   onReload: () => void;
 }) {
-  const [windowSecs, setWindowSecs] = useState(chartWindows[0].secs);
+  const [chartRangeId, setChartRangeId] = useState<ChartRangeId>("day-1");
   const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
   const [isLoading, setIsLoading] = useState(true);
-  const records = stock.records.filter((record) => record.status === "成功");
+  const live = useLiveMockStock(stock, loadingKey, isLoading);
+  const records = live.records;
   const latest = records.at(-1);
   const previous = records.at(-2);
   const change = latest && previous ? latest.close - previous.close : 0;
   const changePct = previous ? (change / previous.close) * 100 : 0;
-  const chartData = toLivelinePoints(records);
-  const candles = toCandles(records);
-  const liveCandle = candles.at(-1);
-  const closedCandles = liveCandle ? candles.slice(0, -1) : candles;
+  const liveCandle = live.candles.at(-1);
+  const closedCandles = liveCandle ? live.candles.slice(0, -1) : live.candles;
   const chartColor = change >= 0 ? "#22c55e" : "#ef4444";
   const momentum = change > 0 ? "up" : change < 0 ? "down" : "flat";
+  const chartRangeOptions = useMemo(() => {
+    const weekDays = getCurrentWeekTradingDayCount(records);
+
+    return [
+      ...dayRangeOptions.map((option) => ({
+        id: option.id,
+        label: option.label,
+        secs: option.days * mockDaySecs,
+      })),
+      {
+        id: "week" as const,
+        label: "本周",
+        secs: weekDays * mockDaySecs + weekWindowOffsetSecs,
+      },
+    ];
+  }, [records]);
+  const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
 
   useEffect(() => {
     setIsLoading(true);
@@ -110,6 +130,10 @@ function StockBoard({
 
     return () => window.clearTimeout(timer);
   }, [stock.code, loadingKey]);
+
+  useEffect(() => {
+    setChartRangeId("day-1");
+  }, [stock.code]);
 
   return (
     <Card className="overflow-hidden bg-card/92">
@@ -127,30 +151,6 @@ function StockBoard({
         <div className="flex flex-wrap items-center gap-2">
           <TrendBadge change={change} changePct={changePct} />
           <Badge variant="outline">{stockListMeta[stock.list].label}</Badge>
-          <div className="flex rounded-md border bg-background/55 p-0.5">
-            <Button
-              type="button"
-              variant={chartMode === "line" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-7 px-2"
-              aria-pressed={chartMode === "line"}
-              onClick={() => setChartMode("line")}
-            >
-              <LineChart data-icon="inline-start" />
-              线
-            </Button>
-            <Button
-              type="button"
-              variant={chartMode === "candle" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-7 px-2"
-              aria-pressed={chartMode === "candle"}
-              onClick={() => setChartMode("candle")}
-            >
-              <ChartCandlestick data-icon="inline-start" />
-              K
-            </Button>
-          </div>
           <Button type="button" variant="outline" size="sm" disabled={isLoading} onClick={onReload}>
             <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
             {isLoading ? "加载中" : "重载"}
@@ -162,20 +162,27 @@ function StockBoard({
         <div className="h-[420px] overflow-hidden rounded-lg border bg-background/80 lg:h-[480px]">
           {latest || isLoading ? (
             <Liveline
-              data={latest ? chartData : []}
+              data={latest ? live.lineData : []}
               value={latest?.close ?? 0}
               mode="candle"
               candles={closedCandles}
               liveCandle={liveCandle}
               candleWidth={candleWidthSecs}
               lineMode={chartMode === "line"}
-              lineData={chartData}
+              lineData={live.lineData}
               lineValue={latest?.close}
+              onModeChange={(mode) => setChartMode(mode)}
               theme="dark"
               color={chartColor}
-              window={windowSecs}
-              windows={chartWindows}
-              onWindowChange={setWindowSecs}
+              window={selectedRange.secs}
+              windows={chartRangeOptions}
+              onWindowChange={(secs) => {
+                const nextRange = chartRangeOptions.find((option) => option.secs === secs);
+
+                if (nextRange) {
+                  setChartRangeId(nextRange.id);
+                }
+              }}
               windowStyle="rounded"
               grid
               scrub
@@ -219,7 +226,7 @@ function StockBoard({
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium">最近 5 日</h2>
+              <h2 className="text-sm font-medium">最近 7 日</h2>
               <span className="text-xs text-muted-foreground">OHLC</span>
             </div>
             <div className="overflow-hidden rounded-lg border">
@@ -230,7 +237,7 @@ function StockBoard({
                 <span className="text-right">低</span>
                 <span className="text-right">收</span>
               </div>
-              {records.slice(-5).map((record) => (
+              {records.slice(-7).map((record) => (
                 <div
                   key={record.date}
                   className="grid grid-cols-[1.1fr_repeat(4,0.8fr)] border-t px-3 py-2 text-xs"
@@ -250,6 +257,94 @@ function StockBoard({
       </CardContent>
     </Card>
   );
+}
+
+function useLiveMockStock(
+  stock: StockCandidate,
+  loadingKey: number,
+  isLoading: boolean,
+) {
+  const sourceRecords = useMemo(
+    () => stock.records.filter((record) => record.status === "成功"),
+    [stock],
+  );
+  const [live, setLive] = useState(() => createLiveSnapshot(sourceRecords));
+
+  useEffect(() => {
+    setLive(createLiveSnapshot(sourceRecords));
+  }, [sourceRecords, stock.code, loadingKey]);
+
+  useEffect(() => {
+    if (isLoading || sourceRecords.length === 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setLive((current) => advanceLiveSnapshot(current));
+    }, 850);
+
+    return () => window.clearInterval(timer);
+  }, [isLoading, sourceRecords.length, stock.code, loadingKey]);
+
+  return live;
+}
+
+function createLiveSnapshot(records: StockDailyRecord[]) {
+  const baseTime = Math.floor(Date.now() / 1000) - records.length * mockDaySecs;
+
+  return {
+    records: records.map((record) => ({ ...record })),
+    candles: toCandles(records, baseTime),
+    lineData: toLivelinePoints(records, baseTime),
+    clock: baseTime + (records.length - 1) * mockDaySecs + candleWidthSecs,
+  };
+}
+
+function advanceLiveSnapshot(live: ReturnType<typeof createLiveSnapshot>) {
+  const latest = live.records.at(-1);
+
+  if (!latest) {
+    return live;
+  }
+
+  const previous = live.records.at(-2);
+  const previousClose = previous?.close ?? latest.last ?? latest.open;
+  const lastCandle = live.candles.at(-1);
+  const nextTime = live.clock + mockTickStepSecs;
+  const drift = (previousClose - latest.close) * 0.018;
+  const noise = latest.close * ((Math.random() - 0.47) * 0.0018);
+  const nextClose = roundPrice(clampPrice(latest.close + drift + noise, latest));
+  const addedVolume = Math.round(latest.volume * (0.0015 + Math.random() * 0.003));
+  const shouldStartNextCandle = Boolean(lastCandle && nextTime >= lastCandle.time + mockDaySecs);
+
+  if (shouldStartNextCandle && lastCandle) {
+    const nextRecord = createNextLiveRecord(latest, nextClose, addedVolume);
+    const records = [...live.records, nextRecord].slice(-42);
+    const candles = [...live.candles, toCandleAt(nextRecord, lastCandle.time + mockDaySecs)].slice(-42);
+    const lineData = [
+      ...live.lineData,
+      { time: lastCandle.time + mockDaySecs, value: nextRecord.open },
+      { time: nextTime, value: nextClose },
+    ].slice(-1200);
+
+    return { records, candles, lineData, clock: nextTime };
+  }
+
+  const nextRecord: StockDailyRecord = {
+    ...latest,
+    close: nextClose,
+    high: roundPrice(Math.max(latest.high, nextClose)),
+    low: roundPrice(Math.min(latest.low, nextClose)),
+    volume: latest.volume + addedVolume,
+    amount: Math.round((latest.volume + addedVolume) * nextClose * 100),
+  };
+  const records = [...live.records.slice(0, -1), nextRecord];
+  const candles = lastCandle
+    ? [...live.candles.slice(0, -1), toCandleAt(nextRecord, lastCandle.time)]
+    : live.candles;
+  const lineData = [...live.lineData, { time: nextTime, value: nextClose }].slice(-1200);
+
+  return { records, candles, lineData, clock: nextTime };
 }
 
 function StockColumn({
@@ -400,42 +495,43 @@ function previousSuccessRecord(stock: StockCandidate) {
   return stock.records.filter((record) => record.status === "成功").at(-2);
 }
 
-function toLivelinePoints(records: StockDailyRecord[]): LivelinePoint[] {
-  return records.flatMap((record) => {
-    const openTime = toMarketOpenTime(record.date);
+function toLivelinePoints(records: StockDailyRecord[], baseTime: number): LivelinePoint[] {
+  return records.flatMap((record, index) => {
+    const openTime = baseTime + index * mockDaySecs;
     const midHighFirst = record.close >= record.open;
     const firstSwing = midHighFirst ? record.high : record.low;
     const secondSwing = midHighFirst ? record.low : record.high;
 
     return [
       { time: openTime, value: record.open },
-      { time: openTime + 90 * 60, value: firstSwing },
-      { time: openTime + 240 * 60, value: secondSwing },
+      { time: openTime + 4, value: firstSwing },
+      { time: openTime + 10, value: secondSwing },
       { time: openTime + candleWidthSecs, value: record.close },
     ];
   });
 }
 
-function toCandles(records: StockDailyRecord[]): CandlePoint[] {
-  return records.map((record) => ({
-    time: toMarketOpenTime(record.date),
+function toCandles(records: StockDailyRecord[], baseTime: number): CandlePoint[] {
+  return records.map((record, index) => toCandleAt(record, baseTime + index * mockDaySecs));
+}
+
+function toCandleAt(record: StockDailyRecord, time: number): CandlePoint {
+  return {
+    time,
     open: record.open,
     high: record.high,
     low: record.low,
     close: record.close,
-  }));
-}
-
-function toMarketOpenTime(date: string) {
-  return Math.floor(new Date(`${date}T09:30:00`).getTime() / 1000);
+  };
 }
 
 function formatChartTime(time: number) {
   const date = new Date(time * 1000);
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
+  const hour = `${date.getHours()}`.padStart(2, "0");
+  const minute = `${date.getMinutes()}`.padStart(2, "0");
+  const second = `${date.getSeconds()}`.padStart(2, "0");
 
-  return `${month}-${day}`;
+  return `${hour}:${minute}:${second}`;
 }
 
 function formatSigned(value: number) {
@@ -458,6 +554,81 @@ function formatAmount(amount: number) {
   }
 
   return `${(amount / 10_000).toFixed(1)} 万`;
+}
+
+function getCurrentWeekTradingDayCount(records: StockDailyRecord[]) {
+  const latest = records.at(-1);
+
+  if (!latest) {
+    return 1;
+  }
+
+  const weekStart = getWeekStartDate(latest.date);
+  const count = records.filter((record) => new Date(`${record.date}T12:00:00`) >= weekStart).length;
+
+  return Math.min(7, Math.max(1, count));
+}
+
+function getWeekStartDate(date: string) {
+  const cursor = new Date(`${date}T12:00:00`);
+  const day = cursor.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+
+  cursor.setDate(cursor.getDate() - diff);
+  cursor.setHours(0, 0, 0, 0);
+
+  return cursor;
+}
+
+function createNextLiveRecord(
+  latest: StockDailyRecord,
+  close: number,
+  addedVolume: number,
+): StockDailyRecord {
+  const volume = Math.max(addedVolume * 12, Math.round(latest.volume * 0.18));
+
+  return {
+    ...latest,
+    date: nextBusinessDate(latest.date),
+    open: latest.close,
+    high: roundPrice(Math.max(latest.close, close)),
+    low: roundPrice(Math.min(latest.close, close)),
+    close,
+    volume,
+    amount: Math.round(volume * close * 100),
+    last: latest.close,
+    limit_up: latest.limit_pct ? roundPrice(latest.close * (1 + latest.limit_pct / 100)) : latest.limit_up,
+    limit_down: latest.limit_pct ? roundPrice(latest.close * (1 - latest.limit_pct / 100)) : latest.limit_down,
+  };
+}
+
+function nextBusinessDate(date: string) {
+  const cursor = new Date(`${date}T12:00:00`);
+
+  do {
+    cursor.setDate(cursor.getDate() + 1);
+  } while (cursor.getDay() === 0 || cursor.getDay() === 6);
+
+  return formatDate(cursor);
+}
+
+function formatDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function clampPrice(value: number, record: StockDailyRecord) {
+  const min = record.limit_down ?? 0.01;
+  const max = record.limit_up ?? Number.POSITIVE_INFINITY;
+
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundPrice(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export default App;
