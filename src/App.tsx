@@ -26,8 +26,8 @@ import { cn } from "@/lib/utils";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
-const intradayBarsPerDay = 240;
-const candleWidthSecs = 60;
+const intradayBarsPerDay = 60;
+const candleWidthSecs = 240;
 const tradingSessionSecs = intradayBarsPerDay * candleWidthSecs;
 const dayGapSecs = 900;
 const packedDaySecs = tradingSessionSecs + dayGapSecs;
