@@ -1,16 +1,21 @@
-import { type DragEvent, useEffect, useMemo, useState } from "react";
+import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Ban,
   ChevronDown,
   CheckCircle2,
   Database,
   ListFilter,
+  LockKeyhole,
+  LogIn,
+  LogOut,
   Moon,
   Plus,
   RefreshCcw,
+  ScanLine,
   ShieldCheck,
   ShieldX,
   Sun,
+  UserRound,
 } from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +24,11 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Threads from "@/components/threads";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
 import { cn } from "@/lib/utils";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
@@ -74,6 +81,7 @@ function App() {
   const [selectedChartCode, setSelectedChartCode] = useState<string | null>(null);
   const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const storedTheme = window.localStorage.getItem(themeStorageKey);
@@ -100,6 +108,25 @@ function App() {
       // Keep theme switching usable if browser storage is unavailable.
     }
   }, [themeMode]);
+
+  function toggleThemeMode() {
+    setThemeMode((mode) => (mode === "dark" ? "light" : "dark"));
+  }
+
+  function logout() {
+    setSelectedChartCode(null);
+    setIsLoggedIn(false);
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <LoginPage
+        themeMode={themeMode}
+        onThemeToggle={toggleThemeMode}
+        onLogin={() => setIsLoggedIn(true)}
+      />
+    );
+  }
 
   function toggleSelectedStock(code: string) {
     if (selectedChartCode === code) {
@@ -239,7 +266,8 @@ function App() {
         <StockBoard
           stock={selectedStock}
           themeMode={themeMode}
-          onThemeToggle={() => setThemeMode((mode) => (mode === "dark" ? "light" : "dark"))}
+          onThemeToggle={toggleThemeMode}
+          onLogout={logout}
         />
 
         <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
@@ -273,18 +301,21 @@ type StockBoardProps = {
   stock: StockCandidate | null;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
+  onLogout: () => void;
 };
 
 function StockBoard({
   stock,
   themeMode,
   onThemeToggle,
+  onLogout,
 }: StockBoardProps) {
   if (!stock) {
     return (
       <StockBoardLoading
         themeMode={themeMode}
         onThemeToggle={onThemeToggle}
+        onLogout={onLogout}
       />
     );
   }
@@ -295,13 +326,14 @@ function StockBoard({
       stock={stock}
       themeMode={themeMode}
       onThemeToggle={onThemeToggle}
+      onLogout={onLogout}
     />
   );
 }
 
-function BrandLockup() {
+function BrandLockup({ className }: { className?: string }) {
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div className={cn("mb-2 flex flex-wrap items-center gap-2", className)}>
       <img
         src={logoSrc}
         alt=""
@@ -315,10 +347,110 @@ function BrandLockup() {
   );
 }
 
+function LoginPage({
+  themeMode,
+  onThemeToggle,
+  onLogin,
+}: {
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
+  onLogin: () => void;
+}) {
+  function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onLogin();
+  }
+
+  return (
+    <main className="relative min-h-screen overflow-hidden text-foreground">
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            themeMode === "light"
+              ? "linear-gradient(135deg, oklch(0.98 0.003 250), oklch(0.91 0.02 210))"
+              : "linear-gradient(135deg, oklch(0.08 0.02 248), oklch(0.12 0.035 205) 46%, oklch(0.09 0.01 260))",
+        }}
+      />
+      <div className="absolute inset-0">
+        <Threads
+          amplitude={1}
+          distance={0}
+          enableMouseInteraction
+        />
+      </div>
+
+      <header className="relative z-10 mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-5 sm:px-6 lg:px-8">
+        <BrandLockup className="mb-0" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="bg-background/45 backdrop-blur-xl"
+          aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+          title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+          onClick={onThemeToggle}
+        >
+          {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+          {themeMode === "dark" ? "亮色" : "暗色"}
+        </Button>
+      </header>
+
+      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-[1320px] items-center justify-center px-4 pb-10 sm:px-6 lg:px-8">
+        <form className="w-full max-w-[420px]" onSubmit={handleLoginSubmit}>
+          <Card className="border-white/15 bg-background/40 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
+            <CardHeader>
+              <div className="mb-2 flex size-11 items-center justify-center rounded-md border bg-background/45 backdrop-blur-xl">
+                <ScanLine className="size-5 text-foreground" />
+              </div>
+              <CardTitle className="text-2xl">登录</CardTitle>
+              <CardDescription>进入 StockPick 筛选看板</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                账号
+                <span className="relative">
+                  <UserRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    className="h-11 w-full rounded-md border bg-background/45 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35"
+                    name="username"
+                    placeholder="stockpick"
+                    autoComplete="username"
+                  />
+                </span>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                密码
+                <span className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    className="h-11 w-full rounded-md border bg-background/45 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35"
+                    name="password"
+                    type="password"
+                    placeholder="password"
+                    autoComplete="current-password"
+                  />
+                </span>
+              </label>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" className="w-full">
+                <LogIn data-icon="inline-start" />
+                进入看板
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 function ActiveStockBoard({
   stock,
   themeMode,
   onThemeToggle,
+  onLogout,
 }: Omit<StockBoardProps, "stock"> & {
   stock: StockCandidate;
 }) {
@@ -524,6 +656,16 @@ function ActiveStockBoard({
               variant="outline"
               size="sm"
               className="bg-background/45 backdrop-blur-xl"
+              onClick={onLogout}
+            >
+              <LogOut data-icon="inline-start" />
+              退出登录
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/45 backdrop-blur-xl"
               disabled={isLoading}
               onClick={reloadStock}
             >
@@ -590,9 +732,11 @@ function ActiveStockBoard({
 function StockBoardLoading({
   themeMode,
   onThemeToggle,
+  onLogout,
 }: {
   themeMode: ThemeMode;
   onThemeToggle: () => void;
+  onLogout: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
 
@@ -625,6 +769,16 @@ function StockBoardLoading({
             >
               {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
               {themeMode === "dark" ? "亮色" : "暗色"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/45 backdrop-blur-xl"
+              onClick={onLogout}
+            >
+              <LogOut data-icon="inline-start" />
+              退出登录
             </Button>
             <Button
               type="button"
