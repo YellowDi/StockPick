@@ -30,11 +30,11 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a pure
 - `src/lib/utils.ts` — `cn()` utility (clsx + tailwind-merge)
 - `src/styles/globals.css` — Tailwind CSS v4 with CSS custom properties for theming
 
-**Styling:** Tailwind CSS v4 via `@tailwindcss/vite` plugin. Dark mode is default; light mode toggled via `.light` class on `<html>`. The `@` path alias maps to `./src`.
+**Styling:** Tailwind CSS v4 via `@tailwindcss/vite` plugin. Light theme uses `:root`; dark mode toggles via `.dark` class on `<html>`. The `@` path alias maps to `./src`.
 
 **Charting:** Uses the `liveline` library (v0.0.7) for candlestick and line charts. The postinstall script `scripts/patch-liveline-a-share-colors.mjs` swaps green/red colors in liveline's source to match A-share convention — do not remove this script.
 
-**UI components:** Hand-written shadcn/ui-style primitives using `class-variance-authority`, `@radix-ui/react-slot`, and `cn()`. Not installed via shadcn CLI.
+**UI components:** Local shadcn/ui primitives using Base UI, `class-variance-authority`, and `cn()`.
 
 ## Product Constraints
 

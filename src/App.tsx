@@ -191,7 +191,7 @@ function App() {
   );
 
   useEffect(() => {
-    document.documentElement.classList.toggle("light", themeMode === "light");
+    document.documentElement.classList.toggle("dark", themeMode === "dark");
 
     try {
       window.localStorage.setItem(themeStorageKey, themeMode);
@@ -1087,18 +1087,20 @@ function StrategySwitchButton({
   return (
     <section className="mt-4 flex justify-center">
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]"
-          >
+        <DialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]"
+            />
+          }
+        >
             <SlidersHorizontal data-icon="inline-start" />
             策略切换
             <Badge variant="secondary" className="hidden sm:inline-flex">
               {config.enabled ? "启用" : "停用"} · {activeStrategy.label}
             </Badge>
-          </Button>
         </DialogTrigger>
 
         <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[640px] gap-0 overflow-hidden p-0">
@@ -1228,14 +1230,16 @@ function StrategySwitchButton({
                 恢复默认
               </Button>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <DialogClose asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="bg-background/55 transition-transform active:scale-[0.96]"
-                  >
+                <DialogClose
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-background/55 transition-transform active:scale-[0.96]"
+                    />
+                  }
+                >
                     取消
-                  </Button>
                 </DialogClose>
                 <Button type="submit" className="transition-transform active:scale-[0.96]">
                   保存为主策略
@@ -1260,10 +1264,19 @@ function StrategySelectField<T extends string>({
   options: readonly { id: T; label: string }[];
   onChange: (value: T) => void;
 }) {
+  const selectItems = options.map((option) => ({
+    label: option.label,
+    value: option.id,
+  }));
+
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <Label>{label}</Label>
-      <Select value={value} onValueChange={(nextValue) => onChange(nextValue as T)}>
+      <Select
+        items={selectItems}
+        value={value}
+        onValueChange={(nextValue) => onChange(nextValue as T)}
+      >
         <SelectTrigger className="h-11 w-full bg-background/55">
           <SelectValue />
         </SelectTrigger>
