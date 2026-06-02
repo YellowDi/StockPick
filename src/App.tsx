@@ -26,9 +26,12 @@ import { cn } from "@/lib/utils";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
-const mockDaySecs = 24;
-const candleWidthSecs = 18;
-const mockTickStepSecs = 3;
+const intradayBarsPerDay = 48;
+const candleWidthSecs = 2;
+const tradingSessionSecs = intradayBarsPerDay * candleWidthSecs;
+const mockDaySecs = 120;
+const mockTickStepSecs = 0.65;
+const initialLiveBarCount = 36;
 const weekWindowOffsetSecs = 0.001;
 const dayRangeOptions = [
   { id: "day-1", label: "本日", days: 1 },
@@ -290,13 +293,16 @@ function useLiveMockStock(
 }
 
 function createLiveSnapshot(records: StockDailyRecord[]) {
-  const baseTime = Math.floor(Date.now() / 1000) - records.length * mockDaySecs;
+  const currentDayStart = Math.floor(Date.now() / 1000) - initialLiveBarCount * candleWidthSecs;
+  const baseTime = currentDayStart - (records.length - 1) * mockDaySecs;
+  const candles = createIntradayCandles(records, baseTime);
 
   return {
     records: records.map((record) => ({ ...record })),
-    candles: toCandles(records, baseTime),
-    lineData: toLivelinePoints(records, baseTime),
-    clock: baseTime + (records.length - 1) * mockDaySecs + candleWidthSecs,
+    candles,
+    lineData: createLineDataFromCandles(candles),
+    clock: currentDayStart + initialLiveBarCount * candleWidthSecs,
+    currentDayStart,
   };
 }
 
@@ -315,20 +321,30 @@ function advanceLiveSnapshot(live: ReturnType<typeof createLiveSnapshot>) {
   const noise = latest.close * ((Math.random() - 0.47) * 0.0018);
   const nextClose = roundPrice(clampPrice(latest.close + drift + noise, latest));
   const addedVolume = Math.round(latest.volume * (0.0015 + Math.random() * 0.003));
-  const shouldStartNextCandle = Boolean(lastCandle && nextTime >= lastCandle.time + mockDaySecs);
+  const shouldStartNextDay = nextTime >= live.currentDayStart + tradingSessionSecs;
 
-  if (shouldStartNextCandle && lastCandle) {
+  if (shouldStartNextDay) {
     const nextRecord = createNextLiveRecord(latest, nextClose, addedVolume);
+    const nextDayStart = live.currentDayStart + mockDaySecs;
+    const nextCandle = createLiveCandle(nextDayStart, nextRecord.open, nextClose, nextRecord);
     const records = [...live.records, nextRecord].slice(-42);
-    const candles = [...live.candles, toCandleAt(nextRecord, lastCandle.time + mockDaySecs)].slice(-42);
+    const candles = [...live.candles, nextCandle].slice(-intradayBarsPerDay * 14);
     const lineData = [
       ...live.lineData,
-      { time: lastCandle.time + mockDaySecs, value: nextRecord.open },
-      { time: nextTime, value: nextClose },
-    ].slice(-1200);
+      { time: nextDayStart, value: nextRecord.open },
+      { time: nextDayStart + mockTickStepSecs, value: nextClose },
+    ].slice(-2000);
 
-    return { records, candles, lineData, clock: nextTime };
+    return {
+      records,
+      candles,
+      lineData,
+      clock: nextDayStart + mockTickStepSecs,
+      currentDayStart: nextDayStart,
+    };
   }
+
+  const shouldStartNextCandle = Boolean(lastCandle && nextTime >= lastCandle.time + candleWidthSecs);
 
   const nextRecord: StockDailyRecord = {
     ...latest,
@@ -339,12 +355,14 @@ function advanceLiveSnapshot(live: ReturnType<typeof createLiveSnapshot>) {
     amount: Math.round((latest.volume + addedVolume) * nextClose * 100),
   };
   const records = [...live.records.slice(0, -1), nextRecord];
-  const candles = lastCandle
-    ? [...live.candles.slice(0, -1), toCandleAt(nextRecord, lastCandle.time)]
-    : live.candles;
-  const lineData = [...live.lineData, { time: nextTime, value: nextClose }].slice(-1200);
+  const candles = lastCandle && shouldStartNextCandle
+    ? [...live.candles, createLiveCandle(lastCandle.time + candleWidthSecs, lastCandle.close, nextClose, nextRecord)]
+    : lastCandle
+      ? [...live.candles.slice(0, -1), updateLiveCandle(lastCandle, nextClose)]
+      : live.candles;
+  const lineData = [...live.lineData, { time: nextTime, value: nextClose }].slice(-2000);
 
-  return { records, candles, lineData, clock: nextTime };
+  return { records, candles, lineData, clock: nextTime, currentDayStart: live.currentDayStart };
 }
 
 function StockColumn({
@@ -495,33 +513,105 @@ function previousSuccessRecord(stock: StockCandidate) {
   return stock.records.filter((record) => record.status === "成功").at(-2);
 }
 
-function toLivelinePoints(records: StockDailyRecord[], baseTime: number): LivelinePoint[] {
+function createIntradayCandles(records: StockDailyRecord[], baseTime: number): CandlePoint[] {
   return records.flatMap((record, index) => {
-    const openTime = baseTime + index * mockDaySecs;
-    const midHighFirst = record.close >= record.open;
-    const firstSwing = midHighFirst ? record.high : record.low;
-    const secondSwing = midHighFirst ? record.low : record.high;
+    const dayStart = baseTime + index * mockDaySecs;
+    const barCount = index === records.length - 1 ? initialLiveBarCount : intradayBarsPerDay;
+    const values = createIntradayClosePath(record, barCount);
+
+    return values.map((close, barIndex) => {
+      const open = barIndex === 0 ? record.open : values[barIndex - 1];
+      const swing = Math.abs(close - open);
+      const wick = Math.max(record.close * 0.0008, swing * 0.7);
+
+      return {
+        time: dayStart + barIndex * candleWidthSecs,
+        open: roundPrice(open),
+        high: roundPrice(
+          Math.min(
+            record.limit_up ?? Number.POSITIVE_INFINITY,
+            Math.max(open, close) + wick * (0.6 + (barIndex % 3) * 0.15),
+          ),
+        ),
+        low: roundPrice(
+          Math.max(
+            record.limit_down ?? 0.01,
+            Math.min(open, close) - wick * (0.55 + (barIndex % 4) * 0.12),
+          ),
+        ),
+        close: roundPrice(close),
+      };
+    });
+  });
+}
+
+function createIntradayClosePath(record: StockDailyRecord, count: number) {
+  const highFirst = record.close >= record.open;
+  const firstSwing = highFirst ? record.high : record.low;
+  const secondSwing = highFirst ? record.low : record.high;
+  const anchors = [
+    { index: 0, value: record.open },
+    { index: Math.max(1, Math.round(count * 0.28)), value: firstSwing },
+    { index: Math.max(2, Math.round(count * 0.62)), value: secondSwing },
+    { index: count - 1, value: record.close },
+  ];
+  const values: number[] = [];
+
+  for (let index = 0; index < count; index++) {
+    const rightAnchorIndex = anchors.findIndex((anchor) => anchor.index >= index);
+    const right = anchors[Math.max(0, rightAnchorIndex)];
+    const left = anchors[Math.max(0, rightAnchorIndex - 1)] ?? right;
+    const span = Math.max(1, right.index - left.index);
+    const progress = (index - left.index) / span;
+    const base = left.value + (right.value - left.value) * progress;
+    const noise = Math.sin(index * 1.7 + record.code.length) * record.close * 0.0018;
+
+    values.push(roundPrice(clampPrice(base + noise, record)));
+  }
+
+  values[0] = record.open;
+  values[count - 1] = record.close;
+
+  return values;
+}
+
+function createLineDataFromCandles(candles: CandlePoint[]): LivelinePoint[] {
+  return candles.flatMap((candle) => {
+    const midValue = Math.abs(candle.high - candle.close) > Math.abs(candle.low - candle.close)
+      ? candle.high
+      : candle.low;
 
     return [
-      { time: openTime, value: record.open },
-      { time: openTime + 4, value: firstSwing },
-      { time: openTime + 10, value: secondSwing },
-      { time: openTime + candleWidthSecs, value: record.close },
+      { time: candle.time, value: candle.open },
+      { time: candle.time + candleWidthSecs * 0.45, value: midValue },
+      { time: candle.time + candleWidthSecs, value: candle.close },
     ];
   });
 }
 
-function toCandles(records: StockDailyRecord[], baseTime: number): CandlePoint[] {
-  return records.map((record, index) => toCandleAt(record, baseTime + index * mockDaySecs));
-}
+function createLiveCandle(
+  time: number,
+  open: number,
+  close: number,
+  record: StockDailyRecord,
+): CandlePoint {
+  const safeClose = roundPrice(clampPrice(close, record));
 
-function toCandleAt(record: StockDailyRecord, time: number): CandlePoint {
   return {
     time,
-    open: record.open,
-    high: record.high,
-    low: record.low,
-    close: record.close,
+    open: roundPrice(open),
+    high: roundPrice(Math.max(open, safeClose)),
+    low: roundPrice(Math.min(open, safeClose)),
+    close: safeClose,
+  };
+}
+
+function updateLiveCandle(candle: CandlePoint, close: number): CandlePoint {
+  return {
+    ...candle,
+    high: roundPrice(Math.max(candle.high, close)),
+    low: roundPrice(Math.min(candle.low, close)),
+    close: roundPrice(close),
   };
 }
 
