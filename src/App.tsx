@@ -196,7 +196,7 @@ function StockBoard({
         style={{ background: "var(--chart-hero-background)" }}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-64 bg-gradient-to-b from-transparent via-background/78 to-background" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24 bg-gradient-to-b from-transparent via-background/20 to-background" />
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-4 px-4 pt-5 sm:px-6 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
@@ -336,7 +336,7 @@ function StockBoard({
               }
               formatValue={(value) => value.toFixed(2)}
               formatTime={formatChartTime}
-              padding={{ top: 190, right: 86, bottom: 92, left: 24 }}
+              padding={{ top: 190, right: 86, bottom: 72, left: 24 }}
               className="size-full"
             />
           ) : (
@@ -346,16 +346,13 @@ function StockBoard({
 
       </div>
 
-      <div className="relative z-20 mx-auto -mt-32 w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
+      <div className="relative z-20 mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr_1.8fr]">
           <MarketStatusCard
             stock={stock}
             latest={latest}
-            records={records}
             change={change}
             changePct={changePct}
-            chartRangeLabel={selectedRange.label}
-            chartModeLabel={chartMode === "candle" ? "K线" : "折线"}
           />
           <KeyMetricsCard latest={latest} change={change} changePct={changePct} loading={isLoading} />
           <RecentRecordsCard records={records} />
@@ -368,19 +365,13 @@ function StockBoard({
 function MarketStatusCard({
   stock,
   latest,
-  records,
   change,
   changePct,
-  chartRangeLabel,
-  chartModeLabel,
 }: {
   stock: StockCandidate;
   latest?: StockDailyRecord;
-  records: StockDailyRecord[];
   change: number;
   changePct: number;
-  chartRangeLabel: string;
-  chartModeLabel: string;
 }) {
   const positive = change >= 0;
   const trend = !latest
@@ -418,10 +409,6 @@ function MarketStatusCard({
         <MetricLine label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
         <MetricLine label="涨跌额" value={latest ? formatSigned(change) : "--"} tone={latest ? positive ? "up" : "down" : undefined} />
         <MetricLine label="强度" value={strength} />
-        <MetricLine label="最新日期" value={latest?.date ?? "--"} />
-        <MetricLine label="样本天数" value={`${records.length} 日`} />
-        <MetricLine label="窗口" value={chartRangeLabel} />
-        <MetricLine label="模式" value={chartModeLabel} />
       </CardContent>
     </Card>
   );
