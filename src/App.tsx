@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useState } from "react";
 import {
   Ban,
   ChevronDown,
@@ -49,6 +49,10 @@ const dayRangeOptions = [
 ] as const;
 type ChartRangeId = "realtime" | (typeof dayRangeOptions)[number]["id"] | "week";
 type ThemeMode = "light" | "dark";
+type DraggedStock = {
+  code: string;
+  fromList: StockListKey;
+};
 
 const themeStorageKey = "stockpick-theme";
 
@@ -62,6 +66,8 @@ const listIcons = {
 function App() {
   const [stockGroups, setStockGroups] = useState(mockStockGroups);
   const [selectedChartCode, setSelectedChartCode] = useState<string | null>(null);
+  const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
+  const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
   const [loadingKey, setLoadingKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -114,6 +120,110 @@ function App() {
     });
   }
 
+  function canDropStock(targetList: StockListKey, stock = draggedStock) {
+    if (!stock || stock.fromList === targetList) {
+      return false;
+    }
+
+    if (targetList === "selected") {
+      return stock.fromList !== "selected" && !selectedStockCodes.has(stock.code);
+    }
+
+    return stock.fromList === "selected";
+  }
+
+  function moveDroppedStock(stock: DraggedStock, targetList: StockListKey) {
+    if (targetList === "selected") {
+      const sourceStock = stockGroups[stock.fromList].find((item) => item.code === stock.code);
+
+      if (sourceStock) {
+        addToSelected(sourceStock);
+      }
+
+      return;
+    }
+
+    if (stock.fromList !== "selected") {
+      return;
+    }
+
+    setStockGroups((currentGroups) => {
+      const selectedStock = currentGroups.selected.find((item) => item.code === stock.code);
+
+      if (!selectedStock) {
+        return currentGroups;
+      }
+
+      const targetStocks = currentGroups[targetList];
+
+      return {
+        ...currentGroups,
+        selected: currentGroups.selected.filter((item) => item.code !== stock.code),
+        [targetList]: targetStocks.some((item) => item.code === stock.code)
+          ? targetStocks
+          : [
+              ...targetStocks,
+              {
+                ...selectedStock,
+                list: targetList,
+              },
+            ],
+      };
+    });
+    setSelectedChartCode((code) => (code === stock.code ? null : code));
+  }
+
+  function handleStockDragStart(
+    stock: StockCandidate,
+    fromList: StockListKey,
+    event: DragEvent<HTMLButtonElement>,
+  ) {
+    const nextDraggedStock = {
+      code: stock.code,
+      fromList,
+    };
+
+    event.dataTransfer.effectAllowed = fromList === "selected" ? "move" : "copy";
+    event.dataTransfer.setData("text/plain", `${fromList}:${stock.code}`);
+    setDraggedStock(nextDraggedStock);
+  }
+
+  function handleColumnDragOver(listKey: StockListKey, event: DragEvent<HTMLDivElement>) {
+    if (!canDropStock(listKey)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = draggedStock?.fromList === "selected" ? "move" : "copy";
+    setDropTarget((current) => (current === listKey ? current : listKey));
+  }
+
+  function handleColumnDragLeave(listKey: StockListKey, event: DragEvent<HTMLDivElement>) {
+    const relatedTarget = event.relatedTarget;
+
+    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+
+    setDropTarget((current) => (current === listKey ? null : current));
+  }
+
+  function handleColumnDrop(listKey: StockListKey, event: DragEvent<HTMLDivElement>) {
+    if (!draggedStock || !canDropStock(listKey, draggedStock)) {
+      return;
+    }
+
+    event.preventDefault();
+    moveDroppedStock(draggedStock, listKey);
+    setDraggedStock(null);
+    setDropTarget(null);
+  }
+
+  function handleDragEnd() {
+    setDraggedStock(null);
+    setDropTarget(null);
+  }
+
   return (
     <main className="min-h-screen overflow-x-hidden text-foreground">
       <div className="flex flex-col">
@@ -134,8 +244,15 @@ function App() {
                 stocks={stockGroups[key]}
                 selectedCode={selectedChartCode}
                 selectedStockCodes={selectedStockCodes}
+                canDrop={canDropStock(key)}
+                isDropTarget={dropTarget === key}
                 onOpenChart={openSelectedStock}
                 onAddToSelected={addToSelected}
+                onDragStart={handleStockDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleColumnDragOver}
+                onDragLeave={handleColumnDragLeave}
+                onDrop={handleColumnDrop}
               />
             ))}
           </section>
@@ -895,22 +1012,49 @@ function StockColumn({
   stocks,
   selectedCode,
   selectedStockCodes,
+  canDrop,
+  isDropTarget,
   onOpenChart,
   onAddToSelected,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   listKey: StockListKey;
   stocks: StockCandidate[];
   selectedCode: string | null;
   selectedStockCodes: Set<string>;
+  canDrop: boolean;
+  isDropTarget: boolean;
   onOpenChart: (code: string) => void;
   onAddToSelected: (stock: StockCandidate) => void;
+  onDragStart: (
+    stock: StockCandidate,
+    fromList: StockListKey,
+    event: DragEvent<HTMLButtonElement>,
+  ) => void;
+  onDragEnd: () => void;
+  onDragOver: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
 }) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
   const opensChart = listKey === "selected";
 
   return (
-    <Card className="min-h-[360px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+    <Card
+      className={cn(
+        "min-h-[360px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl transition-[background-color,border-color,box-shadow]",
+        canDrop && "border-dashed border-ring/60",
+        isDropTarget && "bg-secondary/35 shadow-[0_18px_70px_rgba(0,0,0,0.22)] ring-2 ring-ring/35",
+      )}
+      onDragOver={(event) => onDragOver(listKey, event)}
+      onDragLeave={(event) => onDragLeave(listKey, event)}
+      onDrop={(event) => onDrop(listKey, event)}
+    >
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -928,6 +1072,8 @@ function StockColumn({
             stock={stock}
             active={opensChart && stock.code === selectedCode}
             action={opensChart ? "open" : selectedStockCodes.has(stock.code) ? "added" : "add"}
+            onDragStart={(event) => onDragStart(stock, listKey, event)}
+            onDragEnd={onDragEnd}
             onClick={() => {
               if (opensChart) {
                 onOpenChart(stock.code);
@@ -947,11 +1093,15 @@ function StockListButton({
   stock,
   active,
   action,
+  onDragStart,
+  onDragEnd,
   onClick,
 }: {
   stock: StockCandidate;
   active: boolean;
   action: "open" | "add" | "added";
+  onDragStart: (event: DragEvent<HTMLButtonElement>) => void;
+  onDragEnd: () => void;
   onClick: () => void;
 }) {
   const latest = latestSuccessRecord(stock);
@@ -967,9 +1117,13 @@ function StockListButton({
       className={cn(
         "h-auto justify-start rounded-lg border px-3 py-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96]",
         active ? "border-ring bg-secondary" : "border-transparent bg-background/40 hover:border-border",
+        !disabled && "cursor-grab active:cursor-grabbing",
       )}
       aria-pressed={active}
       disabled={disabled}
+      draggable={!disabled}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onClick={onClick}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-1">
