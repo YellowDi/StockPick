@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { LoginPage } from "@/components/login-page";
+import { Toaster } from "@/components/ui/sonner";
 import {
   clearStoredAuthToken,
   getStoredAuthToken,
@@ -39,6 +41,9 @@ function App() {
   }, [themeMode]);
 
   useEffect(() => subscribeAuthExpired(() => {
+    toast.warning("登录状态已失效", {
+      description: "请重新登录。",
+    });
     setIsLoggedIn(false);
     setLoginError("登录状态已失效，请重新登录。");
   }), []);
@@ -59,10 +64,16 @@ function App() {
       }
 
       setIsLoggedIn(true);
+      toast.success("登录成功");
     } catch (error) {
+      const message = error instanceof Error ? error.message : "登录失败，请稍后重试。";
+
       clearStoredAuthToken();
       setIsLoggedIn(false);
-      setLoginError(error instanceof Error ? error.message : "登录失败，请稍后重试。");
+      setLoginError(message);
+      toast.error("登录失败", {
+        description: message,
+      });
     } finally {
       setIsLoginPending(false);
     }
@@ -71,21 +82,18 @@ function App() {
   const handleLogout = useCallback(() => {
     clearStoredAuthToken();
     setIsLoggedIn(false);
+    toast.info("已退出登录");
   }, []);
 
-  if (!isLoggedIn) {
-    return (
-      <LoginPage
-        themeMode={themeMode}
-        onThemeToggle={toggleThemeMode}
-        onLogin={handleLogin}
-        isLoginPending={isLoginPending}
-        loginError={loginError}
-      />
-    );
-  }
-
-  return (
+  const content = !isLoggedIn ? (
+    <LoginPage
+      themeMode={themeMode}
+      onThemeToggle={toggleThemeMode}
+      onLogin={handleLogin}
+      isLoginPending={isLoginPending}
+      loginError={loginError}
+    />
+  ) : (
     <Suspense fallback={<DashboardFallback />}>
       <StockDashboard
         themeMode={themeMode}
@@ -93,6 +101,13 @@ function App() {
         onLogout={handleLogout}
       />
     </Suspense>
+  );
+
+  return (
+    <>
+      {content}
+      <Toaster theme={themeMode} position="top-right" />
+    </>
   );
 }
 

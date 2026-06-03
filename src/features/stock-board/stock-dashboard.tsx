@@ -25,6 +25,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
+import { toast } from "sonner";
 
 import { BrandLockup } from "@/components/brand-lockup";
 import { Badge } from "@/components/ui/badge";
@@ -191,7 +192,12 @@ export default function StockDashboard({
           return;
         }
 
-        setFilterListsError(error instanceof Error ? error.message : "黑白名单加载失败。");
+        const message = error instanceof Error ? error.message : "黑白名单加载失败。";
+
+        setFilterListsError(message);
+        toast.error("黑白名单加载失败", {
+          description: message,
+        });
       });
 
     return () => controller.abort();
@@ -238,9 +244,14 @@ export default function StockDashboard({
 
   async function deleteStockFromFilterList(stock: StockCandidate, fromList: ReturnableListKey) {
     const filterId = stock.filterId;
+    const listLabel = stockListMeta[fromList].label;
+    const stockLabel = `${stock.name} ${stock.code}`;
 
     if (!filterId) {
       removeStockFromFilterList(stock, fromList);
+      toast.success(`已从${listLabel}删除`, {
+        description: stockLabel,
+      });
       return;
     }
 
@@ -252,9 +263,27 @@ export default function StockDashboard({
     try {
       await deleteStockFilter(filterId);
       removeStockFromFilterList(stock, fromList);
-      await syncFilterLists();
+      toast.success(`已从${listLabel}删除`, {
+        description: stockLabel,
+      });
+
+      try {
+        await syncFilterLists();
+      } catch (syncError) {
+        const message = syncError instanceof Error ? syncError.message : "黑白名单同步失败。";
+
+        setFilterListsError(message);
+        toast.error("黑白名单同步失败", {
+          description: message,
+        });
+      }
     } catch (error) {
-      setFilterListsError(error instanceof Error ? error.message : "删除黑白名单失败。");
+      const message = error instanceof Error ? error.message : "删除黑白名单失败。";
+
+      setFilterListsError(message);
+      toast.error("删除黑白名单失败", {
+        description: message,
+      });
     } finally {
       setFilterDeletePendingIds((currentIds) => (
         currentIds.filter((pendingId) => pendingId !== filterId)
@@ -276,7 +305,16 @@ export default function StockDashboard({
       name: stock.name,
       listType: getFilterListType(targetList),
     });
-    await syncFilterLists();
+    try {
+      await syncFilterLists();
+    } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : "黑白名单同步失败。";
+
+      setFilterListsError(message);
+      toast.error("黑白名单同步失败", {
+        description: message,
+      });
+    }
   }, [syncFilterLists]);
 
   function canDropStock(targetList: StockListKey, stock = draggedStock) {
@@ -1839,12 +1877,20 @@ function StockImportDialog({
         importPendingCode: null,
         importError: null,
       }));
+      toast.success(`已添加到${meta.label}`, {
+        description: `${stock.name} ${stock.code}`,
+      });
     } catch (importError) {
+      const message = importError instanceof Error ? importError.message : "添加黑白名单失败。";
+
       setDialogState((current) => ({
         ...current,
         importPendingCode: null,
-        importError: importError instanceof Error ? importError.message : "添加黑白名单失败。",
+        importError: message,
       }));
+      toast.error("添加黑白名单失败", {
+        description: message,
+      });
     }
   }
 
