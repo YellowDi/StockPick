@@ -131,25 +131,6 @@ export default function StockDashboard({
     scrollBoardIntoViewOnMobile();
   }
 
-  function addToSelected(stock: StockCandidate) {
-    setStockGroups((currentGroups) => {
-      if (currentGroups.selected.some((item) => item.code === stock.code)) {
-        return currentGroups;
-      }
-
-      return {
-        ...currentGroups,
-        selected: [
-          ...currentGroups.selected,
-          {
-            ...stock,
-            list: "selected",
-          },
-        ],
-      };
-    });
-  }
-
   function canDropStock(targetList: StockListKey, stock = draggedStock) {
     if (!stock || stock.fromList === targetList) {
       return false;
@@ -164,11 +145,32 @@ export default function StockDashboard({
 
   function moveDroppedStock(stock: DraggedStock, targetList: StockListKey) {
     if (targetList === "selected") {
-      const sourceStock = stockGroups[stock.fromList].find((item) => item.code === stock.code);
+      setStockGroups((currentGroups) => {
+        const sourceStock = currentGroups[stock.fromList].find((item) => item.code === stock.code);
 
-      if (sourceStock) {
-        addToSelected(sourceStock);
-      }
+        if (!sourceStock || currentGroups.selected.some((item) => item.code === stock.code)) {
+          return currentGroups;
+        }
+
+        return {
+          ...currentGroups,
+          ...(stock.fromList === "initial"
+            ? { initial: currentGroups.initial.filter((item) => item.code !== stock.code) }
+            : {}),
+          selected: [
+            ...currentGroups.selected,
+            {
+              ...sourceStock,
+              list: "selected",
+            },
+          ],
+        };
+      });
+      setChartSelection((selection) => (
+        selection?.listKey === "initial" && selection.code === stock.code
+          ? { code: stock.code, listKey: "selected" }
+          : selection
+      ));
 
       return;
     }
