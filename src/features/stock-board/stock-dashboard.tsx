@@ -65,8 +65,9 @@ import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/sto
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
-const heroChartPadding = { top: 260, right: 86, bottom: 72, left: 24 };
-const compactHeroChartPadding = { top: 292, right: 52, bottom: 54, left: 12 };
+const chartRightGapSecs = daySecs * 1.15;
+const heroChartPadding = { top: 260, right: 118, bottom: 72, left: 24 };
+const compactHeroChartPadding = { top: 292, right: 76, bottom: 54, left: 12 };
 const compactViewportQuery = "(max-width: 639px)";
 const mobileViewportQuery = "(max-width: 767px)";
 const chartRangeOptionsBase = [
@@ -851,7 +852,7 @@ function ActiveStockBoard({
   const chartRangeOptions = useMemo(() => chartRangeOptionsBase.map((option) => ({
     id: option.id,
     label: option.label,
-    secs: option.id === "daily" ? getDailyKWindowSecs(sourceRecords) : daySecs,
+    secs: getDailyKWindowSecs(sourceRecords),
   })), [sourceRecords]);
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
   const isCompactViewport = useIsCompactViewport();
@@ -2615,7 +2616,7 @@ function createChartView(
 ) {
   if (rangeId === "daily") {
     const records = history.slice(-dailyKVisibleDays);
-    const candles = createDailyCandles(records);
+    const candles = createDisplayDailyCandles(records);
 
     return {
       records,
@@ -2626,7 +2627,7 @@ function createChartView(
   }
 
   const records = history.slice(-1);
-  const candles = createDailyCandles(records);
+  const candles = createDisplayDailyCandles(records);
 
   return {
     records,
@@ -2636,9 +2637,13 @@ function createChartView(
   };
 }
 
-function createDailyCandles(records: StockDailyRecord[]): CandlePoint[] {
-  return records.map((record) => ({
-    time: getRecordTime(record),
+function createDisplayDailyCandles(records: StockDailyRecord[]): CandlePoint[] {
+  const windowSecs = getDailyKWindowSecs(records);
+  const rightEdge = Date.now() / 1000 + windowSecs * 0.015;
+  const latestStartTime = rightEdge - chartRightGapSecs;
+
+  return records.map((record, index) => ({
+    time: latestStartTime - (records.length - 1 - index) * daySecs,
     open: record.open,
     high: record.high,
     low: record.low,
