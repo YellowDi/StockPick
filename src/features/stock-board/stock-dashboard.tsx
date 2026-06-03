@@ -47,7 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { defaultStrategyConfig, StrategySwitchButton, type StrategyConfig } from "@/features/strategy-switch/strategy-switch-button";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
-import { listStocks, type StockInfo } from "@/lib/stock-api";
+import { addStockFilter, deleteStockFilter, listStockFilters, listStocks, type StockFilter, type StockInfo } from "@/lib/stock-api";
 import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
@@ -105,6 +105,8 @@ type StockImportDialogState = {
   stocks: StockInfo[];
   isLoading: boolean;
   error: string | null;
+  importPendingCode: string | null;
+  importError: string | null;
 };
 
 const initialStockImportDialogState: StockImportDialogState = {
@@ -114,6 +116,8 @@ const initialStockImportDialogState: StockImportDialogState = {
   stocks: [],
   isLoading: true,
   error: null,
+  importPendingCode: null,
+  importError: null,
 };
 
 const listIcons = {
@@ -141,6 +145,8 @@ export default function StockDashboard({
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
   const [mobileListKey, setMobileListKey] = useState<StockListKey>("selected");
   const [importTargetList, setImportTargetList] = useState<ReturnableListKey | null>(null);
+  const [filterListsError, setFilterListsError] = useState<string | null>(null);
+  const [filterDeletePendingIds, setFilterDeletePendingIds] = useState<number[]>([]);
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>(defaultStrategyConfig);
   const selectedStock = chartSelection
     ? stockGroups[chartSelection.listKey].find((stock) => stock.code === chartSelection.code) ?? null
@@ -149,6 +155,46 @@ export default function StockDashboard({
     () => new Set(stockGroups.selected.map((stock) => stock.code)),
     [stockGroups.selected],
   );
+
+  const syncFilterLists = useCallback(async (signal?: AbortSignal) => {
+    const [whiteFilters, blackFilters] = await Promise.all([
+      listStockFilters("white", signal),
+      listStockFilters("black", signal),
+    ]);
+    const whitelist = createStockFilterCandidates(whiteFilters, "whitelist");
+    const blacklist = createStockFilterCandidates(blackFilters, "blacklist");
+
+    setStockGroups((currentGroups) => ({
+      ...currentGroups,
+      whitelist,
+      blacklist,
+    }));
+    setChartSelection((selection) => {
+      if (!selection || (selection.listKey !== "whitelist" && selection.listKey !== "blacklist")) {
+        return selection;
+      }
+
+      const nextStocks = selection.listKey === "whitelist" ? whitelist : blacklist;
+
+      return nextStocks.some((stock) => stock.code === selection.code) ? selection : null;
+    });
+    setFilterListsError(null);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void syncFilterLists(controller.signal)
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setFilterListsError(error instanceof Error ? error.message : "黑白名单加载失败。");
+      });
+
+    return () => controller.abort();
+  }, [syncFilterLists]);
 
   function scrollBoardIntoViewOnMobile() {
     if (!window.matchMedia(mobileViewportQuery).matches) {
@@ -171,7 +217,7 @@ export default function StockDashboard({
     scrollBoardIntoViewOnMobile();
   }
 
-  function returnListedStockToInitial(stock: StockCandidate, fromList: ReturnableListKey) {
+  function moveListedStockToInitial(stock: StockCandidate, fromList: ReturnableListKey) {
     setStockGroups((currentGroups) => {
       const sourceStock = currentGroups[fromList].find((item) => item.code === stock.code);
 
@@ -190,7 +236,9 @@ export default function StockDashboard({
           : [
               ...currentGroups.initial,
               {
-                ...sourceStock,
+                code: sourceStock.code,
+                name: sourceStock.name,
+                records: sourceStock.records,
                 list: "initial",
               },
             ],
@@ -203,6 +251,32 @@ export default function StockDashboard({
     ));
   }
 
+  async function returnListedStockToInitial(stock: StockCandidate, fromList: ReturnableListKey) {
+    const filterId = stock.filterId;
+
+    if (!filterId) {
+      moveListedStockToInitial(stock, fromList);
+      return;
+    }
+
+    setFilterDeletePendingIds((currentIds) => (
+      currentIds.includes(filterId) ? currentIds : [...currentIds, filterId]
+    ));
+    setFilterListsError(null);
+
+    try {
+      await deleteStockFilter(filterId);
+      moveListedStockToInitial(stock, fromList);
+      await syncFilterLists();
+    } catch (error) {
+      setFilterListsError(error instanceof Error ? error.message : "删除黑白名单失败。");
+    } finally {
+      setFilterDeletePendingIds((currentIds) => (
+        currentIds.filter((pendingId) => pendingId !== filterId)
+      ));
+    }
+  }
+
   const openImportDialog = useCallback((listKey: ReturnableListKey) => {
     setImportTargetList(listKey);
   }, []);
@@ -211,36 +285,14 @@ export default function StockDashboard({
     setImportTargetList(null);
   }, []);
 
-  const importStockToList = useCallback((stock: StockInfo, targetList: ReturnableListKey) => {
-    const importedStock = createImportedStockCandidate(stock, targetList);
-
-    if (!importedStock) {
-      return;
-    }
-
-    const importedCodeKey = getComparableStockCode(importedStock.code);
-    const oppositeList = getOppositeReturnableListKey(targetList);
-
-    setStockGroups((currentGroups) => {
-      const targetStocks = currentGroups[targetList];
-      const alreadyInTarget = targetStocks.some((item) => (
-        getComparableStockCode(item.code) === importedCodeKey
-      ));
-
-      return {
-        ...currentGroups,
-        [targetList]: alreadyInTarget ? targetStocks : [...targetStocks, importedStock],
-        [oppositeList]: currentGroups[oppositeList].filter((item) => (
-          getComparableStockCode(item.code) !== importedCodeKey
-        )),
-      };
+  const importStockToList = useCallback(async (stock: StockInfo, targetList: ReturnableListKey) => {
+    await addStockFilter({
+      code: stock.code,
+      name: stock.name,
+      listType: getFilterListType(targetList),
     });
-    setChartSelection((selection) => (
-      selection?.listKey === oppositeList && getComparableStockCode(selection.code) === importedCodeKey
-        ? { code: importedStock.code, listKey: targetList }
-        : selection
-    ));
-  }, []);
+    await syncFilterLists();
+  }, [syncFilterLists]);
 
   function canDropStock(targetList: StockListKey, stock = draggedStock) {
     if (!stock || stock.fromList === targetList) {
@@ -271,7 +323,9 @@ export default function StockDashboard({
           selected: [
             ...currentGroups.selected,
             {
-              ...sourceStock,
+              code: sourceStock.code,
+              name: sourceStock.name,
+              records: sourceStock.records,
               list: "selected",
             },
           ],
@@ -307,7 +361,9 @@ export default function StockDashboard({
           : [
               ...targetStocks,
               {
-                ...selectedStock,
+                code: selectedStock.code,
+                name: selectedStock.name,
+                records: selectedStock.records,
                 list: targetList,
               },
             ],
@@ -371,6 +427,7 @@ export default function StockDashboard({
 
   const sharedStockListProps = {
     chartSelection,
+    filterDeletePendingIds,
     onToggleChart: toggleSelectedStock,
     onReturnToInitial: returnListedStockToInitial,
   };
@@ -392,6 +449,14 @@ export default function StockDashboard({
             config={strategyConfig}
             onSave={setStrategyConfig}
           />
+          {filterListsError ? (
+            <p
+              className="mx-auto mt-3 max-w-[720px] rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
+              role="alert"
+            >
+              黑白名单操作失败：{filterListsError}
+            </p>
+          ) : null}
 
           <MobileStockTabs
             activeListKey={mobileListKey}
@@ -960,6 +1025,7 @@ function MobileStockTabs({
   activeListKey,
   stockGroups,
   chartSelection,
+  filterDeletePendingIds,
   onOpenImport,
   onActiveListChange,
   onToggleChart,
@@ -968,10 +1034,11 @@ function MobileStockTabs({
   activeListKey: StockListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
   chartSelection: ChartSelection | null;
+  filterDeletePendingIds: number[];
   onOpenImport: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
   onToggleChart: (code: string, listKey: StockListKey) => void;
-  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void;
+  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }) {
   const stocks = stockGroups[activeListKey];
   const meta = stockListMeta[activeListKey];
@@ -1026,7 +1093,8 @@ function MobileStockTabs({
               active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
               draggable={false}
               onClick={() => onToggleChart(stock.code, activeListKey)}
-              onReturnToInitial={returnableListKey ? () => onReturnToInitial(stock, returnableListKey) : undefined}
+              returnPending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
+              onReturnToInitial={returnableListKey ? () => void onReturnToInitial(stock, returnableListKey) : undefined}
             />
           ))
         ) : (
@@ -1380,6 +1448,7 @@ function StockColumn({
   listKey,
   stocks,
   chartSelection,
+  filterDeletePendingIds,
   canDrop,
   isDropTarget,
   onToggleChart,
@@ -1394,10 +1463,11 @@ function StockColumn({
   listKey: StockListKey;
   stocks: StockCandidate[];
   chartSelection: ChartSelection | null;
+  filterDeletePendingIds: number[];
   canDrop: boolean;
   isDropTarget: boolean;
   onToggleChart: (code: string, listKey: StockListKey) => void;
-  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void;
+  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
   onDragStart: (
     stock: StockCandidate,
     fromList: StockListKey,
@@ -1454,7 +1524,8 @@ function StockColumn({
             onDragStart={(event) => onDragStart(stock, listKey, event)}
             onDragEnd={onDragEnd}
             onClick={() => onToggleChart(stock.code, listKey)}
-            onReturnToInitial={returnableListKey ? () => onReturnToInitial(stock, returnableListKey) : undefined}
+            returnPending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
+            onReturnToInitial={returnableListKey ? () => void onReturnToInitial(stock, returnableListKey) : undefined}
           />
         ))}
       </CardContent>
@@ -1470,9 +1541,45 @@ function getOppositeReturnableListKey(listKey: ReturnableListKey): ReturnableLis
   return listKey === "whitelist" ? "blacklist" : "whitelist";
 }
 
+function getFilterListType(listKey: ReturnableListKey) {
+  return listKey === "whitelist" ? "white" : "black";
+}
+
+function createStockFilterCandidates(
+  filters: StockFilter[],
+  targetList: ReturnableListKey,
+): StockCandidate[] {
+  const seenCodes = new Set<string>();
+
+  return filters.flatMap((filter) => {
+    const candidate = createImportedStockCandidate(
+      {
+        code: filter.code,
+        name: filter.name,
+      },
+      targetList,
+      filter.id,
+    );
+
+    if (!candidate) {
+      return [];
+    }
+
+    const codeKey = getComparableStockCode(candidate.code);
+
+    if (seenCodes.has(codeKey)) {
+      return [];
+    }
+
+    seenCodes.add(codeKey);
+    return [candidate];
+  });
+}
+
 function createImportedStockCandidate(
   stock: StockInfo,
   targetList: ReturnableListKey,
+  filterId?: number,
 ): StockCandidate | null {
   const code = stock.code.trim();
 
@@ -1487,6 +1594,7 @@ function createImportedStockCandidate(
     name,
     list: targetList,
     records: [createImportedNoDataRecord(code, name)],
+    ...(filterId && filterId > 0 ? { filterId } : {}),
   };
 }
 
@@ -1539,6 +1647,7 @@ function StockListButton({
   stock,
   active,
   draggable = true,
+  returnPending = false,
   onDragStart,
   onDragEnd,
   onClick,
@@ -1547,12 +1656,13 @@ function StockListButton({
   stock: StockCandidate;
   active: boolean;
   draggable?: boolean;
+  returnPending?: boolean;
   onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
   onDragEnd?: () => void;
   onClick: () => void;
   onReturnToInitial?: () => void;
 }) {
-  const returnTitle = "移回待选";
+  const returnTitle = returnPending ? "正在移回待选" : "移回待选";
 
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -1585,9 +1695,14 @@ function StockListButton({
           className="size-10 shrink-0 rounded-lg border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
           aria-label={returnTitle}
           title={returnTitle}
+          disabled={returnPending}
           onClick={onReturnToInitial}
         >
-          <ListRestart className="size-4" />
+          {returnPending ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <ListRestart className="size-4" />
+          )}
         </Button>
       ) : null}
     </div>
@@ -1603,11 +1718,20 @@ function StockImportDialog({
   targetList: ReturnableListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
   onClose: () => void;
-  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => void;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
 }) {
   const requestIdRef = useRef(0);
   const [dialogState, setDialogState] = useState<StockImportDialogState>(initialStockImportDialogState);
-  const { codeQuery, nameQuery, searchMode, stocks, isLoading, error } = dialogState;
+  const {
+    codeQuery,
+    nameQuery,
+    searchMode,
+    stocks,
+    isLoading,
+    error,
+    importPendingCode,
+    importError,
+  } = dialogState;
   const meta = stockListMeta[targetList];
   const oppositeList = getOppositeReturnableListKey(targetList);
   const filteredStocks = useMemo(
@@ -1709,6 +1833,31 @@ function StockImportDialog({
     });
   }
 
+  async function handleImportStock(stock: StockInfo) {
+    const stockCodeKey = getComparableStockCode(stock.code);
+
+    setDialogState((current) => ({
+      ...current,
+      importPendingCode: stockCodeKey,
+      importError: null,
+    }));
+
+    try {
+      await onImportStock(stock, targetList);
+      setDialogState((current) => ({
+        ...current,
+        importPendingCode: null,
+        importError: null,
+      }));
+    } catch (importError) {
+      setDialogState((current) => ({
+        ...current,
+        importPendingCode: null,
+        importError: importError instanceof Error ? importError.message : "添加黑白名单失败。",
+      }));
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
@@ -1779,6 +1928,11 @@ function StockImportDialog({
             </span>
             <span>{meta.label}</span>
           </div>
+          {importError ? (
+            <div className="mx-5 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+              添加失败：{importError}
+            </div>
+          ) : null}
 
           <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
             {isLoading && stocks.length === 0 ? (
@@ -1795,6 +1949,7 @@ function StockImportDialog({
                 {visibleStocks.map((stock) => {
                   const inTargetList = isStockInList(stock, stockGroups[targetList]);
                   const inOppositeList = isStockInList(stock, stockGroups[oppositeList]);
+                  const isImporting = importPendingCode === getComparableStockCode(stock.code);
 
                   return (
                     <div
@@ -1817,11 +1972,15 @@ function StockImportDialog({
                         size="sm"
                         variant={inTargetList ? "secondary" : "outline"}
                         className="h-8 shrink-0 bg-background/55"
-                        disabled={inTargetList}
-                        onClick={() => onImportStock(stock, targetList)}
+                        disabled={inTargetList || Boolean(importPendingCode)}
+                        onClick={() => void handleImportStock(stock)}
                       >
-                        {inTargetList ? null : <Plus data-icon="inline-start" />}
-                        {inTargetList ? "已添加" : inOppositeList ? "移入" : "添加"}
+                        {isImporting ? (
+                          <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                        ) : inTargetList ? null : (
+                          <Plus data-icon="inline-start" />
+                        )}
+                        {inTargetList ? "已添加" : isImporting ? "添加中" : "添加"}
                       </Button>
                     </div>
                   );

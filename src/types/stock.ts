@@ -25,4 +25,5 @@ export interface StockCandidate {
   name: string;
   list: StockListKey;
   records: StockDailyRecord[];
+  filterId?: number;
 }
