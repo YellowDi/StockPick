@@ -72,10 +72,11 @@ import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/sto
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
-const chartRightGapSecs = daySecs * 1.15;
-const heroChartPadding = { top: 260, right: 118, bottom: 72, left: 24 };
-const compactHeroChartPadding = { top: 292, right: 76, bottom: 54, left: 12 };
-const desktopChartPadding = { top: 28, right: 76, bottom: 52, left: 16 };
+const chartRightGapSecs = daySecs;
+const chartLineWidth = 2.5;
+const heroChartPadding = { top: 260, right: 88, bottom: 72, left: 24 };
+const compactHeroChartPadding = { top: 292, right: 60, bottom: 54, left: 12 };
+const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: -16 };
 const compactViewportQuery = "(max-width: 639px)";
 const mobileViewportQuery = "(max-width: 767px)";
 const chartRangeOptionsBase = [
@@ -960,7 +961,6 @@ function ActiveStockBoard({
         style={{ background: "var(--chart-hero-background)" }}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-        <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
@@ -1114,6 +1114,7 @@ function ActiveStockBoard({
               lineValue={latest?.close}
               theme={themeMode}
               color={chartColor}
+              lineWidth={chartLineWidth}
               window={selectedRange.secs}
               grid
               scrub
@@ -1202,7 +1203,6 @@ function StockBoardLoading({
         style={{ background: "var(--chart-hero-background)" }}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-        <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
 
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
@@ -1267,6 +1267,7 @@ function StockBoardLoading({
             candleWidth={daySecs}
             theme={themeMode}
             color={chartColor}
+            lineWidth={chartLineWidth}
             window={daySecs * dailyKVisibleDays}
             grid
             loading={isLoading}
@@ -1772,9 +1773,8 @@ function DesktopStockChartPanel({
         style={{ background: "var(--chart-hero-background)" }}
       />
       <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
-      <div className="chart-hero-bottom-mask pointer-events-none absolute bottom-0 left-1/2 z-30 h-36 w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]" />
 
-      <div className="relative z-20 grid gap-5 py-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="relative z-20 grid gap-0 py-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[300px_minmax(0,1fr)]">
         <div className="flex min-h-[clamp(320px,44vh,440px)] min-w-0 flex-col justify-between py-1">
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1913,6 +1913,7 @@ function DesktopStockChartPanel({
                 lineValue={latest?.close}
                 theme={themeMode}
                 color={chartColor}
+                lineWidth={chartLineWidth}
                 window={selectedRangeSecs}
                 grid
                 scrub
@@ -2077,7 +2078,6 @@ function DesktopStockBoardLoading({
             style={{ background: "var(--chart-hero-background)" }}
           />
           <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
-          <div className="chart-hero-bottom-mask pointer-events-none absolute bottom-0 left-1/2 z-30 h-36 w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]" />
           <div className="mb-3 flex justify-end">
             <Button
               type="button"
@@ -2102,6 +2102,7 @@ function DesktopStockBoardLoading({
               candleWidth={daySecs}
               theme={themeMode}
               color={chartColor}
+              lineWidth={chartLineWidth}
               window={daySecs * dailyKVisibleDays}
               grid
               loading={isLoading}
@@ -3504,10 +3505,7 @@ function getDailyKWindowSecs(records: StockDailyRecord[]) {
     return daySecs * dailyKVisibleDays;
   }
 
-  const firstTime = getRecordTime(visibleRecords[0]);
-  const lastTime = getRecordTime(visibleRecords.at(-1)!);
-
-  return Math.max(daySecs * visibleRecords.length, lastTime - firstTime + daySecs);
+  return daySecs * visibleRecords.length;
 }
 
 function getDailyChangePct(
@@ -3521,10 +3519,4 @@ function getDailyChangePct(
 
 function hasTouchedLimitUp(record: StockDailyRecord) {
   return typeof record.limit_up === "number" && record.limit_up > 0 && record.high >= record.limit_up;
-}
-
-function getRecordTime(record: StockDailyRecord) {
-  const time = new Date(`${record.date}T12:00:00`).getTime() / 1000;
-
-  return Number.isFinite(time) ? time : Date.now() / 1000;
 }

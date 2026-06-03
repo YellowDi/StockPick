@@ -165,10 +165,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.chart-hero-bottom-mask {
-  background: linear-gradient(to bottom, transparent, var(--page-background-edge));
-}
-
 button {
   font: inherit;
 }

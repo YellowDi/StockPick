@@ -97,7 +97,24 @@ function patchFile(target) {
     }
   }
 
+  source = removeLivelineEdgeFade(source);
+
   if (source !== original) {
     writeFileSync(target, source);
   }
+}
+
+function removeLivelineEdgeFade(source) {
+  const marker = "// StockPick: liveline edge fade removed.";
+  const edgeFadePatterns = [
+    /^([ \t]*)const fadeW = FADE_EDGE_WIDTH;\n\1ctx\.save\(\);\n\1ctx\.globalCompositeOperation = "destination-out";\n\1const fadeGrad = ctx\.createLinearGradient\(layout\.pad\.left, 0, layout\.pad\.left \+ fadeW, 0\);\n\1fadeGrad\.addColorStop\(0, "rgba\(0, 0, 0, 1\)"\);\n\1fadeGrad\.addColorStop\(1, "rgba\(0, 0, 0, 0\)"\);\n\1ctx\.fillStyle = fadeGrad;\n\1ctx\.fillRect\(0, 0, layout\.pad\.left \+ fadeW, layout\.h\);\n\1ctx\.restore\(\);/gm,
+    /^([ \t]*)ctx\.save\(\);\n\1ctx\.globalCompositeOperation = "destination-out";\n\1const fadeGrad = ctx\.createLinearGradient\(layout\.pad\.left, 0, layout\.pad\.left \+ FADE_EDGE_WIDTH, 0\);\n\1fadeGrad\.addColorStop\(0, "rgba\(0, 0, 0, 1\)"\);\n\1fadeGrad\.addColorStop\(1, "rgba\(0, 0, 0, 0\)"\);\n\1ctx\.fillStyle = fadeGrad;\n\1ctx\.fillRect\(0, 0, layout\.pad\.left \+ FADE_EDGE_WIDTH, layout\.h\);\n\1ctx\.restore\(\);/gm,
+    /^([ \t]*)ctx\.save\(\);\n\1ctx\.globalCompositeOperation = "destination-out";\n\1const fadeGrad = ctx\.createLinearGradient\(pad\.left, 0, pad\.left \+ FADE_EDGE_WIDTH, 0\);\n\1fadeGrad\.addColorStop\(0, "rgba\(0, 0, 0, 1\)"\);\n\1fadeGrad\.addColorStop\(1, "rgba\(0, 0, 0, 0\)"\);\n\1ctx\.fillStyle = fadeGrad;\n\1ctx\.fillRect\(0, 0, pad\.left \+ FADE_EDGE_WIDTH, h\);\n\1ctx\.restore\(\);/gm,
+  ];
+
+  for (const pattern of edgeFadePatterns) {
+    source = source.replace(pattern, (_, indent) => `${indent}${marker}`);
+  }
+
+  return source;
 }
