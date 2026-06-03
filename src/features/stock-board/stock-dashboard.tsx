@@ -1633,14 +1633,8 @@ function DesktopActiveStockBoard({
   } = useStockBoardModel(stock, chartRangeId, themeMode);
 
   return (
-    <section
-      className="relative min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
-      style={{ background: "var(--chart-hero-background)" }}
-    >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-      <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
-
-      <div className="relative z-20 flex w-full flex-col gap-5">
+    <section className="min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
+      <div className="flex w-full flex-col">
         <DesktopStockChartPanel
           stock={chartStock}
           latest={latest}
@@ -1710,53 +1704,57 @@ function DesktopStockChartPanel({
   onChartModeChange: (chartMode: ChartMode) => void;
 }) {
   return (
-    <section className="w-full">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <ChartRangeControls
-          className="shadow-none"
-          options={chartRangeOptions}
-          activeId={activeRangeId}
-          onSelect={onRangeSelect}
-        />
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex rounded-lg bg-background/45 p-1">
-            {chartModeOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={cn(
-                  "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-                  option.id === chartMode
-                    ? "bg-secondary text-secondary-foreground"
-                    : "hover:bg-accent hover:text-accent-foreground",
-                )}
-                aria-pressed={option.id === chartMode}
-                onClick={() => onChartModeChange(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="bg-background/55"
-            aria-label={isLoading ? "加载中" : "重载"}
-            title={isLoading ? "加载中" : "重载"}
-            disabled={isLoading}
-            onClick={onReload}
-          >
-            <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-            {isLoading ? "加载中" : "重载"}
-          </Button>
-        </div>
-      </div>
+    <section
+      className="relative -mx-5 overflow-hidden px-5 pt-4 lg:-mx-8 lg:px-8"
+      style={{ background: "var(--chart-hero-background)" }}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
+      <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-30 h-36" />
 
-      <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-background/75 to-transparent" />
-        <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24" />
-        <div className="absolute inset-0 z-0">
+      <div className="relative z-20 w-full">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <ChartRangeControls
+            className="shadow-none"
+            options={chartRangeOptions}
+            activeId={activeRangeId}
+            onSelect={onRangeSelect}
+          />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex rounded-lg bg-background/45 p-1">
+              {chartModeOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={cn(
+                    "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                    option.id === chartMode
+                      ? "bg-secondary text-secondary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground",
+                  )}
+                  aria-pressed={option.id === chartMode}
+                  onClick={() => onChartModeChange(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/55"
+              aria-label={isLoading ? "加载中" : "重载"}
+              title={isLoading ? "加载中" : "重载"}
+              disabled={isLoading}
+              onClick={onReload}
+            >
+              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
+              {isLoading ? "加载中" : "重载"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
           {latest || isLoading ? (
             <Liveline
               data={latest ? chartView.lineData : []}
@@ -1830,7 +1828,7 @@ function DesktopStockInfoPanel({
   const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
 
   return (
-    <section className="w-full pb-6">
+    <section className="w-full pb-6 pt-4">
       <div className="grid gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1956,15 +1954,14 @@ function DesktopStockBoardLoading({
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
 
   return (
-    <section
-      className="relative min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
-      style={{ background: "var(--chart-hero-background)" }}
-    >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-      <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
-
-      <div className="relative z-20 flex w-full flex-col gap-5">
-        <section className="w-full">
+    <section className="min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
+      <div className="flex w-full flex-col">
+        <section
+          className="relative -mx-5 overflow-hidden px-5 pt-4 lg:-mx-8 lg:px-8"
+          style={{ background: "var(--chart-hero-background)" }}
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
+          <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-30 h-36" />
           <div className="mb-3 flex justify-end">
             <Button
               type="button"
@@ -1981,29 +1978,25 @@ function DesktopStockBoardLoading({
             </Button>
           </div>
           <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-background/75 to-transparent" />
-            <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24" />
-            <div className="absolute inset-0 z-0">
-              <Liveline
-                data={[]}
-                value={0}
-                mode="candle"
-                candles={[]}
-                candleWidth={daySecs}
-                theme={themeMode}
-                color={chartColor}
-                window={daySecs * dailyKVisibleDays}
-                grid
-                loading={isLoading}
-                momentum="flat"
-                padding={desktopChartPadding}
-                className="size-full"
-              />
-            </div>
+            <Liveline
+              data={[]}
+              value={0}
+              mode="candle"
+              candles={[]}
+              candleWidth={daySecs}
+              theme={themeMode}
+              color={chartColor}
+              window={daySecs * dailyKVisibleDays}
+              grid
+              loading={isLoading}
+              momentum="flat"
+              padding={desktopChartPadding}
+              className="size-full"
+            />
           </div>
         </section>
 
-        <section className="flex flex-row items-start justify-between gap-3 pb-6">
+        <section className="flex flex-row items-start justify-between gap-3 pb-6 pt-4">
           <div className="min-w-0">
             <CardTitle className="text-2xl text-balance">
               {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
