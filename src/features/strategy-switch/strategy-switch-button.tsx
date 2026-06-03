@@ -15,12 +15,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { cn } from "@/lib/utils";
 
 const emptyStrategyConfigs: StrategyConfig[] = [];
+const strategyXOptions = Array.from({ length: 8 }, (_, value) => value);
 
 type StrategyDraftAction =
   | { type: "reset"; config: StrategyConfig }
@@ -196,13 +205,9 @@ export function StrategySwitchButton({
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="flex min-w-0 flex-col gap-2">
                     <Label htmlFor="strategy-x">往前推第 X 天</Label>
-                    <Input
+                    <StrategyXSelect
                       id="strategy-x"
-                      type="number"
-                      min={0}
-                      step={1}
-                      className="h-11 bg-background/55"
-                      value={String(draft.x)}
+                      value={normalizeStrategyX(draft.x)}
                       onValueChange={(value) => dispatchDraft({ type: "x", value })}
                     />
                   </div>
@@ -226,13 +231,13 @@ export function StrategySwitchButton({
                 <div className="mt-3 grid gap-2">
                   <StrategyRuleSwitch
                     id="strategy-rule2"
-                    label="规则 2：前日冲高回落"
+                    label="规则 2：基准日-1天，冲高比基准日收盘价高，且有回落"
                     checked={draft.rule2Enabled}
                     onCheckedChange={(value) => dispatchDraft({ type: "rule2", value })}
                   />
                   <StrategyRuleSwitch
                     id="strategy-rule3"
-                    label="规则 3：MA5 区间确认"
+                    label="规则 3：基准日-2天收盘价在五日线之上一定百分比，且在基准日的最高点和最低点之间"
                     checked={draft.rule3Enabled}
                     onCheckedChange={(value) => dispatchDraft({ type: "rule3", value })}
                   />
@@ -242,8 +247,9 @@ export function StrategySwitchButton({
               <section>
                 <h3 className="text-sm font-semibold">策略预览</h3>
                 <p className="mt-3 rounded-lg bg-background/50 px-4 py-3 text-sm leading-6 text-foreground text-pretty">
-                  当前配置会使用 X={draft.x}，{draft.rule2Enabled ? "启用" : "停用"}冲高回落规则，
-                  {draft.rule3Enabled ? `启用 MA5 区间规则，偏移 ${draft.y}%` : "停用 MA5 区间规则"}。
+                  当前配置会使用 X={normalizeStrategyX(draft.x)}；
+                  {draft.rule2Enabled ? "启用规则 2：基准日-1天，冲高比基准日收盘价高，且有回落" : "停用规则 2"}；
+                  {draft.rule3Enabled ? `启用规则 3：基准日-2天收盘价在五日线之上 ${draft.y}%，且在基准日最高点和最低点之间` : "停用规则 3"}。
                 </p>
               </section>
             </div>
@@ -302,6 +308,43 @@ export function StrategySwitchButton({
   );
 }
 
+function StrategyXSelect({
+  id,
+  value,
+  onValueChange,
+}: {
+  id: string;
+  value: number;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      value={String(value)}
+      onValueChange={(nextValue) => {
+        if (nextValue !== null) {
+          onValueChange(nextValue);
+        }
+      }}
+    >
+      <SelectTrigger
+        id={id}
+        className="h-11 w-full bg-background/55"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {strategyXOptions.map((option) => (
+            <SelectItem key={option} value={String(option)}>
+              {option === 0 ? "0 天（今日实时）" : `${option} 天`}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
 function StrategyRuleSwitch({
   id,
   label,
@@ -353,9 +396,13 @@ function normalizeStrategyConfig(config: StrategyConfig): StrategyConfig {
   return {
     ...config,
     name: config.name.trim() || defaultStrategyConfig.name,
-    x: Math.max(0, Math.round(config.x)),
+    x: normalizeStrategyX(config.x),
     y: Math.max(0, config.y),
   };
+}
+
+function normalizeStrategyX(value: number) {
+  return Math.min(7, Math.max(0, Math.round(value)));
 }
 
 function parseNumberInput(value: string, fallback: number) {
@@ -379,5 +426,5 @@ function getStrategyRulesLabel(config: StrategyConfig) {
     config.rule3Enabled ? "规则3" : null,
   ].filter(Boolean).join("+");
 
-  return `X=${config.x} · Y=${config.y}% · ${rules}`;
+  return `X=${normalizeStrategyX(config.x)} · Y=${config.y}% · ${rules}`;
 }
