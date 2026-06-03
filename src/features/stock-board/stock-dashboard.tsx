@@ -1316,6 +1316,40 @@ function HeroMetric({
   );
 }
 
+function JudgementMetricCard({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "up" | "down";
+}) {
+  return (
+    <Card
+      className={cn(
+        "gap-2 rounded-lg bg-card/72 p-4 shadow-sm backdrop-blur-xl",
+        tone === "up" && "border-stock-up/25 bg-stock-up/5",
+        tone === "down" && "border-stock-down/25 bg-stock-down/5",
+      )}
+    >
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "min-w-0 truncate text-2xl font-semibold tabular-nums",
+          tone === "up" && "text-stock-up",
+          tone === "down" && "text-stock-down",
+        )}
+      >
+        {value}
+      </div>
+      <div className="min-w-0 truncate text-xs text-muted-foreground">{detail}</div>
+    </Card>
+  );
+}
+
 function ChartRangeControls({
   options,
   activeId,
@@ -1637,7 +1671,13 @@ function DesktopActiveStockBoard({
       <div className="mx-auto flex w-full max-w-[1180px] flex-col">
         <DesktopStockChartPanel
           stock={chartStock}
+          sourceRecords={sourceRecords}
           latest={latest}
+          change={change}
+          changePct={changePct}
+          positive={positive}
+          trend={trend}
+          strength={strength}
           chartView={chartView}
           activeRangeId={chartRangeId}
           chartMode={chartMode}
@@ -1648,12 +1688,13 @@ function DesktopActiveStockBoard({
           isLoading={isLoading}
           error={error}
           themeMode={themeMode}
+          onThemeToggle={onThemeToggle}
+          onLogout={onLogout}
           onReload={onReload}
           onRangeSelect={(rangeId) => dispatchBoard({ type: "select-range", rangeId })}
           onChartModeChange={(nextChartMode) => dispatchBoard({ type: "set-chart-mode", chartMode: nextChartMode })}
         />
         <DesktopStockInfoPanel
-          stock={stock}
           sourceRecords={sourceRecords}
           latest={latest}
           change={change}
@@ -1661,9 +1702,6 @@ function DesktopActiveStockBoard({
           positive={positive}
           trend={trend}
           strength={strength}
-          themeMode={themeMode}
-          onThemeToggle={onThemeToggle}
-          onLogout={onLogout}
         />
       </div>
     </section>
@@ -1672,7 +1710,13 @@ function DesktopActiveStockBoard({
 
 function DesktopStockChartPanel({
   stock,
+  sourceRecords,
   latest,
+  change,
+  changePct,
+  positive,
+  trend,
+  strength,
   chartView,
   activeRangeId,
   chartMode,
@@ -1683,12 +1727,20 @@ function DesktopStockChartPanel({
   isLoading,
   error,
   themeMode,
+  onThemeToggle,
+  onLogout,
   onReload,
   onRangeSelect,
   onChartModeChange,
 }: {
   stock: StockCandidate;
+  sourceRecords: StockDailyRecord[];
   latest: StockDailyRecord | undefined;
+  change: number;
+  changePct: number;
+  positive: boolean;
+  trend: string;
+  strength: string;
   chartView: ReturnType<typeof createChartView>;
   activeRangeId: ChartRangeId;
   chartMode: ChartMode;
@@ -1699,6 +1751,8 @@ function DesktopStockChartPanel({
   isLoading: boolean;
   error: string | null;
   themeMode: ThemeMode;
+  onThemeToggle: () => void;
+  onLogout: () => void;
   onReload: () => void;
   onRangeSelect: (rangeId: ChartRangeId) => void;
   onChartModeChange: (chartMode: ChartMode) => void;
@@ -1714,142 +1768,35 @@ function DesktopStockChartPanel({
       <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
       <div className="chart-hero-bottom-mask pointer-events-none absolute bottom-0 left-1/2 z-30 h-36 w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]" />
 
-      <div className="relative z-20 w-full">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <ChartRangeControls
-            className="shadow-none"
-            options={chartRangeOptions}
-            activeId={activeRangeId}
-            onSelect={onRangeSelect}
-          />
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="flex rounded-lg bg-background/45 p-1">
-              {chartModeOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={cn(
-                    "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-                    option.id === chartMode
-                      ? "bg-secondary text-secondary-foreground"
-                      : "hover:bg-accent hover:text-accent-foreground",
-                  )}
-                  aria-pressed={option.id === chartMode}
-                  onClick={() => onChartModeChange(option.id)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-background/55"
-              aria-label={isLoading ? "加载中" : "重载"}
-              title={isLoading ? "加载中" : "重载"}
-              disabled={isLoading}
-              onClick={onReload}
-            >
-              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-              {isLoading ? "加载中" : "重载"}
-            </Button>
-          </div>
-        </div>
-
-        <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
-          {latest || isLoading ? (
-            <Liveline
-              data={latest ? chartView.lineData : []}
-              value={latest?.close ?? 0}
-              mode="candle"
-              candles={chartView.candles}
-              candleWidth={chartView.candleWidth}
-              lineMode={chartMode === "line"}
-              lineData={chartView.lineData}
-              lineValue={latest?.close}
-              theme={themeMode}
-              color={chartColor}
-              window={selectedRangeSecs}
-              grid
-              scrub
-              badge={true}
-              badgeVariant="minimal"
-              badgeTail
-              momentum={momentum}
-              pulse
-              loading={isLoading}
-              showValue
-              valueMomentumColor
-              referenceLine={
-                latest?.last
-                  ? {
-                      value: latest.last,
-                      label: "昨收",
-                    }
-                  : undefined
-              }
-              formatValue={(value) => value.toFixed(2)}
-              formatTime={formatChartDate}
-              padding={desktopChartPadding}
-              className="size-full"
-            />
-          ) : (
-            <EmptyChart error={error ?? stock.records[0]?.error} className="min-h-0" />
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function DesktopStockInfoPanel({
-  stock,
-  sourceRecords,
-  latest,
-  change,
-  changePct,
-  positive,
-  trend,
-  strength,
-  themeMode,
-  onThemeToggle,
-  onLogout,
-}: {
-  stock: StockCandidate;
-  sourceRecords: StockDailyRecord[];
-  latest: StockDailyRecord | undefined;
-  change: number;
-  changePct: number;
-  positive: boolean;
-  trend: string;
-  strength: string;
-  themeMode: ThemeMode;
-  onThemeToggle: () => void;
-  onLogout: () => void;
-}) {
-  const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
-
-  return (
-    <section className="w-full pb-6 pt-4">
-      <div className="grid gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="relative z-20 grid gap-5 py-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="flex min-h-[clamp(320px,44vh,440px)] min-w-0 flex-col justify-between py-1">
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <CardTitle className="truncate text-2xl text-balance">{stock.name}</CardTitle>
-              <span className="text-sm text-muted-foreground tabular-nums">{stock.code}</span>
-              <Badge variant="outline" className="bg-background/45">{stockListMeta[stock.list].label}</Badge>
-              <Badge variant={latest ? "secondary" : "destructive"}>{latest ? "行情正常" : "无数据"}</Badge>
+              <h1 className="min-w-0 truncate text-3xl font-semibold leading-tight tracking-normal text-foreground">
+                {stock.name}
+              </h1>
+              <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{stock.code}</span>
             </div>
-            <div className="mt-3 flex flex-wrap items-end gap-x-3 gap-y-1">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="bg-background/45 backdrop-blur">
+                {stockListMeta[stock.list].label}
+              </Badge>
+              <Badge variant={latest ? "secondary" : "destructive"} className="bg-background/55 backdrop-blur">
+                {latest ? "行情正常" : "无数据"}
+              </Badge>
+              {latest ? (
+                <span className="text-xs text-muted-foreground tabular-nums">{latest.date}</span>
+              ) : null}
+            </div>
+            <div className="mt-6 flex flex-wrap items-end gap-x-3 gap-y-1">
               <span
                 className={cn(
-                  "text-4xl font-semibold leading-none tabular-nums",
+                  "text-5xl font-semibold leading-none tabular-nums",
                   latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
                 )}
               >
                 <AnimatedDigits
-                  key={`desktop-price-${stock.code}:${latest?.date ?? ""}:${latest?.close ?? ""}`}
+                  key={`desktop-side-price-${stock.code}:${latest?.date ?? ""}:${latest?.close ?? ""}`}
                   value={latest ? latest.close.toFixed(2) : "--"}
                 />
               </span>
@@ -1860,13 +1807,21 @@ function DesktopStockInfoPanel({
                 )}
               >
                 <AnimatedDigits
-                  key={`desktop-change-${stock.code}:${latest?.date ?? ""}:${change}:${changePct}`}
+                  key={`desktop-side-change-${stock.code}:${latest?.date ?? ""}:${change}:${changePct}`}
                   value={latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
                 />
               </span>
             </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
+              <HeroMetric label="强度" value={strength} />
+              <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
+              <HeroMetric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
+              <HeroMetric label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
+              <HeroMetric label="记录" value={`${sourceRecords.length}`} />
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             {isThemeToggleVisible(themeMode) ? (
               <Button
                 type="button"
@@ -1896,16 +1851,165 @@ function DesktopStockInfoPanel({
           </div>
         </div>
 
-        <div className="grid gap-2 lg:grid-cols-4">
-          <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
-          <HeroMetric label="强度" value={strength} />
-          <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
-          <HeroMetric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
-          <HeroMetric label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
-          <HeroMetric label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
-          <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
-          <HeroMetric label="记录" value={`${sourceRecords.length}`} />
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <ChartRangeControls
+              className="shadow-none"
+              options={chartRangeOptions}
+              activeId={activeRangeId}
+              onSelect={onRangeSelect}
+            />
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex rounded-lg bg-background/45 p-1">
+                {chartModeOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={cn(
+                      "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                      option.id === chartMode
+                        ? "bg-secondary text-secondary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground",
+                    )}
+                    aria-pressed={option.id === chartMode}
+                    onClick={() => onChartModeChange(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-background/55"
+                aria-label={isLoading ? "加载中" : "重载"}
+                title={isLoading ? "加载中" : "重载"}
+                disabled={isLoading}
+                onClick={onReload}
+              >
+                <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
+                {isLoading ? "加载中" : "重载"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
+            {latest || isLoading ? (
+              <Liveline
+                data={latest ? chartView.lineData : []}
+                value={latest?.close ?? 0}
+                mode="candle"
+                candles={chartView.candles}
+                candleWidth={chartView.candleWidth}
+                lineMode={chartMode === "line"}
+                lineData={chartView.lineData}
+                lineValue={latest?.close}
+                theme={themeMode}
+                color={chartColor}
+                window={selectedRangeSecs}
+                grid
+                scrub
+                badge={true}
+                badgeVariant="minimal"
+                badgeTail
+                momentum={momentum}
+                pulse
+                loading={isLoading}
+                showValue
+                valueMomentumColor
+                referenceLine={
+                  latest?.last
+                    ? {
+                        value: latest.last,
+                        label: "昨收",
+                      }
+                    : undefined
+                }
+                formatValue={(value) => value.toFixed(2)}
+                formatTime={formatChartDate}
+                padding={desktopChartPadding}
+                className="size-full"
+              />
+            ) : (
+              <EmptyChart error={error ?? stock.records[0]?.error} className="min-h-0" />
+            )}
+          </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function DesktopStockInfoPanel({
+  sourceRecords,
+  latest,
+  change,
+  changePct,
+  positive,
+  trend,
+  strength,
+}: {
+  sourceRecords: StockDailyRecord[];
+  latest: StockDailyRecord | undefined;
+  change: number;
+  changePct: number;
+  positive: boolean;
+  trend: string;
+  strength: string;
+}) {
+  const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
+  const visibleRecords = sourceRecords.slice(-dailyKVisibleDays);
+  const firstVisibleRecord = visibleRecords[0];
+  const latestVisibleRecord = visibleRecords.at(-1);
+  const rangeChangePct = firstVisibleRecord && latestVisibleRecord && firstVisibleRecord.close !== 0
+    ? ((latestVisibleRecord.close - firstVisibleRecord.close) / firstVisibleRecord.close) * 100
+    : null;
+  const intradayAmplitudePct = latest && latest.close !== 0
+    ? ((latest.high - latest.low) / latest.close) * 100
+    : null;
+  const limitUpDistancePct = latest?.limit_up && latest.close !== 0
+    ? ((latest.limit_up - latest.close) / latest.close) * 100
+    : null;
+  const limitHitCount = visibleRecords.filter(hasTouchedLimitUp).length;
+
+  return (
+    <section className="w-full pb-6 pt-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <JudgementMetricCard
+          label="趋势强度"
+          value={latest ? `${trend} / ${strength}` : "--"}
+          detail={latest ? `涨跌 ${formatSigned(change)} / ${formatSigned(changePct)}%` : "暂无成功行情"}
+          tone={latest ? positive ? "up" : "down" : undefined}
+        />
+        <JudgementMetricCard
+          label="日内振幅"
+          value={intradayAmplitudePct === null ? "--" : formatPercent(intradayAmplitudePct)}
+          detail={latest ? `${formatPrice(latest.low)} - ${formatPrice(latest.high)}` : "暂无最高/最低价"}
+        />
+        <JudgementMetricCard
+          label="距涨停"
+          value={limitUpDistancePct === null ? "--" : formatPercent(limitUpDistancePct)}
+          detail={latest?.limit_up ? `涨停价 ${formatPrice(latest.limit_up)}` : "暂无涨停价"}
+          tone={limitUpDistancePct !== null && limitUpDistancePct <= 0 ? "up" : undefined}
+        />
+        <JudgementMetricCard
+          label={`近 ${visibleRecords.length || dailyKVisibleDays} 日收盘`}
+          value={rangeChangePct === null ? "--" : `${formatSigned(rangeChangePct)}%`}
+          detail={firstVisibleRecord && latestVisibleRecord ? `${firstVisibleRecord.date} 至 ${latestVisibleRecord.date}` : "暂无区间数据"}
+          tone={rangeChangePct === null ? undefined : rangeChangePct >= 0 ? "up" : "down"}
+        />
+        <JudgementMetricCard
+          label="触及涨停"
+          value={`${limitHitCount} 次`}
+          detail={`近 ${visibleRecords.length} 条成功记录`}
+          tone={limitHitCount > 0 ? "up" : undefined}
+        />
+        <JudgementMetricCard
+          label="成交活跃度"
+          value={latest ? formatAmount(latest.amount) : "--"}
+          detail={latest ? `成交量 ${formatVolume(latest.volume)}` : "暂无量额数据"}
+        />
       </div>
 
       <div className="mt-5 border-t border-border/60 pt-4">
