@@ -75,9 +75,13 @@ type StrategyDraftAction =
 
 export function StrategySwitchButton({
   config,
+  className,
+  buttonClassName,
   onSave,
 }: {
   config: StrategyConfig;
+  className?: string;
+  buttonClassName?: string;
   onSave: (config: StrategyConfig) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -102,14 +106,17 @@ export function StrategySwitchButton({
   }
 
   return (
-    <section className="mt-4 flex justify-center">
+    <section className={cn("mt-4 flex justify-center", className)}>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogTrigger
           render={
             <Button
               type="button"
               variant="outline"
-              className="h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]"
+              className={cn(
+                "h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]",
+                buttonClassName,
+              )}
             />
           }
         >

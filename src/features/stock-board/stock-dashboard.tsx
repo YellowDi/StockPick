@@ -68,6 +68,7 @@ const dailyKVisibleDays = 7;
 const chartRightGapSecs = daySecs * 1.15;
 const heroChartPadding = { top: 260, right: 118, bottom: 72, left: 24 };
 const compactHeroChartPadding = { top: 292, right: 76, bottom: 54, left: 12 };
+const desktopChartPadding = { top: 28, right: 76, bottom: 52, left: 16 };
 const compactViewportQuery = "(max-width: 639px)";
 const mobileViewportQuery = "(max-width: 767px)";
 const chartRangeOptionsBase = [
@@ -127,6 +128,16 @@ type StockListAction = {
   onClick?: () => void;
 };
 
+type StockListSharedProps = {
+  chartSelection: ChartSelection | null;
+  filterDeletePendingIds: number[];
+  selectedStockCodes: Set<string>;
+  onAddToSelected: (stock: StockCandidate) => void;
+  onRemoveFromSelected: (stock: StockCandidate) => void;
+  onToggleChart: (code: string, listKey: StockListKey) => void;
+  onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
+};
+
 const initialStockImportDialogState: StockImportDialogState = {
   codeQuery: "",
   nameQuery: "",
@@ -155,6 +166,7 @@ type StockDashboardState = {
   stockGroups: StockGroups;
   chartSelection: ChartSelection | null;
   mobileListKey: StockListKey;
+  desktopListKey: StockListKey;
   importTargetList: ReturnableListKey | null;
   scanError: string | null;
   scanReloadKey: number;
@@ -167,6 +179,7 @@ type StockDashboardState = {
 type StockDashboardAction =
   | { type: "set-chart-selection"; selection: ChartSelection | null }
   | { type: "set-mobile-list"; listKey: StockListKey }
+  | { type: "set-desktop-list"; listKey: StockListKey }
   | { type: "open-import"; listKey: ReturnableListKey }
   | { type: "close-import" }
   | { type: "scan-start" }
@@ -186,6 +199,7 @@ const initialStockDashboardState: StockDashboardState = {
   stockGroups: emptyStockGroups,
   chartSelection: null,
   mobileListKey: "selected",
+  desktopListKey: "selected",
   importTargetList: null,
   scanError: null,
   scanReloadKey: 0,
@@ -418,6 +432,7 @@ function useStockDashboard() {
     deleteStockFromFilterList,
     reloadStrategyScan: () => dispatch({ type: "scan-reload" }),
     setMobileListKey: (listKey: StockListKey) => dispatch({ type: "set-mobile-list", listKey }),
+    setDesktopListKey: (listKey: StockListKey) => dispatch({ type: "set-desktop-list", listKey }),
     setStrategyConfig: (config: StrategyConfig) => dispatch({ type: "set-strategy-config", config }),
   };
 }
@@ -439,6 +454,7 @@ function StockDashboardLayout({
   deleteStockFromFilterList,
   reloadStrategyScan,
   setMobileListKey,
+  setDesktopListKey,
   setStrategyConfig,
 }: StockDashboardProps & ReturnType<typeof useStockDashboard>) {
   const sharedStockListProps = {
@@ -452,8 +468,8 @@ function StockDashboardLayout({
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden text-foreground">
-      <div className="flex flex-col">
+    <main className="min-h-dvh overflow-x-hidden text-foreground">
+      <div className="flex flex-col md:hidden">
         <div ref={stockBoardRef}>
           <StockBoard
             stock={selectedStock}
@@ -488,24 +504,33 @@ function StockDashboardLayout({
             {...sharedStockListProps}
           />
 
-          <section className="mt-4 hidden gap-4 md:grid xl:grid-cols-4">
-            {listOrder.map((key) => (
-              <StockColumn
-                key={key}
-                listKey={key}
-                stocks={state.stockGroups[key]}
-                {...sharedStockListProps}
-                onOpenImport={openImportDialog}
-              />
-            ))}
-          </section>
-
           <MobileAccountActions
             themeMode={themeMode}
             onThemeToggle={onThemeToggle}
             onLogout={onLogout}
           />
         </div>
+      </div>
+      <div className="hidden h-dvh overflow-hidden md:grid md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[360px_minmax(0,1fr)]">
+        <DesktopStockSidebar
+          activeListKey={state.desktopListKey}
+          filterListsError={state.filterListsError}
+          stockGroups={state.stockGroups}
+          strategyConfig={state.strategyConfig}
+          onActiveListChange={setDesktopListKey}
+          onOpenImport={openImportDialog}
+          onStrategySave={setStrategyConfig}
+          {...sharedStockListProps}
+        />
+        <DesktopStockBoard
+          stock={selectedStock}
+          isLoading={state.scanLoading}
+          error={state.scanError}
+          themeMode={themeMode}
+          onThemeToggle={onThemeToggle}
+          onLogout={onLogout}
+          onReload={reloadStrategyScan}
+        />
       </div>
       {state.importTargetList ? (
         <StockImportDialog
@@ -528,6 +553,8 @@ function stockDashboardReducer(
       return { ...state, chartSelection: action.selection };
     case "set-mobile-list":
       return { ...state, mobileListKey: action.listKey };
+    case "set-desktop-list":
+      return { ...state, desktopListKey: action.listKey };
     case "open-import":
       return { ...state, importTargetList: action.listKey };
     case "close-import":
@@ -808,23 +835,12 @@ function useIsCompactViewport() {
 
   return isCompact;
 }
-function ActiveStockBoard({
-  stock,
-  isLoading,
-  error,
-  themeMode,
-  onThemeToggle,
-  onLogout,
-  onReload,
-}: Omit<StockBoardProps, "stock"> & {
-  stock: StockCandidate;
-}) {
-  const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
-  const {
-    chartRangeId,
-    chartMode,
-    detailsOpen,
-  } = boardState;
+
+function useStockBoardModel(
+  stock: StockCandidate,
+  chartRangeId: ChartRangeId,
+  themeMode: ThemeMode,
+) {
   const chartStock = useMemo(
     () => ({
       ...stock,
@@ -848,20 +864,13 @@ function ActiveStockBoard({
   const chartColor = change >= 0
     ? themeMode === "light" ? "#b94545" : "#ef4444"
     : themeMode === "light" ? "#2f7f59" : "#22c55e";
-  const momentum = change > 0 ? "up" : change < 0 ? "down" : "flat";
+  const momentum: "up" | "down" | "flat" = change > 0 ? "up" : change < 0 ? "down" : "flat";
   const chartRangeOptions = useMemo(() => chartRangeOptionsBase.map((option) => ({
     id: option.id,
     label: option.label,
     secs: getDailyKWindowSecs(sourceRecords),
   })), [sourceRecords]);
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
-  const isCompactViewport = useIsCompactViewport();
-  const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
-
-  function selectChartRange(rangeId: ChartRangeId) {
-    dispatchBoard({ type: "select-range", rangeId });
-  }
-
   const positive = change >= 0;
   const trend = !latest
     ? "暂无行情"
@@ -877,6 +886,65 @@ function ActiveStockBoard({
       : Math.abs(changePct) >= 1
         ? "中"
         : "弱";
+
+  return {
+    chartStock,
+    sourceRecords,
+    chartView,
+    records,
+    latest,
+    previous,
+    change,
+    changePct,
+    chartColor,
+    momentum,
+    chartRangeOptions,
+    selectedRange,
+    positive,
+    trend,
+    strength,
+  };
+}
+
+function ActiveStockBoard({
+  stock,
+  isLoading,
+  error,
+  themeMode,
+  onThemeToggle,
+  onLogout,
+  onReload,
+}: Omit<StockBoardProps, "stock"> & {
+  stock: StockCandidate;
+}) {
+  const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
+  const {
+    chartRangeId,
+    chartMode,
+    detailsOpen,
+  } = boardState;
+  const {
+    chartStock,
+    sourceRecords,
+    chartView,
+    latest,
+    change,
+    changePct,
+    chartColor,
+    momentum,
+    chartRangeOptions,
+    selectedRange,
+    positive,
+    trend,
+    strength,
+  } = useStockBoardModel(stock, chartRangeId, themeMode);
+  const isCompactViewport = useIsCompactViewport();
+  const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
+
+  function selectChartRange(rangeId: ChartRangeId) {
+    dispatchBoard({ type: "select-range", rangeId });
+  }
+
   return (
     <>
       <section className="relative">
@@ -1287,6 +1355,685 @@ function ChartRangeControls({
     </div>
   );
 }
+
+function DesktopStockSidebar({
+  activeListKey,
+  filterListsError,
+  stockGroups,
+  strategyConfig,
+  onActiveListChange,
+  onOpenImport,
+  onStrategySave,
+  ...stockListProps
+}: {
+  activeListKey: StockListKey;
+  filterListsError: string | null;
+  stockGroups: StockGroups;
+  strategyConfig: StrategyConfig;
+  onActiveListChange: (key: StockListKey) => void;
+  onOpenImport: (listKey: ReturnableListKey) => void;
+  onStrategySave: (config: StrategyConfig) => void;
+} & StockListSharedProps) {
+  return (
+    <aside className="flex min-h-0 flex-col gap-4 border-r bg-card/82 p-4">
+      <div className="shrink-0">
+        <BrandLockup />
+        <StrategySwitchButton
+          config={strategyConfig}
+          className="mt-4 justify-start"
+          buttonClassName="h-10 w-full justify-start bg-background/70 px-3 shadow-sm"
+          onSave={onStrategySave}
+        />
+        {filterListsError ? (
+          <p
+            className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
+            role="alert"
+          >
+            黑白名单操作失败：{filterListsError}
+          </p>
+        ) : null}
+      </div>
+
+      <DesktopStockAccordion
+        activeListKey={activeListKey}
+        stockGroups={stockGroups}
+        onActiveListChange={onActiveListChange}
+        onOpenImport={onOpenImport}
+        {...stockListProps}
+      />
+    </aside>
+  );
+}
+
+function DesktopStockAccordion({
+  activeListKey,
+  stockGroups,
+  chartSelection,
+  filterDeletePendingIds,
+  selectedStockCodes,
+  onActiveListChange,
+  onOpenImport,
+  onAddToSelected,
+  onRemoveFromSelected,
+  onToggleChart,
+  onDeleteFromFilterList,
+}: {
+  activeListKey: StockListKey;
+  stockGroups: StockGroups;
+  onActiveListChange: (key: StockListKey) => void;
+  onOpenImport: (listKey: ReturnableListKey) => void;
+} & StockListSharedProps) {
+  return (
+    <section className="flex min-h-0 flex-1 flex-col gap-2" aria-label="股票列表">
+      {listOrder.map((key) => (
+        <DesktopStockAccordionItem
+          key={key}
+          listKey={key}
+          stocks={stockGroups[key]}
+          expanded={key === activeListKey}
+          chartSelection={chartSelection}
+          filterDeletePendingIds={filterDeletePendingIds}
+          selectedStockCodes={selectedStockCodes}
+          onActiveListChange={onActiveListChange}
+          onOpenImport={onOpenImport}
+          onAddToSelected={onAddToSelected}
+          onRemoveFromSelected={onRemoveFromSelected}
+          onToggleChart={onToggleChart}
+          onDeleteFromFilterList={onDeleteFromFilterList}
+        />
+      ))}
+    </section>
+  );
+}
+
+function DesktopStockAccordionItem({
+  listKey,
+  stocks,
+  expanded,
+  chartSelection,
+  filterDeletePendingIds,
+  selectedStockCodes,
+  onActiveListChange,
+  onOpenImport,
+  onAddToSelected,
+  onRemoveFromSelected,
+  onToggleChart,
+  onDeleteFromFilterList,
+}: {
+  listKey: StockListKey;
+  stocks: StockCandidate[];
+  expanded: boolean;
+  onActiveListChange: (key: StockListKey) => void;
+  onOpenImport: (listKey: ReturnableListKey) => void;
+} & StockListSharedProps) {
+  const Icon = listIcons[listKey];
+  const meta = stockListMeta[listKey];
+  const returnableListKey = getReturnableListKey(listKey);
+  const contentId = `desktop-stock-list-${listKey}`;
+
+  return (
+    <Card
+      className={cn(
+        "gap-0 overflow-hidden bg-background/58 shadow-sm",
+        expanded ? "min-h-0 flex-1" : "shrink-0",
+      )}
+    >
+      <CardHeader className="px-3 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            className="group flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50"
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            onClick={() => onActiveListChange(listKey)}
+          >
+            <Icon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 items-center gap-2">
+                <CardTitle className="truncate text-sm">{meta.label}</CardTitle>
+                <Badge variant="secondary" className="shrink-0">{stocks.length}</Badge>
+              </span>
+              <CardDescription className="mt-0.5 truncate text-xs">{meta.description}</CardDescription>
+            </span>
+            <ChevronDown
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                expanded && "rotate-180",
+              )}
+            />
+          </button>
+          {returnableListKey ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="shrink-0 bg-background/70"
+              aria-label={`导入${meta.label}`}
+              title={`导入${meta.label}`}
+              onClick={() => onOpenImport(returnableListKey)}
+            >
+              <ImportIcon />
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
+
+      {expanded ? (
+        <CardContent id={contentId} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+          {stocks.length > 0 ? (
+            <ItemGroup className="gap-2">
+              {stocks.map((stock) => (
+                <StockListButton
+                  key={stock.code}
+                  stock={stock}
+                  active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
+                  onClick={() => onToggleChart(stock.code, listKey)}
+                  action={getStockListAction({
+                    stock,
+                    listKey,
+                    selectedStockCodes,
+                    filterDeletePendingIds,
+                    onAddToSelected,
+                    onRemoveFromSelected,
+                    onDeleteFromFilterList,
+                  })}
+                />
+              ))}
+            </ItemGroup>
+          ) : (
+            <DesktopStockListEmptyState listKey={listKey} />
+          )}
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
+function DesktopStockListEmptyState({ listKey }: { listKey: StockListKey }) {
+  const message = listKey === "initial"
+    ? "调整策略后重载扫描"
+    : listKey === "selected"
+      ? "从待选列表添加股票"
+      : "点击上方导入添加股票";
+
+  return (
+    <div className="flex min-h-32 flex-col items-center justify-center gap-1 rounded-md border border-dashed bg-background/35 px-3 text-center">
+      <div className="text-sm font-medium">暂无股票</div>
+      <div className="text-xs text-muted-foreground text-pretty">{message}</div>
+    </div>
+  );
+}
+
+function DesktopStockBoard({
+  stock,
+  isLoading,
+  error,
+  themeMode,
+  onThemeToggle,
+  onLogout,
+  onReload,
+}: StockBoardProps) {
+  if (!stock) {
+    return (
+      <DesktopStockBoardLoading
+        isLoading={isLoading}
+        error={error}
+        themeMode={themeMode}
+        onThemeToggle={onThemeToggle}
+        onLogout={onLogout}
+        onReload={onReload}
+      />
+    );
+  }
+
+  return (
+    <DesktopActiveStockBoard
+      key={`${stock.list}:${stock.code}`}
+      stock={stock}
+      isLoading={isLoading}
+      error={error}
+      themeMode={themeMode}
+      onThemeToggle={onThemeToggle}
+      onLogout={onLogout}
+      onReload={onReload}
+    />
+  );
+}
+
+function DesktopActiveStockBoard({
+  stock,
+  isLoading,
+  error,
+  themeMode,
+  onThemeToggle,
+  onLogout,
+  onReload,
+}: Omit<StockBoardProps, "stock"> & {
+  stock: StockCandidate;
+}) {
+  const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
+  const {
+    chartRangeId,
+    chartMode,
+  } = boardState;
+  const {
+    chartStock,
+    sourceRecords,
+    chartView,
+    latest,
+    change,
+    changePct,
+    chartColor,
+    momentum,
+    chartRangeOptions,
+    selectedRange,
+    positive,
+    trend,
+    strength,
+  } = useStockBoardModel(stock, chartRangeId, themeMode);
+
+  return (
+    <section
+      className="min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
+      style={{ background: "var(--chart-hero-background)" }}
+    >
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
+        <DesktopStockChartPanel
+          stock={chartStock}
+          latest={latest}
+          chartView={chartView}
+          activeRangeId={chartRangeId}
+          chartMode={chartMode}
+          chartColor={chartColor}
+          chartRangeOptions={chartRangeOptions}
+          selectedRangeSecs={selectedRange.secs}
+          momentum={momentum}
+          isLoading={isLoading}
+          error={error}
+          themeMode={themeMode}
+          onReload={onReload}
+          onRangeSelect={(rangeId) => dispatchBoard({ type: "select-range", rangeId })}
+          onChartModeChange={(nextChartMode) => dispatchBoard({ type: "set-chart-mode", chartMode: nextChartMode })}
+        />
+        <DesktopStockInfoPanel
+          stock={stock}
+          sourceRecords={sourceRecords}
+          latest={latest}
+          change={change}
+          changePct={changePct}
+          positive={positive}
+          trend={trend}
+          strength={strength}
+          themeMode={themeMode}
+          onThemeToggle={onThemeToggle}
+          onLogout={onLogout}
+        />
+      </div>
+    </section>
+  );
+}
+
+function DesktopStockChartPanel({
+  stock,
+  latest,
+  chartView,
+  activeRangeId,
+  chartMode,
+  chartColor,
+  chartRangeOptions,
+  selectedRangeSecs,
+  momentum,
+  isLoading,
+  error,
+  themeMode,
+  onReload,
+  onRangeSelect,
+  onChartModeChange,
+}: {
+  stock: StockCandidate;
+  latest: StockDailyRecord | undefined;
+  chartView: ReturnType<typeof createChartView>;
+  activeRangeId: ChartRangeId;
+  chartMode: ChartMode;
+  chartColor: string;
+  chartRangeOptions: Array<{ id: ChartRangeId; label: string; secs: number }>;
+  selectedRangeSecs: number;
+  momentum: "up" | "down" | "flat";
+  isLoading: boolean;
+  error: string | null;
+  themeMode: ThemeMode;
+  onReload: () => void;
+  onRangeSelect: (rangeId: ChartRangeId) => void;
+  onChartModeChange: (chartMode: ChartMode) => void;
+}) {
+  return (
+    <section className="rounded-lg border bg-card/88 p-3 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <ChartRangeControls
+          className="shadow-none"
+          options={chartRangeOptions}
+          activeId={activeRangeId}
+          onSelect={onRangeSelect}
+        />
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex rounded-lg bg-background/45 p-1">
+            {chartModeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={cn(
+                  "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                  option.id === chartMode
+                    ? "bg-secondary text-secondary-foreground"
+                    : "hover:bg-accent hover:text-accent-foreground",
+                )}
+                aria-pressed={option.id === chartMode}
+                onClick={() => onChartModeChange(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="bg-background/55"
+            aria-label={isLoading ? "加载中" : "重载"}
+            title={isLoading ? "加载中" : "重载"}
+            disabled={isLoading}
+            onClick={onReload}
+          >
+            <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
+            {isLoading ? "加载中" : "重载"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="relative mx-auto h-[clamp(320px,44vh,440px)] max-w-[980px] overflow-hidden rounded-lg bg-background/45">
+        {latest || isLoading ? (
+          <Liveline
+            data={latest ? chartView.lineData : []}
+            value={latest?.close ?? 0}
+            mode="candle"
+            candles={chartView.candles}
+            candleWidth={chartView.candleWidth}
+            lineMode={chartMode === "line"}
+            lineData={chartView.lineData}
+            lineValue={latest?.close}
+            theme={themeMode}
+            color={chartColor}
+            window={selectedRangeSecs}
+            grid
+            scrub
+            badge={true}
+            badgeVariant="minimal"
+            badgeTail
+            momentum={momentum}
+            pulse
+            loading={isLoading}
+            showValue
+            valueMomentumColor
+            referenceLine={
+              latest?.last
+                ? {
+                    value: latest.last,
+                    label: "昨收",
+                  }
+                : undefined
+            }
+            formatValue={(value) => value.toFixed(2)}
+            formatTime={formatChartDate}
+            padding={desktopChartPadding}
+            className="size-full"
+          />
+        ) : (
+          <EmptyChart error={error ?? stock.records[0]?.error} className="min-h-0" />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DesktopStockInfoPanel({
+  stock,
+  sourceRecords,
+  latest,
+  change,
+  changePct,
+  positive,
+  trend,
+  strength,
+  themeMode,
+  onThemeToggle,
+  onLogout,
+}: {
+  stock: StockCandidate;
+  sourceRecords: StockDailyRecord[];
+  latest: StockDailyRecord | undefined;
+  change: number;
+  changePct: number;
+  positive: boolean;
+  trend: string;
+  strength: string;
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
+  onLogout: () => void;
+}) {
+  const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
+
+  return (
+    <Card className="gap-0 bg-card/88 shadow-sm">
+      <CardHeader className="gap-4 px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <CardTitle className="truncate text-2xl text-balance">{stock.name}</CardTitle>
+              <span className="text-sm text-muted-foreground tabular-nums">{stock.code}</span>
+              <Badge variant="outline" className="bg-background/45">{stockListMeta[stock.list].label}</Badge>
+              <Badge variant={latest ? "secondary" : "destructive"}>{latest ? "行情正常" : "无数据"}</Badge>
+            </div>
+            <div className="mt-3 flex flex-wrap items-end gap-x-3 gap-y-1">
+              <span
+                className={cn(
+                  "text-4xl font-semibold leading-none tabular-nums",
+                  latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
+                )}
+              >
+                <AnimatedDigits
+                  key={`desktop-price-${stock.code}:${latest?.date ?? ""}:${latest?.close ?? ""}`}
+                  value={latest ? latest.close.toFixed(2) : "--"}
+                />
+              </span>
+              <span
+                className={cn(
+                  "pb-1 text-base font-semibold tabular-nums",
+                  latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
+                )}
+              >
+                <AnimatedDigits
+                  key={`desktop-change-${stock.code}:${latest?.date ?? ""}:${change}:${changePct}`}
+                  value={latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
+                />
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {isThemeToggleVisible(themeMode) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-background/55"
+                aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                onClick={onThemeToggle}
+              >
+                {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                {themeMode === "dark" ? "亮色" : "暗色"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/55"
+              aria-label="退出登录"
+              title="退出登录"
+              onClick={onLogout}
+            >
+              <LogOut data-icon="inline-start" />
+              退出登录
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-2 lg:grid-cols-4">
+          <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
+          <HeroMetric label="强度" value={strength} />
+          <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
+          <HeroMetric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
+          <HeroMetric label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
+          <HeroMetric label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
+          <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
+          <HeroMetric label="记录" value={`${sourceRecords.length}`} />
+        </div>
+      </CardHeader>
+
+      <CardContent className="border-t px-4 py-4">
+        <div className="flex w-max max-w-full gap-1 overflow-x-auto rounded-lg bg-background/45 p-1 [-webkit-overflow-scrolling:touch]">
+          {stockDataViewOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={cn(
+                "h-8 whitespace-nowrap rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                option.id === activeViewId
+                  ? "bg-secondary text-secondary-foreground"
+                  : "hover:bg-accent hover:text-accent-foreground",
+              )}
+              aria-pressed={option.id === activeViewId}
+              onClick={() => setActiveViewId(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4">
+          {activeViewId === "daily-detail" ? (
+            <DailyKlineDetailSection records={sourceRecords} />
+          ) : (
+            <FiveDayTrendSection records={sourceRecords} />
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DesktopStockBoardLoading({
+  isLoading,
+  error,
+  themeMode,
+  onThemeToggle,
+  onLogout,
+  onReload,
+}: {
+  isLoading: boolean;
+  error: string | null;
+  themeMode: ThemeMode;
+  onThemeToggle: () => void;
+  onLogout: () => void;
+  onReload: () => void;
+}) {
+  const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
+
+  return (
+    <section
+      className="min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
+      style={{ background: "var(--chart-hero-background)" }}
+    >
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
+        <section className="rounded-lg border bg-card/88 p-3 shadow-sm">
+          <div className="mb-3 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/55"
+              aria-label={isLoading ? "加载中" : "重载"}
+              title={isLoading ? "加载中" : "重载"}
+              disabled={isLoading}
+              onClick={onReload}
+            >
+              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
+              {isLoading ? "加载中" : "重载"}
+            </Button>
+          </div>
+          <div className="relative mx-auto h-[clamp(320px,44vh,440px)] max-w-[980px] overflow-hidden rounded-lg bg-background/45">
+            <Liveline
+              data={[]}
+              value={0}
+              mode="candle"
+              candles={[]}
+              candleWidth={daySecs}
+              theme={themeMode}
+              color={chartColor}
+              window={daySecs * dailyKVisibleDays}
+              grid
+              loading={isLoading}
+              momentum="flat"
+              padding={desktopChartPadding}
+              className="size-full"
+            />
+          </div>
+        </section>
+
+        <Card className="gap-0 bg-card/88 shadow-sm">
+          <CardHeader className="flex flex-row items-start justify-between gap-3 px-4 py-4">
+            <div className="min-w-0">
+              <CardTitle className="text-2xl text-balance">
+                {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
+              </CardTitle>
+              <CardDescription className="mt-2 text-pretty">
+                {error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "当前策略没有返回候选股票")}
+              </CardDescription>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {isThemeToggleVisible(themeMode) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="bg-background/55"
+                  aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                  title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                  onClick={onThemeToggle}
+                >
+                  {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                  {themeMode === "dark" ? "亮色" : "暗色"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-background/55"
+                aria-label="退出登录"
+                title="退出登录"
+                onClick={onLogout}
+              >
+                <LogOut data-icon="inline-start" />
+                退出登录
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
 function MobileStockTabs({
   activeListKey,
   stockGroups,
@@ -1772,83 +2519,6 @@ function createKlineNoDataRecord(stock: StockCandidate, error: string): StockDai
     status: "无数据",
     error,
   };
-}
-
-function StockColumn({
-  listKey,
-  stocks,
-  chartSelection,
-  filterDeletePendingIds,
-  selectedStockCodes,
-  onAddToSelected,
-  onRemoveFromSelected,
-  onToggleChart,
-  onDeleteFromFilterList,
-  onOpenImport,
-}: {
-  listKey: StockListKey;
-  stocks: StockCandidate[];
-  chartSelection: ChartSelection | null;
-  filterDeletePendingIds: number[];
-  selectedStockCodes: Set<string>;
-  onAddToSelected: (stock: StockCandidate) => void;
-  onRemoveFromSelected: (stock: StockCandidate) => void;
-  onToggleChart: (code: string, listKey: StockListKey) => void;
-  onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
-  onOpenImport: (listKey: ReturnableListKey) => void;
-}) {
-  const Icon = listIcons[listKey];
-  const meta = stockListMeta[listKey];
-  const returnableListKey = getReturnableListKey(listKey);
-
-  return (
-    <Card
-      className="min-h-[260px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl sm:min-h-[360px]"
-    >
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <Icon className="size-4 text-muted-foreground" />
-            <CardTitle className="truncate text-base">{meta.label}</CardTitle>
-            <Badge variant="secondary">{stocks.length}</Badge>
-          </div>
-          {returnableListKey ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 shrink-0 bg-background/45"
-              onClick={() => onOpenImport(returnableListKey)}
-            >
-              <ImportIcon data-icon="inline-start" />
-              导入
-            </Button>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="pb-5">
-        <ItemGroup className="gap-2">
-          {stocks.map((stock) => (
-            <StockListButton
-              key={stock.code}
-              stock={stock}
-              active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
-              onClick={() => onToggleChart(stock.code, listKey)}
-              action={getStockListAction({
-                stock,
-                listKey,
-                selectedStockCodes,
-                filterDeletePendingIds,
-                onAddToSelected,
-                onRemoveFromSelected,
-                onDeleteFromFilterList,
-              })}
-            />
-          ))}
-        </ItemGroup>
-      </CardContent>
-    </Card>
-  );
 }
 
 function getReturnableListKey(listKey: StockListKey): ReturnableListKey | null {
@@ -2598,9 +3268,9 @@ function StockImportResultItem({
   );
 }
 
-function EmptyChart({ error }: { error?: string }) {
+function EmptyChart({ error, className }: { error?: string; className?: string }) {
   return (
-    <div className="flex size-full min-h-[420px] flex-col items-center justify-center gap-3 px-6 text-center">
+    <div className={cn("flex size-full min-h-[420px] flex-col items-center justify-center gap-3 px-6 text-center", className)}>
       <Database className="size-8 text-muted-foreground" />
       <div>
         <div className="font-medium">暂无行情数据</div>
