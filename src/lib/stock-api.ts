@@ -27,16 +27,12 @@ export type AddStockFilterRequest = {
   listType: StockFilterListType;
 };
 
-export type KlineCacheRequest = {
-  code?: string;
-  date_from?: string;
-  date_to?: string;
-};
-
 export type DailyKline = {
   amount?: number;
   close?: number;
   code?: string;
+  date?: string;
+  error?: string;
   high?: number;
   last?: number;
   limit_down?: number;
@@ -45,8 +41,36 @@ export type DailyKline = {
   low?: number;
   name?: string;
   open?: number;
+  status?: string;
   trade_date?: string;
   volume?: number;
+};
+
+export type StrategyScanRequest = {
+  config_id?: number;
+  x?: number;
+  y?: number;
+};
+
+export type StrategyScanResult = {
+  code?: string;
+  highlight?: boolean;
+  klines?: DailyKline[];
+  limit_up_price?: number;
+  matched?: boolean;
+  matched_rules?: number[];
+  name?: string;
+  rule1_limit_up?: boolean;
+  rule2_surge_fall?: boolean;
+  rule3_above_ma5_in_range?: boolean;
+  x1_close?: number;
+  x1_high?: number;
+  x2_close?: number;
+  x2_ma5?: number;
+  x_close?: number;
+  x_date?: string;
+  x_high?: number;
+  x_low?: number;
 };
 
 export async function listStocks(
@@ -227,18 +251,18 @@ export async function deleteStockFilter(id: number): Promise<void> {
   }
 }
 
-export async function listKlineCache(
-  request: KlineCacheRequest,
+export async function scanStrategy(
+  request: StrategyScanRequest,
   signal?: AbortSignal,
-): Promise<DailyKline[]> {
+): Promise<StrategyScanResult[]> {
   let response: Response;
   const token = getStoredAuthToken()?.trim();
 
   try {
-    response = await fetch(`${apiBaseUrl}/kline-cache`, {
+    response = await fetch(`${apiBaseUrl}/strategy/scan`, {
       method: "POST",
       headers: createJsonAuthHeaders(token),
-      body: JSON.stringify(createKlineCacheRequestBody(request)),
+      body: JSON.stringify(createStrategyScanRequestBody(request)),
       signal,
     });
   } catch (error) {
@@ -246,13 +270,13 @@ export async function listKlineCache(
       throw error;
     }
 
-    throw new Error("无法连接日 K 缓存接口，请确认后端服务或跨域配置。");
+    throw new Error("无法连接策略扫描接口，请确认后端服务或跨域配置。");
   }
 
   const payload = await readJson(response);
 
   if (!response.ok) {
-    const message = getErrorMessage(payload) ?? "日 K 缓存加载失败。";
+    const message = getErrorMessage(payload) ?? "策略扫描失败。";
 
     if (isAuthFailureStatus(response.status)) {
       notifyAuthExpired();
@@ -264,10 +288,10 @@ export async function listKlineCache(
   const apiStatus = getApiStatus(payload);
 
   if (apiStatus !== null && apiStatus !== 0) {
-    throw new ApiError(getErrorMessage(payload) ?? "日 K 缓存加载失败。", response.status);
+    throw new ApiError(getErrorMessage(payload) ?? "策略扫描失败。", response.status);
   }
 
-  return getDailyKlines(payload);
+  return getStrategyScanResults(payload);
 }
 
 async function readJson(response: Response) {
@@ -329,7 +353,10 @@ function getDailyKlines(payload: unknown) {
     const dailyKline: DailyKline = {};
 
     assignStringField(dailyKline, item, "code");
+    assignStringField(dailyKline, item, "date");
+    assignStringField(dailyKline, item, "error");
     assignStringField(dailyKline, item, "name");
+    assignStringField(dailyKline, item, "status");
     assignStringField(dailyKline, item, "trade_date");
     assignNumberField(dailyKline, item, "amount");
     assignNumberField(dailyKline, item, "close");
@@ -343,6 +370,62 @@ function getDailyKlines(payload: unknown) {
     assignNumberField(dailyKline, item, "volume");
 
     return Object.keys(dailyKline).length > 0 ? [dailyKline] : [];
+  });
+}
+
+function getStrategyScanResults(payload: unknown) {
+  const list = getPayloadList(payload);
+
+  return list.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    const result: StrategyScanResult = {};
+
+    assignScanStringField(result, item, "code");
+    assignScanStringField(result, item, "name");
+    assignScanStringField(result, item, "x_date");
+    assignScanNumberField(result, item, "limit_up_price");
+    assignScanNumberField(result, item, "x1_close");
+    assignScanNumberField(result, item, "x1_high");
+    assignScanNumberField(result, item, "x2_close");
+    assignScanNumberField(result, item, "x2_ma5");
+    assignScanNumberField(result, item, "x_close");
+    assignScanNumberField(result, item, "x_high");
+    assignScanNumberField(result, item, "x_low");
+
+    if (typeof item.highlight === "boolean") {
+      result.highlight = item.highlight;
+    }
+
+    if (typeof item.matched === "boolean") {
+      result.matched = item.matched;
+    }
+
+    if (typeof item.rule1_limit_up === "boolean") {
+      result.rule1_limit_up = item.rule1_limit_up;
+    }
+
+    if (typeof item.rule2_surge_fall === "boolean") {
+      result.rule2_surge_fall = item.rule2_surge_fall;
+    }
+
+    if (typeof item.rule3_above_ma5_in_range === "boolean") {
+      result.rule3_above_ma5_in_range = item.rule3_above_ma5_in_range;
+    }
+
+    if (Array.isArray(item.matched_rules)) {
+      result.matched_rules = item.matched_rules.filter((rule): rule is number => (
+        typeof rule === "number" && Number.isFinite(rule)
+      ));
+    }
+
+    if (Array.isArray(item.klines)) {
+      result.klines = getDailyKlines(item.klines);
+    }
+
+    return result.code || result.name || result.klines?.length ? [result] : [];
   });
 }
 
@@ -370,19 +453,19 @@ function getPayloadList(payload: unknown) {
   return isRecord(payload) ? [payload] : [];
 }
 
-function createKlineCacheRequestBody(request: KlineCacheRequest) {
-  const body: KlineCacheRequest = {};
+function createStrategyScanRequestBody(request: StrategyScanRequest) {
+  const body: StrategyScanRequest = {};
 
-  if (request.code?.trim()) {
-    body.code = request.code.trim();
+  if (typeof request.config_id === "number" && Number.isFinite(request.config_id)) {
+    body.config_id = request.config_id;
   }
 
-  if (request.date_from?.trim()) {
-    body.date_from = request.date_from.trim();
+  if (typeof request.x === "number" && Number.isFinite(request.x)) {
+    body.x = request.x;
   }
 
-  if (request.date_to?.trim()) {
-    body.date_to = request.date_to.trim();
+  if (typeof request.y === "number" && Number.isFinite(request.y)) {
+    body.y = request.y;
   }
 
   return body;
@@ -391,12 +474,44 @@ function createKlineCacheRequestBody(request: KlineCacheRequest) {
 function assignStringField(
   target: DailyKline,
   source: Record<string, unknown>,
-  key: "code" | "name" | "trade_date",
+  key: "code" | "date" | "error" | "name" | "status" | "trade_date",
 ) {
   const value = source[key];
 
   if (typeof value === "string" && value.trim()) {
     target[key] = value.trim();
+  }
+}
+
+function assignScanStringField(
+  target: StrategyScanResult,
+  source: Record<string, unknown>,
+  key: "code" | "name" | "x_date",
+) {
+  const value = source[key];
+
+  if (typeof value === "string" && value.trim()) {
+    target[key] = value.trim();
+  }
+}
+
+function assignScanNumberField(
+  target: StrategyScanResult,
+  source: Record<string, unknown>,
+  key:
+    | "limit_up_price"
+    | "x1_close"
+    | "x1_high"
+    | "x2_close"
+    | "x2_ma5"
+    | "x_close"
+    | "x_high"
+    | "x_low",
+) {
+  const value = source[key];
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    target[key] = value;
   }
 }
 

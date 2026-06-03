@@ -56,8 +56,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
-import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
-import { addStockFilter, deleteStockFilter, listKlineCache, listStockFilters, listStocks, type DailyKline, type StockFilter, type StockInfo } from "@/lib/stock-api";
+import { stockListMeta } from "@/data/mock-stocks";
+import { addStockFilter, deleteStockFilter, listStockFilters, listStocks, scanStrategy, type DailyKline, type StockFilter, type StockInfo, type StrategyScanResult } from "@/lib/stock-api";
 import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
@@ -65,7 +65,6 @@ import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/sto
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
-const klineCacheLookbackDays = 14;
 const heroChartPadding = { top: 260, right: 86, bottom: 72, left: 24 };
 const compactHeroChartPadding = { top: 292, right: 52, bottom: 54, left: 12 };
 const compactViewportQuery = "(max-width: 639px)";
@@ -74,6 +73,12 @@ const chartRangeOptionsBase = [
   { id: "daily", label: "日K" },
   { id: "today", label: "当日" },
 ] as const;
+const emptyStockGroups: StockGroups = {
+  initial: [],
+  selected: [],
+  whitelist: [],
+  blacklist: [],
+};
 type ChartRangeId = (typeof chartRangeOptionsBase)[number]["id"];
 type ChartMode = "line" | "candle";
 const chartModeOptions = [
@@ -150,6 +155,9 @@ type StockDashboardState = {
   chartSelection: ChartSelection | null;
   mobileListKey: StockListKey;
   importTargetList: ReturnableListKey | null;
+  scanError: string | null;
+  scanReloadKey: number;
+  scanLoading: boolean;
   filterListsError: string | null;
   filterDeletePendingIds: number[];
   strategyConfig: StrategyConfig;
@@ -160,6 +168,10 @@ type StockDashboardAction =
   | { type: "set-mobile-list"; listKey: StockListKey }
   | { type: "open-import"; listKey: ReturnableListKey }
   | { type: "close-import" }
+  | { type: "scan-start" }
+  | { type: "scan-success"; stocks: StockCandidate[] }
+  | { type: "scan-error"; error: string }
+  | { type: "scan-reload" }
   | { type: "set-filter-error"; error: string | null }
   | { type: "sync-filter-lists"; whitelist: StockCandidate[]; blacklist: StockCandidate[] }
   | { type: "remove-filter-stock"; stock: StockCandidate; listKey: ReturnableListKey }
@@ -170,10 +182,13 @@ type StockDashboardAction =
   | { type: "set-strategy-config"; config: StrategyConfig };
 
 const initialStockDashboardState: StockDashboardState = {
-  stockGroups: mockStockGroups,
+  stockGroups: emptyStockGroups,
   chartSelection: null,
   mobileListKey: "selected",
   importTargetList: null,
+  scanError: null,
+  scanReloadKey: 0,
+  scanLoading: true,
   filterListsError: null,
   filterDeletePendingIds: [],
   strategyConfig: defaultStrategyConfig,
@@ -207,6 +222,31 @@ function useStockDashboard() {
     () => new Set(state.stockGroups.selected.map((stock) => stock.code)),
     [state.stockGroups.selected],
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    dispatch({ type: "scan-start" });
+
+    void scanStrategy(createScanRequestFromConfig(state.strategyConfig), controller.signal)
+      .then((results) => {
+        dispatch({ type: "scan-success", stocks: createScanStockCandidates(results) });
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "策略扫描失败。";
+
+        dispatch({ type: "scan-error", error: message });
+        toast.error("策略扫描失败", {
+          description: message,
+        });
+      });
+
+    return () => controller.abort();
+  }, [state.strategyConfig, state.scanReloadKey]);
 
   const syncFilterLists = useCallback(async (signal?: AbortSignal) => {
     const [whiteFilters, blackFilters] = await Promise.all([
@@ -375,6 +415,7 @@ function useStockDashboard() {
     removeStockFromSelected,
     toggleSelectedStock,
     deleteStockFromFilterList,
+    reloadStrategyScan: () => dispatch({ type: "scan-reload" }),
     setMobileListKey: (listKey: StockListKey) => dispatch({ type: "set-mobile-list", listKey }),
     setStrategyConfig: (config: StrategyConfig) => dispatch({ type: "set-strategy-config", config }),
   };
@@ -395,6 +436,7 @@ function StockDashboardLayout({
   removeStockFromSelected,
   toggleSelectedStock,
   deleteStockFromFilterList,
+  reloadStrategyScan,
   setMobileListKey,
   setStrategyConfig,
 }: StockDashboardProps & ReturnType<typeof useStockDashboard>) {
@@ -414,9 +456,12 @@ function StockDashboardLayout({
         <div ref={stockBoardRef}>
           <StockBoard
             stock={selectedStock}
+            isLoading={state.scanLoading}
+            error={state.scanError}
             themeMode={themeMode}
             onThemeToggle={onThemeToggle}
             onLogout={onLogout}
+            onReload={reloadStrategyScan}
           />
         </div>
 
@@ -486,6 +531,14 @@ function stockDashboardReducer(
       return { ...state, importTargetList: action.listKey };
     case "close-import":
       return { ...state, importTargetList: null };
+    case "scan-start":
+      return { ...state, scanLoading: true, scanError: null };
+    case "scan-success":
+      return syncScanStocksState(state, action.stocks);
+    case "scan-error":
+      return { ...state, scanLoading: false, scanError: action.error };
+    case "scan-reload":
+      return { ...state, scanReloadKey: state.scanReloadKey + 1 };
     case "set-filter-error":
       return { ...state, filterListsError: action.error };
     case "sync-filter-lists":
@@ -516,15 +569,75 @@ function stockDashboardReducer(
   return state;
 }
 
+function syncScanStocksState(
+  state: StockDashboardState,
+  initial: StockCandidate[],
+): StockDashboardState {
+  const knownRecords = new Map<string, StockDailyRecord[]>();
+
+  for (const stock of initial) {
+    knownRecords.set(getComparableStockCode(stock.code), stock.records);
+  }
+
+  const selected = state.stockGroups.selected.map((stock) => hydrateStockCandidate(stock, knownRecords));
+  const whitelist = state.stockGroups.whitelist.map((stock) => hydrateStockCandidate(stock, knownRecords));
+  const blacklist = state.stockGroups.blacklist.map((stock) => hydrateStockCandidate(stock, knownRecords));
+  const stockGroups = {
+    ...state.stockGroups,
+    initial,
+    selected,
+    whitelist,
+    blacklist,
+  };
+  let chartSelection = state.chartSelection;
+
+  if (chartSelection) {
+    const selection = chartSelection;
+
+    if (!stockGroups[selection.listKey].some((stock) => stock.code === selection.code)) {
+      chartSelection = null;
+    }
+  }
+
+  if (!chartSelection && initial.length > 0) {
+    chartSelection = { code: initial[0].code, listKey: "initial" };
+  }
+
+  return {
+    ...state,
+    stockGroups,
+    chartSelection,
+    scanLoading: false,
+    scanError: null,
+  };
+}
+
+function hydrateStockCandidate(
+  stock: StockCandidate,
+  knownRecords: Map<string, StockDailyRecord[]>,
+): StockCandidate {
+  const records = knownRecords.get(getComparableStockCode(stock.code));
+
+  return records
+    ? { ...stock, records }
+    : stock;
+}
+
 function syncFilterListsState(
   state: StockDashboardState,
   whitelist: StockCandidate[],
   blacklist: StockCandidate[],
 ): StockDashboardState {
+  const knownRecords = new Map<string, StockDailyRecord[]>();
+
+  for (const stock of [...state.stockGroups.initial, ...state.stockGroups.selected]) {
+    knownRecords.set(getComparableStockCode(stock.code), stock.records);
+  }
+
   const stockGroups = {
     ...state.stockGroups,
-    whitelist,
-    blacklist,
+    whitelist: whitelist.map((stock) => hydrateStockCandidate(stock, knownRecords)),
+    blacklist: blacklist.map((stock) => hydrateStockCandidate(stock, knownRecords)),
   };
 
   if (!state.chartSelection || (state.chartSelection.listKey !== "whitelist" && state.chartSelection.listKey !== "blacklist")) {
@@ -535,7 +648,7 @@ function syncFilterListsState(
     };
   }
 
-  const nextStocks = state.chartSelection.listKey === "whitelist" ? whitelist : blacklist;
+  const nextStocks = state.chartSelection.listKey === "whitelist" ? stockGroups.whitelist : stockGroups.blacklist;
   const chartSelection = nextStocks.some((stock) => stock.code === state.chartSelection?.code)
     ? state.chartSelection
     : null;
@@ -619,53 +732,49 @@ function removeSelectedStockState(
 }
 type StockBoardProps = {
   stock: StockCandidate | null;
+  isLoading: boolean;
+  error: string | null;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
   onLogout: () => void;
+  onReload: () => void;
 };
 
 type ActiveStockBoardState = {
   chartRangeId: ChartRangeId;
   chartMode: ChartMode;
   detailsOpen: boolean;
-  isLoading: boolean;
-  liveResetKey: number;
-};
-
-type KlineCacheState = {
-  key: string;
-  records: StockDailyRecord[];
-  error: string | null;
-  isLoading: boolean;
 };
 
 type ActiveStockBoardAction =
   | { type: "select-range"; rangeId: ChartRangeId }
   | { type: "set-chart-mode"; chartMode: ChartMode }
-  | { type: "toggle-details" }
-  | { type: "finish-loading" }
-  | { type: "reload" };
+  | { type: "toggle-details" };
 
 const initialActiveStockBoardState: ActiveStockBoardState = {
   chartRangeId: "daily",
   chartMode: "candle",
   detailsOpen: false,
-  isLoading: true,
-  liveResetKey: 0,
 };
 
 function StockBoard({
   stock,
+  isLoading,
+  error,
   themeMode,
   onThemeToggle,
   onLogout,
+  onReload,
 }: StockBoardProps) {
   if (!stock) {
     return (
       <StockBoardLoading
+        isLoading={isLoading}
+        error={error}
         themeMode={themeMode}
         onThemeToggle={onThemeToggle}
         onLogout={onLogout}
+        onReload={onReload}
       />
     );
   }
@@ -674,9 +783,12 @@ function StockBoard({
     <ActiveStockBoard
       key={`${stock.list}:${stock.code}`}
       stock={stock}
+      isLoading={isLoading}
+      error={error}
       themeMode={themeMode}
       onThemeToggle={onThemeToggle}
       onLogout={onLogout}
+      onReload={onReload}
     />
   );
 }
@@ -697,9 +809,12 @@ function useIsCompactViewport() {
 }
 function ActiveStockBoard({
   stock,
+  isLoading,
+  error,
   themeMode,
   onThemeToggle,
   onLogout,
+  onReload,
 }: Omit<StockBoardProps, "stock"> & {
   stock: StockCandidate;
 }) {
@@ -708,18 +823,14 @@ function ActiveStockBoard({
     chartRangeId,
     chartMode,
     detailsOpen,
-    isLoading: isResetLoading,
-    liveResetKey,
   } = boardState;
-  const klineCache = useKlineCache(stock, liveResetKey);
   const chartStock = useMemo(
     () => ({
       ...stock,
-      records: klineCache.records,
+      records: stock.records,
     }),
-    [klineCache.records, stock],
+    [stock],
   );
-  const isLoading = isResetLoading || klineCache.isLoading;
   const sourceRecords = useMemo(
     () => chartStock.records.filter((record) => record.status === "成功"),
     [chartStock.records],
@@ -748,20 +859,6 @@ function ActiveStockBoard({
 
   function selectChartRange(rangeId: ChartRangeId) {
     dispatchBoard({ type: "select-range", rangeId });
-  }
-
-  useEffect(() => {
-    if (!isLoading) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => dispatchBoard({ type: "finish-loading" }), 520);
-
-    return () => window.clearTimeout(timer);
-  }, [isLoading, liveResetKey]);
-
-  function reloadStock() {
-    dispatchBoard({ type: "reload" });
   }
 
   const positive = change >= 0;
@@ -827,7 +924,7 @@ function ActiveStockBoard({
                 )}
               >
                 <AnimatedDigits
-                  key={`price-${stock.code}:${liveResetKey}`}
+                  key={`price-${stock.code}:${latest?.date ?? ""}:${latest?.close ?? ""}`}
                   value={latest ? latest.close.toFixed(2) : "--"}
                 />
               </span>
@@ -838,7 +935,7 @@ function ActiveStockBoard({
                 )}
               >
                 <AnimatedDigits
-                  key={`change-${stock.code}:${liveResetKey}`}
+                  key={`change-${stock.code}:${latest?.date ?? ""}:${change}:${changePct}`}
                   value={latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
                 />
               </span>
@@ -914,7 +1011,7 @@ function ActiveStockBoard({
               aria-label={isLoading ? "加载中" : "重载"}
               title={isLoading ? "加载中" : "重载"}
               disabled={isLoading}
-              onClick={reloadStock}
+              onClick={onReload}
             >
               <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
               <span className="max-[420px]:hidden">{isLoading ? "加载中" : "重载"}</span>
@@ -966,7 +1063,7 @@ function ActiveStockBoard({
               className="size-full"
             />
           ) : (
-            <EmptyChart error={klineCache.error ?? chartStock.records[0]?.error} />
+            <EmptyChart error={error ?? chartStock.records[0]?.error} />
           )}
         </div>
 
@@ -998,27 +1095,25 @@ function activeStockBoardReducer(
       return { ...state, chartMode: action.chartMode };
     case "toggle-details":
       return { ...state, detailsOpen: !state.detailsOpen };
-    case "finish-loading":
-      return { ...state, isLoading: false };
-    case "reload":
-      return {
-        ...state,
-        isLoading: true,
-        liveResetKey: state.liveResetKey + 1,
-      };
   }
 
   return state;
 }
 
 function StockBoardLoading({
+  isLoading,
+  error,
   themeMode,
   onThemeToggle,
   onLogout,
+  onReload,
 }: {
+  isLoading: boolean;
+  error: string | null;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
   onLogout: () => void;
+  onReload: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
   const isCompactViewport = useIsCompactViewport();
@@ -1037,8 +1132,11 @@ function StockBoardLoading({
           <div className="min-w-0">
             <BrandLockup />
             <h1 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
-              欢迎回来
+              {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
             </h1>
+            <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+              {error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "当前策略没有返回候选股票")}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:col-start-3 lg:justify-end lg:justify-self-end">
@@ -1075,10 +1173,11 @@ function StockBoardLoading({
               className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
               aria-label="重载"
               title="重载"
-              disabled
+              disabled={isLoading}
+              onClick={onReload}
             >
-              <RefreshCcw data-icon="inline-start" />
-              重载
+              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
+              {isLoading ? "加载中" : "重载"}
             </Button>
           </div>
         </div>
@@ -1094,7 +1193,7 @@ function StockBoardLoading({
             color={chartColor}
             window={daySecs * dailyKVisibleDays}
             grid
-            loading
+            loading={isLoading}
             momentum="flat"
             padding={chartPadding}
             className="size-full"
@@ -1555,65 +1654,66 @@ function StockDataEmptyState({ label }: { label: string }) {
   );
 }
 
-function useKlineCache(stock: StockCandidate, resetKey: number): KlineCacheState {
-  const cacheKey = `${stock.code}:${resetKey}`;
-  const [cacheState, setCacheState] = useState<KlineCacheState>(() => ({
-    key: cacheKey,
-    records: [],
-    error: null,
-    isLoading: true,
-  }));
+function createScanStockCandidates(results: StrategyScanResult[]): StockCandidate[] {
+  const seenCodes = new Set<string>();
 
-  useEffect(() => {
-    const controller = new AbortController();
+  return results.flatMap((result) => {
+    const code = result.code?.trim() || result.klines?.find((kline) => kline.code?.trim())?.code?.trim() || "";
 
-    setCacheState({
-      key: cacheKey,
+    if (!code) {
+      return [];
+    }
+
+    const codeKey = getComparableStockCode(code);
+
+    if (seenCodes.has(codeKey)) {
+      return [];
+    }
+
+    seenCodes.add(codeKey);
+
+    const name = result.name?.trim()
+      || result.klines?.find((kline) => kline.name?.trim())?.name?.trim()
+      || code;
+    const stock: StockCandidate = {
+      code,
+      name,
+      list: "initial",
       records: [],
-      error: null,
-      isLoading: true,
-    });
+    };
+    const records = createDailyRecordsFromKlines(result.klines ?? [], stock);
 
-    void listKlineCache({
-      code: stock.code,
-      ...createKlineCacheDateRange(new Date()),
-    }, controller.signal)
-      .then((dailyKlines) => {
-        const records = createDailyRecordsFromKlines(dailyKlines, stock);
+    return [{
+      ...stock,
+      records: records.length > 0
+        ? records
+        : [createKlineNoDataRecord(stock, "策略扫描未返回有效日 K 数据")],
+    }];
+  });
+}
 
-        setCacheState({
-          key: cacheKey,
-          records: records.length > 0
-            ? records
-            : [createKlineNoDataRecord(stock, "后端暂无该股票日 K 缓存")],
-          error: records.length > 0 ? null : "后端暂无该股票日 K 缓存",
-          isLoading: false,
-        });
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-
-        const message = error instanceof Error ? error.message : "日 K 缓存加载失败。";
-
-        setCacheState({
-          key: cacheKey,
-          records: [createKlineNoDataRecord(stock, message)],
-          error: message,
-          isLoading: false,
-        });
-      });
-
-    return () => controller.abort();
-  }, [cacheKey, stock]);
-
-  return cacheState.key === cacheKey ? cacheState : {
-    key: cacheKey,
-    records: [],
-    error: null,
-    isLoading: true,
+function createScanRequestFromConfig(config: StrategyConfig) {
+  return {
+    config_id: 0,
+    x: getStrategyScanX(config.baseDate),
+    y: getStrategyScanY(config.ma5Ratio),
   };
+}
+
+function getStrategyScanX(baseDate: string) {
+  if (baseDate === "today") {
+    return 0;
+  }
+
+  const match = baseDate.match(/^prev-(\d+)$/);
+
+  return match ? Number(match[1]) : 5;
+}
+
+function getStrategyScanY(ma5Ratio: string) {
+  const ratio = Number(ma5Ratio);
+
+  return Number.isFinite(ratio) ? ratio : 0;
 }
 
 function createDailyRecordsFromKlines(
@@ -1621,7 +1721,7 @@ function createDailyRecordsFromKlines(
   stock: StockCandidate,
 ): StockDailyRecord[] {
   return dailyKlines.flatMap((dailyKline) => {
-    const date = formatTradeDate(dailyKline.trade_date);
+    const date = formatTradeDate(dailyKline.date ?? dailyKline.trade_date);
 
     if (
       !date
@@ -1635,6 +1735,7 @@ function createDailyRecordsFromKlines(
 
     const code = dailyKline.code?.trim() || stock.code;
     const name = dailyKline.name?.trim() || stock.name;
+    const status: StockDailyRecord["status"] = dailyKline.status === "无数据" ? "无数据" : "成功";
 
     return [{
       code,
@@ -1650,7 +1751,8 @@ function createDailyRecordsFromKlines(
       limit_up: dailyKline.limit_up,
       limit_down: dailyKline.limit_down,
       limit_pct: dailyKline.limit_pct,
-      status: "成功" as const,
+      status,
+      error: dailyKline.error,
     }];
   }).sort((left, right) => left.date.localeCompare(right.date));
 }
@@ -1825,7 +1927,7 @@ function createImportedNoDataRecord(code: string, name: string): StockDailyRecor
     volume: 0,
     amount: 0,
     status: "无数据",
-    error: "通过股票列表导入，选择后加载日线缓存",
+    error: "通过股票列表导入，等待策略扫描返回日 K 数据",
   };
 }
 
@@ -1856,25 +1958,6 @@ function formatRecordDate(date: Date) {
   const day = `${date.getDate()}`.padStart(2, "0");
 
   return `${year}-${month}-${day}`;
-}
-
-function createKlineCacheDateRange(dateTo: Date) {
-  const dateFrom = new Date(dateTo);
-
-  dateFrom.setDate(dateFrom.getDate() - klineCacheLookbackDays);
-
-  return {
-    date_from: formatCompactDate(dateFrom),
-    date_to: formatCompactDate(dateTo),
-  };
-}
-
-function formatCompactDate(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-
-  return `${year}${month}${day}`;
 }
 
 function formatTradeDate(tradeDate: string | undefined) {
