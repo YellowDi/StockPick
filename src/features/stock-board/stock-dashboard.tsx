@@ -1634,7 +1634,7 @@ function DesktopActiveStockBoard({
 
   return (
     <section className="min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
-      <div className="flex w-full flex-col">
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col">
         <DesktopStockChartPanel
           stock={chartStock}
           latest={latest}
@@ -1705,11 +1705,14 @@ function DesktopStockChartPanel({
 }) {
   return (
     <section
-      className="relative -mx-5 overflow-hidden px-5 pt-4 lg:-mx-8 lg:px-8"
-      style={{ background: "var(--chart-hero-background)" }}
+      className="relative pt-4"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
-      <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-30 h-36" />
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 z-0 h-full w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]"
+        style={{ background: "var(--chart-hero-background)" }}
+      />
+      <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
+      <div className="chart-hero-bottom-mask pointer-events-none absolute bottom-0 left-1/2 z-30 h-36 w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]" />
 
       <div className="relative z-20 w-full">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1955,13 +1958,16 @@ function DesktopStockBoardLoading({
 
   return (
     <section className="min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
-      <div className="flex w-full flex-col">
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col">
         <section
-          className="relative -mx-5 overflow-hidden px-5 pt-4 lg:-mx-8 lg:px-8"
-          style={{ background: "var(--chart-hero-background)" }}
+          className="relative pt-4"
         >
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
-          <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-30 h-36" />
+          <div
+            className="pointer-events-none absolute left-1/2 top-0 z-0 h-full w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]"
+            style={{ background: "var(--chart-hero-background)" }}
+          />
+          <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
+          <div className="chart-hero-bottom-mask pointer-events-none absolute bottom-0 left-1/2 z-30 h-36 w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]" />
           <div className="mb-3 flex justify-end">
             <Button
               type="button"
