@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useReducer, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { defaultStrategyConfig, type StrategyConfig, type StrategyId } from "@/features/strategy-switch/strategy-config";
 import { cn } from "@/lib/utils";
 
 const strategyBaseDateOptions = [
@@ -61,23 +62,17 @@ const strategyOptions = [
     description: "涨停后冲高回落，再观察回踩是否仍保持强势",
   },
 ] as const;
-type StrategyId = (typeof strategyOptions)[number]["id"];
-export type StrategyConfig = {
-  name: string;
-  enabled: boolean;
-  baseDate: string;
-  limitPrice: string;
-  ma5Ratio: string;
-  strategyId: StrategyId;
-};
-export const defaultStrategyConfig: StrategyConfig = {
-  name: "涨停回踩确认",
-  enabled: true,
-  baseDate: "today",
-  limitPrice: "auto",
-  ma5Ratio: "2",
-  strategyId: "limit-up-pullback-confirm",
-};
+
+type StrategyDraftAction =
+  | { type: "reset"; config: StrategyConfig }
+  | { type: "restore-default" }
+  | { type: "name"; value: string }
+  | { type: "enabled"; value: boolean }
+  | { type: "base-date"; value: string }
+  | { type: "limit-price"; value: string }
+  | { type: "ma5-ratio"; value: string }
+  | { type: "strategy"; value: StrategyId };
+
 export function StrategySwitchButton({
   config,
   onSave,
@@ -86,12 +81,12 @@ export function StrategySwitchButton({
   onSave: (config: StrategyConfig) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<StrategyConfig>(config);
+  const [draft, dispatchDraft] = useReducer(strategyDraftReducer, config);
   const activeStrategy = getStrategyOption(config.strategyId);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
-      setDraft(config);
+      dispatchDraft({ type: "reset", config });
     }
 
     setOpen(nextOpen);
@@ -127,7 +122,7 @@ export function StrategySwitchButton({
 
         <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
           <form onSubmit={saveStrategy}>
-            <DialogHeader className="px-5 py-5 pr-12">
+            <DialogHeader className="p-5 pr-12">
               <DialogTitle className="text-xl text-balance">策略切换</DialogTitle>
               <DialogDescription>选择一个筛选逻辑作为当前主策略</DialogDescription>
             </DialogHeader>
@@ -140,7 +135,7 @@ export function StrategySwitchButton({
                     id="strategy-name"
                     className="h-11 bg-background/55"
                     value={draft.name}
-                    onValueChange={(value) => setDraft((current) => ({ ...current, name: value }))}
+                    onValueChange={(value) => dispatchDraft({ type: "name", value })}
                   />
                 </div>
 
@@ -151,7 +146,7 @@ export function StrategySwitchButton({
                     <Switch
                       id="strategy-enabled"
                       checked={draft.enabled}
-                      onCheckedChange={(enabled) => setDraft((current) => ({ ...current, enabled }))}
+                      onCheckedChange={(value) => dispatchDraft({ type: "enabled", value })}
                     />
                   </div>
                 </div>
@@ -164,19 +159,19 @@ export function StrategySwitchButton({
                     label="基准日"
                     value={draft.baseDate}
                     options={strategyBaseDateOptions}
-                    onChange={(baseDate) => setDraft((current) => ({ ...current, baseDate }))}
+                    onChange={(value) => dispatchDraft({ type: "base-date", value })}
                   />
                   <StrategyComboboxField
                     label="涨停价 P"
                     value={draft.limitPrice}
                     options={strategyLimitPriceOptions}
-                    onChange={(limitPrice) => setDraft((current) => ({ ...current, limitPrice }))}
+                    onChange={(value) => dispatchDraft({ type: "limit-price", value })}
                   />
                   <StrategyComboboxField
                     label="高于 5 日线比例"
                     value={draft.ma5Ratio}
                     options={strategyMa5RatioOptions}
-                    onChange={(ma5Ratio) => setDraft((current) => ({ ...current, ma5Ratio }))}
+                    onChange={(value) => dispatchDraft({ type: "ma5-ratio", value })}
                   />
                 </div>
               </section>
@@ -186,9 +181,7 @@ export function StrategySwitchButton({
                 <RadioGroup
                   className="mt-3 gap-2"
                   value={draft.strategyId}
-                  onValueChange={(strategyId) => (
-                    setDraft((current) => ({ ...current, strategyId: strategyId as StrategyId }))
-                  )}
+                  onValueChange={(value) => dispatchDraft({ type: "strategy", value: value as StrategyId })}
                 >
                   {strategyOptions.map((option) => {
                     const selected = draft.strategyId === option.id;
@@ -242,12 +235,12 @@ export function StrategySwitchButton({
             </div>
 
             <Separator />
-            <DialogFooter className="mx-0 mb-0 rounded-none border-t-0 bg-transparent px-5 py-5 sm:justify-between">
+            <DialogFooter className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
                 className="bg-background/55 transition-transform active:scale-[0.96]"
-                onClick={() => setDraft(defaultStrategyConfig)}
+                onClick={() => dispatchDraft({ type: "restore-default" })}
               >
                 恢复默认
               </Button>
@@ -320,6 +313,32 @@ function StrategyComboboxField({
       </Combobox>
     </div>
   );
+}
+
+function strategyDraftReducer(
+  state: StrategyConfig,
+  action: StrategyDraftAction,
+): StrategyConfig {
+  switch (action.type) {
+    case "reset":
+      return action.config;
+    case "restore-default":
+      return defaultStrategyConfig;
+    case "name":
+      return { ...state, name: action.value };
+    case "enabled":
+      return { ...state, enabled: action.value };
+    case "base-date":
+      return { ...state, baseDate: action.value };
+    case "limit-price":
+      return { ...state, limitPrice: action.value };
+    case "ma5-ratio":
+      return { ...state, ma5Ratio: action.value };
+    case "strategy":
+      return { ...state, strategyId: action.value };
+  }
+
+  return state;
 }
 
 function getStrategyOption(strategyId: StrategyId) {
