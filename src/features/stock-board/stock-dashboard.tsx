@@ -1,5 +1,4 @@
 import {
-  type DragEvent,
   type FormEvent,
   useCallback,
   useEffect,
@@ -94,12 +93,12 @@ const chartModeOptions = [
 ];
 const stockImportResultLimit = 80;
 const exactCodePrefixPattern = /^(SH|SZ)/i;
-const stockItemActionClassName = "w-8 shrink-0 overflow-hidden opacity-100 transition-[width,opacity,transform] duration-150 md:w-0 md:translate-x-1 md:opacity-0 md:group-focus-within/stock-item:w-8 md:group-focus-within/stock-item:translate-x-0 md:group-focus-within/stock-item:opacity-100 md:group-hover/stock-item:w-8 md:group-hover/stock-item:translate-x-0 md:group-hover/stock-item:opacity-100";
-
-type DraggedStock = {
-  code: string;
-  fromList: StockListKey;
-};
+const stockItemActionClassName = cn(
+  "w-8 translate-x-0 shrink-0 overflow-hidden opacity-100 transition-[width,opacity,transform] duration-150",
+  "md:w-0 md:translate-x-1 md:opacity-0",
+  "md:group-focus-within/stock-item:w-8 md:group-focus-within/stock-item:translate-x-0 md:group-focus-within/stock-item:opacity-100",
+  "md:group-hover/stock-item:w-8 md:group-hover/stock-item:translate-x-0 md:group-hover/stock-item:opacity-100",
+);
 
 type ChartSelection = {
   code: string;
@@ -117,6 +116,14 @@ type StockImportDialogState = {
   error: string | null;
   importPendingCode: string | null;
   importError: string | null;
+};
+
+type StockListAction = {
+  icon: "add" | "added" | "delete";
+  title: string;
+  disabled?: boolean;
+  pending?: boolean;
+  onClick?: () => void;
 };
 
 const initialStockImportDialogState: StockImportDialogState = {
@@ -151,8 +158,6 @@ export default function StockDashboard({
   const stockBoardRef = useRef<HTMLDivElement>(null);
   const [stockGroups, setStockGroups] = useState(mockStockGroups);
   const [chartSelection, setChartSelection] = useState<ChartSelection | null>(null);
-  const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
-  const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
   const [mobileListKey, setMobileListKey] = useState<StockListKey>("selected");
   const [importTargetList, setImportTargetList] = useState<ReturnableListKey | null>(null);
   const [filterListsError, setFilterListsError] = useState<string | null>(null);
@@ -164,6 +169,10 @@ export default function StockDashboard({
   const selectedStockCodes = useMemo(
     () => new Set(stockGroups.selected.map((stock) => stock.code)),
     [stockGroups.selected],
+  );
+  const initialStockCodes = useMemo(
+    () => new Set(stockGroups.initial.map((stock) => stock.code)),
+    [stockGroups.initial],
   );
 
   const syncFilterLists = useCallback(async (signal?: AbortSignal) => {
@@ -325,140 +334,69 @@ export default function StockDashboard({
     }
   }, [syncFilterLists]);
 
-  function canDropStock(targetList: StockListKey, stock = draggedStock) {
-    if (!stock || stock.fromList === targetList) {
-      return false;
-    }
-
-    if (targetList === "selected") {
-      return stock.fromList !== "selected" && !selectedStockCodes.has(stock.code);
-    }
-
-    return stock.fromList === "selected";
-  }
-
-  function moveDroppedStock(stock: DraggedStock, targetList: StockListKey) {
-    if (targetList === "selected") {
-      setStockGroups((currentGroups) => {
-        const sourceStock = currentGroups[stock.fromList].find((item) => item.code === stock.code);
-
-        if (!sourceStock || currentGroups.selected.some((item) => item.code === stock.code)) {
-          return currentGroups;
-        }
-
-        return {
-          ...currentGroups,
-          ...(stock.fromList === "initial"
-            ? { initial: currentGroups.initial.filter((item) => item.code !== stock.code) }
-            : {}),
-          selected: [
-            ...currentGroups.selected,
-            {
-              code: sourceStock.code,
-              name: sourceStock.name,
-              records: sourceStock.records,
-              list: "selected",
-            },
-          ],
-        };
+  function addStockToSelected(stock: StockCandidate) {
+    if (selectedStockCodes.has(stock.code)) {
+      toast.message("已在已选", {
+        description: `${stock.name} ${stock.code}`,
       });
-      setChartSelection((selection) => (
-        selection?.listKey === "initial" && selection.code === stock.code
-          ? { code: stock.code, listKey: "selected" }
-          : selection
-      ));
-
-      return;
-    }
-
-    if (stock.fromList !== "selected") {
       return;
     }
 
     setStockGroups((currentGroups) => {
-      const selectedStock = currentGroups.selected.find((item) => item.code === stock.code);
-
-      if (!selectedStock) {
+      if (currentGroups.selected.some((item) => item.code === stock.code)) {
         return currentGroups;
       }
 
-      const targetStocks = currentGroups[targetList];
-
       return {
         ...currentGroups,
-        selected: currentGroups.selected.filter((item) => item.code !== stock.code),
-        [targetList]: targetStocks.some((item) => item.code === stock.code)
-          ? targetStocks
-          : [
-              ...targetStocks,
-              {
-                code: selectedStock.code,
-                name: selectedStock.name,
-                records: selectedStock.records,
-                list: targetList,
-              },
-            ],
+        selected: [
+          ...currentGroups.selected,
+          {
+            code: stock.code,
+            name: stock.name,
+            records: stock.records,
+            list: "selected",
+          },
+        ],
       };
     });
     setChartSelection((selection) => (
-      selection?.listKey === "selected" && selection.code === stock.code ? null : selection
+      selection?.listKey === "initial" && selection.code === stock.code
+        ? { code: stock.code, listKey: "selected" }
+        : selection
     ));
+    toast.success("已添加到已选", {
+      description: `${stock.name} ${stock.code}`,
+    });
   }
 
-  function handleStockDragStart(
-    stock: StockCandidate,
-    fromList: StockListKey,
-    event: DragEvent<HTMLElement>,
-  ) {
-    const nextDraggedStock = {
-      code: stock.code,
-      fromList,
-    };
-
-    event.dataTransfer.effectAllowed = fromList === "selected" ? "move" : "copy";
-    event.dataTransfer.setData("text/plain", fromList + ":" + stock.code);
-    setDraggedStock(nextDraggedStock);
-  }
-
-  function handleColumnDragOver(listKey: StockListKey, event: DragEvent<HTMLDivElement>) {
-    if (!canDropStock(listKey)) {
+  function removeStockFromSelected(stock: StockCandidate) {
+    if (!selectedStockCodes.has(stock.code)) {
       return;
     }
 
-    event.preventDefault();
-    event.dataTransfer.dropEffect = draggedStock?.fromList === "selected" ? "move" : "copy";
-    setDropTarget((current) => (current === listKey ? current : listKey));
-  }
-
-  function handleColumnDragLeave(listKey: StockListKey, event: DragEvent<HTMLDivElement>) {
-    const relatedTarget = event.relatedTarget;
-
-    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
-      return;
-    }
-
-    setDropTarget((current) => (current === listKey ? null : current));
-  }
-
-  function handleColumnDrop(listKey: StockListKey, event: DragEvent<HTMLDivElement>) {
-    if (!draggedStock || !canDropStock(listKey, draggedStock)) {
-      return;
-    }
-
-    event.preventDefault();
-    moveDroppedStock(draggedStock, listKey);
-    setDraggedStock(null);
-    setDropTarget(null);
-  }
-
-  function handleDragEnd() {
-    setDraggedStock(null);
-    setDropTarget(null);
+    setStockGroups((currentGroups) => ({
+      ...currentGroups,
+      selected: currentGroups.selected.filter((item) => item.code !== stock.code),
+    }));
+    setChartSelection((selection) => (
+      selection?.listKey === "selected" && selection.code === stock.code
+        ? initialStockCodes.has(stock.code)
+          ? { code: stock.code, listKey: "initial" }
+          : null
+        : selection
+    ));
+    toast.success("已从已选删除", {
+      description: `${stock.name} ${stock.code}`,
+    });
   }
 
   const sharedStockListProps = {
     chartSelection,
     filterDeletePendingIds,
+    selectedStockCodes,
+    onAddToSelected: addStockToSelected,
+    onRemoveFromSelected: removeStockFromSelected,
     onToggleChart: toggleSelectedStock,
     onDeleteFromFilterList: deleteStockFromFilterList,
   };
@@ -504,13 +442,6 @@ export default function StockDashboard({
                 listKey={key}
                 stocks={stockGroups[key]}
                 {...sharedStockListProps}
-                canDrop={canDropStock(key)}
-                isDropTarget={dropTarget === key}
-                onDragStart={handleStockDragStart}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleColumnDragOver}
-                onDragLeave={handleColumnDragLeave}
-                onDrop={handleColumnDrop}
                 onOpenImport={openImportDialog}
               />
             ))}
@@ -1057,8 +988,11 @@ function MobileStockTabs({
   stockGroups,
   chartSelection,
   filterDeletePendingIds,
+  selectedStockCodes,
   onOpenImport,
   onActiveListChange,
+  onAddToSelected,
+  onRemoveFromSelected,
   onToggleChart,
   onDeleteFromFilterList,
 }: {
@@ -1066,8 +1000,11 @@ function MobileStockTabs({
   stockGroups: Record<StockListKey, StockCandidate[]>;
   chartSelection: ChartSelection | null;
   filterDeletePendingIds: number[];
+  selectedStockCodes: Set<string>;
   onOpenImport: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
+  onAddToSelected: (stock: StockCandidate) => void;
+  onRemoveFromSelected: (stock: StockCandidate) => void;
   onToggleChart: (code: string, listKey: StockListKey) => void;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }) {
@@ -1123,10 +1060,16 @@ function MobileStockTabs({
                 key={stock.code}
                 stock={stock}
                 active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
-                draggable={false}
                 onClick={() => onToggleChart(stock.code, activeListKey)}
-                deletePending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
-                onDeleteFromFilterList={returnableListKey ? () => void onDeleteFromFilterList(stock, returnableListKey) : undefined}
+                action={getStockListAction({
+                  stock,
+                  listKey: activeListKey,
+                  selectedStockCodes,
+                  filterDeletePendingIds,
+                  onAddToSelected,
+                  onRemoveFromSelected,
+                  onDeleteFromFilterList,
+                })}
               />
             ))}
           </ItemGroup>
@@ -1482,34 +1425,22 @@ function StockColumn({
   stocks,
   chartSelection,
   filterDeletePendingIds,
-  canDrop,
-  isDropTarget,
+  selectedStockCodes,
+  onAddToSelected,
+  onRemoveFromSelected,
   onToggleChart,
   onDeleteFromFilterList,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDragLeave,
-  onDrop,
   onOpenImport,
 }: {
   listKey: StockListKey;
   stocks: StockCandidate[];
   chartSelection: ChartSelection | null;
   filterDeletePendingIds: number[];
-  canDrop: boolean;
-  isDropTarget: boolean;
+  selectedStockCodes: Set<string>;
+  onAddToSelected: (stock: StockCandidate) => void;
+  onRemoveFromSelected: (stock: StockCandidate) => void;
   onToggleChart: (code: string, listKey: StockListKey) => void;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
-  onDragStart: (
-    stock: StockCandidate,
-    fromList: StockListKey,
-    event: DragEvent<HTMLElement>,
-  ) => void;
-  onDragEnd: () => void;
-  onDragOver: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
-  onDragLeave: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
   onOpenImport: (listKey: ReturnableListKey) => void;
 }) {
   const Icon = listIcons[listKey];
@@ -1518,14 +1449,7 @@ function StockColumn({
 
   return (
     <Card
-      className={cn(
-        "min-h-[260px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl transition-[background-color,border-color,box-shadow] sm:min-h-[360px]",
-        canDrop && "border-dashed border-ring/60",
-        isDropTarget && "bg-secondary/35 shadow-[0_18px_70px_rgba(0,0,0,0.22)] ring-2 ring-ring/35",
-      )}
-      onDragOver={(event) => onDragOver(listKey, event)}
-      onDragLeave={(event) => onDragLeave(listKey, event)}
-      onDrop={(event) => onDrop(listKey, event)}
+      className="min-h-[260px] bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl sm:min-h-[360px]"
     >
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
@@ -1555,11 +1479,16 @@ function StockColumn({
               key={stock.code}
               stock={stock}
               active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
-              onDragStart={(event) => onDragStart(stock, listKey, event)}
-              onDragEnd={onDragEnd}
               onClick={() => onToggleChart(stock.code, listKey)}
-              deletePending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
-              onDeleteFromFilterList={returnableListKey ? () => void onDeleteFromFilterList(stock, returnableListKey) : undefined}
+              action={getStockListAction({
+                stock,
+                listKey,
+                selectedStockCodes,
+                filterDeletePendingIds,
+                onAddToSelected,
+                onRemoveFromSelected,
+                onDeleteFromFilterList,
+              })}
             />
           ))}
         </ItemGroup>
@@ -1678,27 +1607,72 @@ function formatRecordDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function StockListButton({
+function getStockListAction({
   stock,
-  active,
-  draggable = true,
-  deletePending = false,
-  onDragStart,
-  onDragEnd,
-  onClick,
+  listKey,
+  selectedStockCodes,
+  filterDeletePendingIds,
+  onAddToSelected,
+  onRemoveFromSelected,
   onDeleteFromFilterList,
 }: {
   stock: StockCandidate;
-  active: boolean;
-  draggable?: boolean;
-  deletePending?: boolean;
-  onDragStart?: (event: DragEvent<HTMLElement>) => void;
-  onDragEnd?: () => void;
-  onClick: () => void;
-  onDeleteFromFilterList?: () => void;
-}) {
-  const deleteTitle = deletePending ? "正在删除" : "从名单删除";
+  listKey: StockListKey;
+  selectedStockCodes: Set<string>;
+  filterDeletePendingIds: number[];
+  onAddToSelected: (stock: StockCandidate) => void;
+  onRemoveFromSelected: (stock: StockCandidate) => void;
+  onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
+}): StockListAction | undefined {
+  if (listKey === "initial") {
+    return selectedStockCodes.has(stock.code)
+      ? {
+          icon: "added",
+          title: "已在已选",
+          disabled: true,
+        }
+      : {
+          icon: "add",
+          title: "添加到已选",
+          onClick: () => onAddToSelected(stock),
+        };
+  }
 
+  if (listKey === "selected") {
+    return {
+      icon: "delete",
+      title: "从已选删除",
+      onClick: () => onRemoveFromSelected(stock),
+    };
+  }
+
+  const returnableListKey = getReturnableListKey(listKey);
+
+  if (!returnableListKey) {
+    return undefined;
+  }
+
+  const pending = Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId));
+
+  return {
+    icon: "delete",
+    title: `从${stockListMeta[returnableListKey].label}删除`,
+    pending,
+    onClick: () => void onDeleteFromFilterList(stock, returnableListKey),
+  };
+}
+
+function StockListButton({
+  stock,
+  active,
+  onClick,
+  action,
+}: {
+  stock: StockCandidate;
+  active: boolean;
+  onClick: () => void;
+  action?: StockListAction;
+}) {
   return (
     <Item
       variant="outline"
@@ -1712,15 +1686,9 @@ function StockListButton({
     >
       <button
         type="button"
-        className={cn(
-          "flex min-w-0 flex-1 items-center rounded-md px-2 py-2 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50",
-          draggable && "cursor-grab active:cursor-grabbing",
-        )}
+        className="flex min-w-0 flex-1 items-center rounded-md p-2 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`${stock.name} ${stock.code}`}
         aria-pressed={active}
-        draggable={draggable}
-        onDragStart={draggable ? onDragStart : undefined}
-        onDragEnd={draggable ? onDragEnd : undefined}
         onClick={onClick}
       >
         <span className="flex min-w-0 flex-1 items-baseline gap-2">
@@ -1728,11 +1696,11 @@ function StockListButton({
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
         </span>
       </button>
-      {onDeleteFromFilterList ? (
+      {action ? (
         <ItemActions
           className={cn(
             stockItemActionClassName,
-            deletePending && "md:w-8 md:translate-x-0 md:opacity-100",
+            action.pending && "md:w-8 md:translate-x-0 md:opacity-100",
           )}
         >
           <Button
@@ -1740,13 +1708,17 @@ function StockListButton({
             variant="ghost"
             size="icon"
             className="size-8 rounded-md border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
-            aria-label={deleteTitle}
-            title={deleteTitle}
-            disabled={deletePending}
-            onClick={onDeleteFromFilterList}
+            aria-label={`${action.title}：${stock.name} ${stock.code}`}
+            title={action.title}
+            disabled={action.disabled || action.pending}
+            onClick={action.onClick}
           >
-            {deletePending ? (
+            {action.pending ? (
               <LoaderCircle className="animate-spin" />
+            ) : action.icon === "add" ? (
+              <Plus />
+            ) : action.icon === "added" ? (
+              <CheckCircle2 />
             ) : (
               <Trash2 />
             )}
