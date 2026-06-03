@@ -1,4 +1,5 @@
 const apiBaseUrl = "http://192.168.2.16:1889/api/v1";
+const authExpiredEventName = "stockpick-auth-expired";
 const authTokenStorageKey = "stockpick-auth-token";
 
 export type LoginCredentials = {
@@ -52,17 +53,26 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
 
 export function getStoredAuthToken() {
   try {
-    return window.localStorage.getItem(authTokenStorageKey);
+    const token = window.localStorage.getItem(authTokenStorageKey);
+
+    return token?.trim() ? token : null;
   } catch {
     return null;
   }
 }
 
 export function storeAuthToken(token: string) {
+  const normalizedToken = token.trim();
+
+  if (!normalizedToken) {
+    return false;
+  }
+
   try {
-    window.localStorage.setItem(authTokenStorageKey, token);
+    window.localStorage.setItem(authTokenStorageKey, normalizedToken);
+    return true;
   } catch {
-    // Keep the current login flow usable even if browser storage is unavailable.
+    return false;
   }
 }
 
@@ -72,6 +82,28 @@ export function clearStoredAuthToken() {
   } catch {
     // Storage can be unavailable in restricted browser contexts.
   }
+}
+
+export function notifyAuthExpired() {
+  clearStoredAuthToken();
+
+  try {
+    window.dispatchEvent(new Event(authExpiredEventName));
+  } catch {
+    // The token is already cleared; UI notification is best effort.
+  }
+}
+
+export function subscribeAuthExpired(listener: () => void) {
+  window.addEventListener(authExpiredEventName, listener);
+
+  return () => {
+    window.removeEventListener(authExpiredEventName, listener);
+  };
+}
+
+export function isAuthFailureStatus(status: number) {
+  return status === 401 || status === 403;
 }
 
 async function readJson(response: Response) {

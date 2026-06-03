@@ -1,5 +1,7 @@
 import {
   type DragEvent,
+  type FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -9,11 +11,15 @@ import {
   ChevronDown,
   CheckCircle2,
   Database,
+  Import as ImportIcon,
   ListFilter,
   LogOut,
   ListRestart,
+  LoaderCircle,
   Moon,
+  Plus,
   RefreshCcw,
+  Search,
   ShieldCheck,
   ShieldX,
   Sun,
@@ -30,8 +36,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { defaultStrategyConfig, StrategySwitchButton, type StrategyConfig } from "@/features/strategy-switch/strategy-switch-button";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
+import { listStocks, type StockInfo } from "@/lib/stock-api";
 import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
@@ -67,6 +83,8 @@ const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
 ];
+const stockImportResultLimit = 80;
+const exactCodePrefixPattern = /^(SH|SZ)/i;
 
 type DraggedStock = {
   code: string;
@@ -79,6 +97,24 @@ type ChartSelection = {
 };
 
 type ReturnableListKey = Extract<StockListKey, "whitelist" | "blacklist">;
+type ImportSearchMode = "fuzzy" | "exact";
+type StockImportDialogState = {
+  codeQuery: string;
+  nameQuery: string;
+  searchMode: ImportSearchMode;
+  stocks: StockInfo[];
+  isLoading: boolean;
+  error: string | null;
+};
+
+const initialStockImportDialogState: StockImportDialogState = {
+  codeQuery: "",
+  nameQuery: "",
+  searchMode: "fuzzy",
+  stocks: [],
+  isLoading: true,
+  error: null,
+};
 
 const listIcons = {
   initial: ListFilter,
@@ -104,6 +140,7 @@ export default function StockDashboard({
   const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
   const [mobileListKey, setMobileListKey] = useState<StockListKey>("selected");
+  const [importTargetList, setImportTargetList] = useState<ReturnableListKey | null>(null);
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>(defaultStrategyConfig);
   const selectedStock = chartSelection
     ? stockGroups[chartSelection.listKey].find((stock) => stock.code === chartSelection.code) ?? null
@@ -165,6 +202,45 @@ export default function StockDashboard({
         : selection
     ));
   }
+
+  const openImportDialog = useCallback((listKey: ReturnableListKey) => {
+    setImportTargetList(listKey);
+  }, []);
+
+  const closeImportDialog = useCallback(() => {
+    setImportTargetList(null);
+  }, []);
+
+  const importStockToList = useCallback((stock: StockInfo, targetList: ReturnableListKey) => {
+    const importedStock = createImportedStockCandidate(stock, targetList);
+
+    if (!importedStock) {
+      return;
+    }
+
+    const importedCodeKey = getComparableStockCode(importedStock.code);
+    const oppositeList = getOppositeReturnableListKey(targetList);
+
+    setStockGroups((currentGroups) => {
+      const targetStocks = currentGroups[targetList];
+      const alreadyInTarget = targetStocks.some((item) => (
+        getComparableStockCode(item.code) === importedCodeKey
+      ));
+
+      return {
+        ...currentGroups,
+        [targetList]: alreadyInTarget ? targetStocks : [...targetStocks, importedStock],
+        [oppositeList]: currentGroups[oppositeList].filter((item) => (
+          getComparableStockCode(item.code) !== importedCodeKey
+        )),
+      };
+    });
+    setChartSelection((selection) => (
+      selection?.listKey === oppositeList && getComparableStockCode(selection.code) === importedCodeKey
+        ? { code: importedStock.code, listKey: targetList }
+        : selection
+    ));
+  }, []);
 
   function canDropStock(targetList: StockListKey, stock = draggedStock) {
     if (!stock || stock.fromList === targetList) {
@@ -320,6 +396,7 @@ export default function StockDashboard({
           <MobileStockTabs
             activeListKey={mobileListKey}
             stockGroups={stockGroups}
+            onOpenImport={openImportDialog}
             onActiveListChange={setMobileListKey}
             {...sharedStockListProps}
           />
@@ -338,6 +415,7 @@ export default function StockDashboard({
                 onDragOver={handleColumnDragOver}
                 onDragLeave={handleColumnDragLeave}
                 onDrop={handleColumnDrop}
+                onOpenImport={openImportDialog}
               />
             ))}
           </section>
@@ -349,6 +427,14 @@ export default function StockDashboard({
           />
         </div>
       </div>
+      {importTargetList ? (
+        <StockImportDialog
+          targetList={importTargetList}
+          stockGroups={stockGroups}
+          onClose={closeImportDialog}
+          onImportStock={importStockToList}
+        />
+      ) : null}
     </main>
   );
 }
@@ -393,7 +479,6 @@ function useIsCompactViewport() {
     const media = window.matchMedia(compactViewportQuery);
     const handleChange = () => setIsCompact(media.matches);
 
-    handleChange();
     media.addEventListener("change", handleChange);
 
     return () => media.removeEventListener("change", handleChange);
@@ -452,7 +537,8 @@ function ActiveStockBoard({
     ];
   }, [live.historicalRecords]);
   const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
-  const chartPadding = useIsCompactViewport() ? compactHeroChartPadding : heroChartPadding;
+  const isCompactViewport = useIsCompactViewport();
+  const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
 
   function selectChartRange(rangeId: ChartRangeId) {
     setChartRangeId(rangeId);
@@ -704,7 +790,8 @@ function StockBoardLoading({
   onLogout: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
-  const chartPadding = useIsCompactViewport() ? compactHeroChartPadding : heroChartPadding;
+  const isCompactViewport = useIsCompactViewport();
+  const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
 
   return (
     <section className="relative">
@@ -873,6 +960,7 @@ function MobileStockTabs({
   activeListKey,
   stockGroups,
   chartSelection,
+  onOpenImport,
   onActiveListChange,
   onToggleChart,
   onReturnToInitial,
@@ -880,6 +968,7 @@ function MobileStockTabs({
   activeListKey: StockListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
   chartSelection: ChartSelection | null;
+  onOpenImport: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
   onToggleChart: (code: string, listKey: StockListKey) => void;
   onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void;
@@ -910,8 +999,22 @@ function MobileStockTabs({
           ))}
         </div>
         <div className="flex items-center justify-between gap-3">
-          <CardDescription>{meta.description}</CardDescription>
-          <Badge variant="secondary">{stocks.length}</Badge>
+          <div className="flex min-w-0 items-center gap-2">
+            <CardDescription className="truncate">{meta.description}</CardDescription>
+            <Badge variant="secondary">{stocks.length}</Badge>
+          </div>
+          {returnableListKey ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 bg-background/45"
+              onClick={() => onOpenImport(returnableListKey)}
+            >
+              <ImportIcon data-icon="inline-start" />
+              导入
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 pb-5">
@@ -1286,6 +1389,7 @@ function StockColumn({
   onDragOver,
   onDragLeave,
   onDrop,
+  onOpenImport,
 }: {
   listKey: StockListKey;
   stocks: StockCandidate[];
@@ -1303,6 +1407,7 @@ function StockColumn({
   onDragOver: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
   onDragLeave: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
   onDrop: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
+  onOpenImport: (listKey: ReturnableListKey) => void;
 }) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
@@ -1324,8 +1429,20 @@ function StockColumn({
           <div className="flex min-w-0 items-center gap-2">
             <Icon className="size-4 text-muted-foreground" />
             <CardTitle className="truncate text-base">{meta.label}</CardTitle>
+            <Badge variant="secondary">{stocks.length}</Badge>
           </div>
-          <Badge variant="secondary">{stocks.length}</Badge>
+          {returnableListKey ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 bg-background/45"
+              onClick={() => onOpenImport(returnableListKey)}
+            >
+              <ImportIcon data-icon="inline-start" />
+              导入
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 pb-5">
@@ -1347,6 +1464,75 @@ function StockColumn({
 
 function getReturnableListKey(listKey: StockListKey): ReturnableListKey | null {
   return listKey === "whitelist" || listKey === "blacklist" ? listKey : null;
+}
+
+function getOppositeReturnableListKey(listKey: ReturnableListKey): ReturnableListKey {
+  return listKey === "whitelist" ? "blacklist" : "whitelist";
+}
+
+function createImportedStockCandidate(
+  stock: StockInfo,
+  targetList: ReturnableListKey,
+): StockCandidate | null {
+  const code = stock.code.trim();
+
+  if (!code) {
+    return null;
+  }
+
+  const name = stock.name.trim() || code;
+
+  return {
+    code,
+    name,
+    list: targetList,
+    records: [createImportedNoDataRecord(code, name)],
+  };
+}
+
+function createImportedNoDataRecord(code: string, name: string): StockDailyRecord {
+  return {
+    code,
+    name,
+    date: formatRecordDate(new Date()),
+    open: 0,
+    high: 0,
+    low: 0,
+    close: 0,
+    volume: 0,
+    amount: 0,
+    status: "无数据",
+    error: "通过股票列表导入，等待行情接口接入",
+  };
+}
+
+function isStockInList(stock: StockInfo, stocks: StockCandidate[]) {
+  const codeKey = getComparableStockCode(stock.code);
+
+  return stocks.some((item) => getComparableStockCode(item.code) === codeKey);
+}
+
+function isExactStockMatch(stock: StockInfo, codeQuery: string, nameQuery: string) {
+  const code = codeQuery.trim();
+  const name = nameQuery.trim();
+  const matchesCode = !code
+    || stock.code.toUpperCase() === code.toUpperCase()
+    || getComparableStockCode(stock.code) === getComparableStockCode(code);
+  const matchesName = !name || stock.name === name;
+
+  return matchesCode && matchesName;
+}
+
+function getComparableStockCode(code: string) {
+  return code.trim().replace(exactCodePrefixPattern, "").toUpperCase();
+}
+
+function formatRecordDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function StockListButton({
@@ -1405,6 +1591,251 @@ function StockListButton({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+function StockImportDialog({
+  targetList,
+  stockGroups,
+  onClose,
+  onImportStock,
+}: {
+  targetList: ReturnableListKey;
+  stockGroups: Record<StockListKey, StockCandidate[]>;
+  onClose: () => void;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => void;
+}) {
+  const requestIdRef = useRef(0);
+  const [dialogState, setDialogState] = useState<StockImportDialogState>(initialStockImportDialogState);
+  const { codeQuery, nameQuery, searchMode, stocks, isLoading, error } = dialogState;
+  const meta = stockListMeta[targetList];
+  const oppositeList = getOppositeReturnableListKey(targetList);
+  const filteredStocks = useMemo(
+    () => searchMode === "exact"
+      ? stocks.filter((stock) => isExactStockMatch(stock, codeQuery, nameQuery))
+      : stocks,
+    [codeQuery, nameQuery, searchMode, stocks],
+  );
+  const visibleStocks = filteredStocks.slice(0, stockImportResultLimit);
+
+  const loadStocks = useCallback(async (query: { code?: string; name?: string }, signal?: AbortSignal) => {
+    const requestId = requestIdRef.current + 1;
+
+    requestIdRef.current = requestId;
+    setDialogState((current) => ({
+      ...current,
+      isLoading: true,
+      error: null,
+    }));
+
+    try {
+      const stockList = await listStocks(query, signal);
+
+      if (requestId === requestIdRef.current) {
+        setDialogState((current) => ({
+          ...current,
+          stocks: stockList,
+        }));
+      }
+    } catch (loadError) {
+      if (loadError instanceof DOMException && loadError.name === "AbortError") {
+        return;
+      }
+
+      if (requestId === requestIdRef.current) {
+        setDialogState((current) => ({
+          ...current,
+          stocks: [],
+          error: loadError instanceof Error ? loadError.message : "股票列表加载失败。",
+        }));
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setDialogState((current) => ({
+          ...current,
+          isLoading: false,
+        }));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const requestId = requestIdRef.current + 1;
+
+    requestIdRef.current = requestId;
+    void listStocks({}, controller.signal)
+      .then((stockList) => {
+        if (requestId === requestIdRef.current) {
+          setDialogState((current) => ({
+            ...current,
+            stocks: stockList,
+          }));
+        }
+      })
+      .catch((loadError) => {
+        if (loadError instanceof DOMException && loadError.name === "AbortError") {
+          return;
+        }
+
+        if (requestId === requestIdRef.current) {
+          setDialogState((current) => ({
+            ...current,
+            stocks: [],
+            error: loadError instanceof Error ? loadError.message : "股票列表加载失败。",
+          }));
+        }
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) {
+          setDialogState((current) => ({
+            ...current,
+            isLoading: false,
+          }));
+        }
+      });
+
+    return () => {
+      requestIdRef.current += 1;
+      controller.abort();
+    };
+  }, []);
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void loadStocks({
+      code: codeQuery,
+      name: nameQuery,
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="p-5 pr-12">
+          <DialogTitle className="text-xl text-balance">导入{meta.label}</DialogTitle>
+          <DialogDescription>从股票列表添加标的</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex max-h-[min(78vh,760px)] flex-col overflow-hidden">
+          <form className="border-y bg-muted/25 px-5 py-4" onSubmit={handleSearch}>
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] md:items-end">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="stock-import-code">代码</Label>
+                <Input
+                  id="stock-import-code"
+                  className="h-10 bg-background/70"
+                  value={codeQuery}
+                  placeholder="600519 / SH600519"
+                  onChange={(event) => (
+                    setDialogState((current) => ({ ...current, codeQuery: event.currentTarget.value }))
+                  )}
+                />
+              </div>
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="stock-import-name">名称</Label>
+                <Input
+                  id="stock-import-name"
+                  className="h-10 bg-background/70"
+                  value={nameQuery}
+                  placeholder="贵州茅台"
+                  onChange={(event) => (
+                    setDialogState((current) => ({ ...current, nameQuery: event.currentTarget.value }))
+                  )}
+                />
+              </div>
+              <div className="flex h-10 rounded-lg bg-background/70 p-1">
+                {[
+                  { id: "fuzzy" as const, label: "模糊" },
+                  { id: "exact" as const, label: "精准" },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={cn(
+                      "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                      option.id === searchMode
+                        ? "bg-secondary text-secondary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground",
+                    )}
+                    aria-pressed={option.id === searchMode}
+                    onClick={() => setDialogState((current) => ({ ...current, searchMode: option.id }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <Button type="submit" className="h-10" disabled={isLoading}>
+                {isLoading ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Search data-icon="inline-start" />}
+                搜索
+              </Button>
+            </div>
+          </form>
+
+          <div className="flex items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground">
+            <span>
+              结果 {filteredStocks.length}
+              {filteredStocks.length > visibleStocks.length ? `，显示前 ${visibleStocks.length}` : ""}
+            </span>
+            <span>{meta.label}</span>
+          </div>
+
+          <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
+            {isLoading && stocks.length === 0 ? (
+              <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin" />
+                加载中...
+              </div>
+            ) : error ? (
+              <div className="flex min-h-48 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 px-4 text-sm text-destructive">
+                {error}
+              </div>
+            ) : visibleStocks.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {visibleStocks.map((stock) => {
+                  const inTargetList = isStockInList(stock, stockGroups[targetList]);
+                  const inOppositeList = isStockInList(stock, stockGroups[oppositeList]);
+
+                  return (
+                    <div
+                      key={stock.code}
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-background/45 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-baseline gap-2">
+                          <span className="truncate text-sm font-medium">{stock.name}</span>
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
+                        </div>
+                        {inOppositeList && !inTargetList ? (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            已在{stockListMeta[oppositeList].label}
+                          </div>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={inTargetList ? "secondary" : "outline"}
+                        className="h-8 shrink-0 bg-background/55"
+                        disabled={inTargetList}
+                        onClick={() => onImportStock(stock, targetList)}
+                      >
+                        {inTargetList ? null : <Plus data-icon="inline-start" />}
+                        {inTargetList ? "已添加" : inOppositeList ? "移入" : "添加"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex min-h-48 items-center justify-center text-sm text-muted-foreground">
+                暂无匹配股票
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

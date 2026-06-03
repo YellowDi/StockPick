@@ -6,6 +6,7 @@ import {
   getStoredAuthToken,
   login,
   storeAuthToken,
+  subscribeAuthExpired,
   type LoginCredentials,
 } from "@/lib/auth-api";
 import type { ThemeMode } from "@/types/theme";
@@ -37,6 +38,11 @@ function App() {
     }
   }, [themeMode]);
 
+  useEffect(() => subscribeAuthExpired(() => {
+    setIsLoggedIn(false);
+    setLoginError("登录状态已失效，请重新登录。");
+  }), []);
+
   const toggleThemeMode = useCallback(() => {
     setThemeMode((mode) => (mode === "dark" ? "light" : "dark"));
   }, []);
@@ -48,7 +54,10 @@ function App() {
     try {
       const { token } = await login(credentials);
 
-      storeAuthToken(token);
+      if (!storeAuthToken(token)) {
+        throw new Error("无法保存登录状态，请检查浏览器存储权限。");
+      }
+
       setIsLoggedIn(true);
     } catch (error) {
       clearStoredAuthToken();
