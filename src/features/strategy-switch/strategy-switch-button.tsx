@@ -23,6 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
@@ -181,7 +186,7 @@ export function StrategySwitchButton({
                   <Label htmlFor="strategy-name">配置名称</Label>
                   <Input
                     id="strategy-name"
-                    className="h-11 bg-background/55"
+                    className="bg-background/55"
                     value={draft.name}
                     onValueChange={(value) => dispatchDraft({ type: "name", value })}
                   />
@@ -189,7 +194,7 @@ export function StrategySwitchButton({
 
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="strategy-enabled">是否启用</Label>
-                  <div className="flex h-11 min-w-[132px] items-center justify-between gap-3 rounded-md border bg-background/55 px-3">
+                  <div className="flex h-8 min-w-[132px] items-center justify-between gap-3 rounded-md border bg-background/55 px-3">
                     <span className="text-sm">{draft.enabled ? "已启用" : "已停用"}</span>
                     <Switch
                       id="strategy-enabled"
@@ -213,15 +218,17 @@ export function StrategySwitchButton({
                   </div>
                   <div className="flex min-w-0 flex-col gap-2">
                     <Label htmlFor="strategy-y">MA5 百分比偏移</Label>
-                    <Input
-                      id="strategy-y"
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      className="h-11 bg-background/55"
-                      value={String(draft.y)}
-                      onValueChange={(value) => dispatchDraft({ type: "y", value })}
-                    />
+                    <InputGroup className="bg-background/55">
+                      <InputGroupInput
+                        id="strategy-y"
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={String(draft.y)}
+                        onChange={(event) => dispatchDraft({ type: "y", value: event.target.value })}
+                      />
+                      <InputGroupAddon align="inline-end">%</InputGroupAddon>
+                    </InputGroup>
                   </div>
                 </div>
               </section>
@@ -328,7 +335,7 @@ function StrategyXSelect({
     >
       <SelectTrigger
         id={id}
-        className="h-11 w-full bg-background/55"
+        className="w-full bg-background/55"
       >
         <SelectValue />
       </SelectTrigger>

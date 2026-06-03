@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { LoginCredentials } from "@/lib/auth-api";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 
@@ -77,12 +79,13 @@ export function LoginPage({
               </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <label className="flex flex-col gap-2 text-sm font-medium">
+              <Label htmlFor="login-username" className="flex flex-col gap-2 text-sm font-medium">
                 账号
                 <span className="relative">
                   <UserRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    className="h-11 w-full rounded-md border bg-background/45 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35"
+                  <Input
+                    id="login-username"
+                    className="bg-background/45 pl-9"
                     name="username"
                     placeholder="stockpick"
                     autoComplete="username"
@@ -91,13 +94,14 @@ export function LoginPage({
                     aria-invalid={loginError ? true : undefined}
                   />
                 </span>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
+              </Label>
+              <Label htmlFor="login-password" className="flex flex-col gap-2 text-sm font-medium">
                 密码
                 <span className="relative">
                   <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    className="h-11 w-full rounded-md border bg-background/45 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35"
+                  <Input
+                    id="login-password"
+                    className="bg-background/45 pl-9"
                     name="password"
                     type="password"
                     placeholder="password"
@@ -107,7 +111,7 @@ export function LoginPage({
                     aria-invalid={loginError ? true : undefined}
                   />
                 </span>
-              </label>
+              </Label>
               {loginError ? (
                 <p
                   className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"

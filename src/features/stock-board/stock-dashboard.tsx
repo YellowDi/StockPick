@@ -4058,7 +4058,7 @@ function StockImportSearchForm({
           <Label htmlFor="stock-import-code">代码</Label>
           <Input
             id="stock-import-code"
-            className="h-10 bg-background/70"
+            className="bg-background/70"
             value={codeQuery}
             placeholder="600519 / SH600519"
             onValueChange={onCodeQueryChange}
@@ -4068,7 +4068,7 @@ function StockImportSearchForm({
           <Label htmlFor="stock-import-name">名称</Label>
           <Input
             id="stock-import-name"
-            className="h-10 bg-background/70"
+            className="bg-background/70"
             value={nameQuery}
             placeholder="贵州茅台"
             onValueChange={onNameQueryChange}
