@@ -11,6 +11,7 @@ import {
   Database,
   ListFilter,
   LogOut,
+  ListRestart,
   Moon,
   RefreshCcw,
   ShieldCheck,
@@ -77,6 +78,8 @@ type ChartSelection = {
   listKey: StockListKey;
 };
 
+type ReturnableListKey = Extract<StockListKey, "whitelist" | "blacklist">;
+
 const listIcons = {
   initial: ListFilter,
   selected: CheckCircle2,
@@ -129,6 +132,38 @@ export default function StockDashboard({
 
     setChartSelection({ code, listKey });
     scrollBoardIntoViewOnMobile();
+  }
+
+  function returnListedStockToInitial(stock: StockCandidate, fromList: ReturnableListKey) {
+    setStockGroups((currentGroups) => {
+      const sourceStock = currentGroups[fromList].find((item) => item.code === stock.code);
+
+      if (!sourceStock) {
+        return currentGroups;
+      }
+
+      const existsInSelected = currentGroups.selected.some((item) => item.code === stock.code);
+      const existsInInitial = currentGroups.initial.some((item) => item.code === stock.code);
+
+      return {
+        ...currentGroups,
+        [fromList]: currentGroups[fromList].filter((item) => item.code !== stock.code),
+        initial: existsInSelected || existsInInitial
+          ? currentGroups.initial
+          : [
+              ...currentGroups.initial,
+              {
+                ...sourceStock,
+                list: "initial",
+              },
+            ],
+      };
+    });
+    setChartSelection((selection) => (
+      selection?.listKey === fromList && selection.code === stock.code
+        ? { code: stock.code, listKey: selectedStockCodes.has(stock.code) ? "selected" : "initial" }
+        : selection
+    ));
   }
 
   function canDropStock(targetList: StockListKey, stock = draggedStock) {
@@ -261,6 +296,7 @@ export default function StockDashboard({
   const sharedStockListProps = {
     chartSelection,
     onToggleChart: toggleSelectedStock,
+    onReturnToInitial: returnListedStockToInitial,
   };
 
   return (
@@ -835,15 +871,18 @@ function MobileStockTabs({
   chartSelection,
   onActiveListChange,
   onToggleChart,
+  onReturnToInitial,
 }: {
   activeListKey: StockListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
   chartSelection: ChartSelection | null;
   onActiveListChange: (key: StockListKey) => void;
   onToggleChart: (code: string, listKey: StockListKey) => void;
+  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void;
 }) {
   const stocks = stockGroups[activeListKey];
   const meta = stockListMeta[activeListKey];
+  const returnableListKey = getReturnableListKey(activeListKey);
 
   return (
     <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
@@ -880,6 +919,7 @@ function MobileStockTabs({
               active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
               draggable={false}
               onClick={() => onToggleChart(stock.code, activeListKey)}
+              onReturnToInitial={returnableListKey ? () => onReturnToInitial(stock, returnableListKey) : undefined}
             />
           ))
         ) : (
@@ -1227,6 +1267,7 @@ function StockColumn({
   canDrop,
   isDropTarget,
   onToggleChart,
+  onReturnToInitial,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -1239,6 +1280,7 @@ function StockColumn({
   canDrop: boolean;
   isDropTarget: boolean;
   onToggleChart: (code: string, listKey: StockListKey) => void;
+  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void;
   onDragStart: (
     stock: StockCandidate,
     fromList: StockListKey,
@@ -1251,6 +1293,7 @@ function StockColumn({
 }) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
+  const returnableListKey = getReturnableListKey(listKey);
 
   return (
     <Card
@@ -1281,11 +1324,16 @@ function StockColumn({
             onDragStart={(event) => onDragStart(stock, listKey, event)}
             onDragEnd={onDragEnd}
             onClick={() => onToggleChart(stock.code, listKey)}
+            onReturnToInitial={returnableListKey ? () => onReturnToInitial(stock, returnableListKey) : undefined}
           />
         ))}
       </CardContent>
     </Card>
   );
+}
+
+function getReturnableListKey(listKey: StockListKey): ReturnableListKey | null {
+  return listKey === "whitelist" || listKey === "blacklist" ? listKey : null;
 }
 
 function StockListButton({
@@ -1295,6 +1343,7 @@ function StockListButton({
   onDragStart,
   onDragEnd,
   onClick,
+  onReturnToInitial,
 }: {
   stock: StockCandidate;
   active: boolean;
@@ -1302,29 +1351,47 @@ function StockListButton({
   onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
   onDragEnd?: () => void;
   onClick: () => void;
+  onReturnToInitial?: () => void;
 }) {
+  const returnTitle = "移回待选";
+
   return (
-    <Button
-      type="button"
-      variant={active ? "secondary" : "ghost"}
-      className={cn(
-        "h-auto justify-start rounded-lg border px-3 py-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96]",
-        active
-          ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
-          : "border-transparent bg-background/40 hover:border-border",
-        draggable && "cursor-grab active:cursor-grabbing",
-      )}
-      aria-pressed={active}
-      draggable={draggable}
-      onDragStart={draggable ? onDragStart : undefined}
-      onDragEnd={draggable ? onDragEnd : undefined}
-      onClick={onClick}
-    >
-      <span className="flex min-w-0 flex-1 items-baseline gap-2">
-        <span className="truncate font-medium">{stock.name}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
-      </span>
-    </Button>
+    <div className="flex min-w-0 items-center gap-2">
+      <Button
+        type="button"
+        variant={active ? "secondary" : "ghost"}
+        className={cn(
+          "h-auto min-w-0 flex-1 justify-start rounded-lg border px-3 py-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96]",
+          active
+            ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
+            : "border-transparent bg-background/40 hover:border-border",
+          draggable && "cursor-grab active:cursor-grabbing",
+        )}
+        aria-pressed={active}
+        draggable={draggable}
+        onDragStart={draggable ? onDragStart : undefined}
+        onDragEnd={draggable ? onDragEnd : undefined}
+        onClick={onClick}
+      >
+        <span className="flex min-w-0 flex-1 items-baseline gap-2">
+          <span className="truncate font-medium">{stock.name}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
+        </span>
+      </Button>
+      {onReturnToInitial ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10 shrink-0 rounded-lg border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
+          aria-label={returnTitle}
+          title={returnTitle}
+          onClick={onReturnToInitial}
+        >
+          <ListRestart className="size-4" />
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
