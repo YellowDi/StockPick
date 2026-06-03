@@ -45,7 +45,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Item, ItemGroup } from "@/components/ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
 import { defaultStrategyConfig, StrategySwitchButton, type StrategyConfig } from "@/features/strategy-switch/strategy-switch-button";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
@@ -87,6 +94,7 @@ const chartModeOptions = [
 ];
 const stockImportResultLimit = 80;
 const exactCodePrefixPattern = /^(SH|SZ)/i;
+const stockItemActionClassName = "w-8 shrink-0 overflow-hidden opacity-100 transition-[width,opacity,transform] duration-150 md:w-0 md:translate-x-1 md:opacity-0 md:group-focus-within/stock-item:w-8 md:group-focus-within/stock-item:translate-x-0 md:group-focus-within/stock-item:opacity-100 md:group-hover/stock-item:w-8 md:group-hover/stock-item:translate-x-0 md:group-hover/stock-item:opacity-100";
 
 type DraggedStock = {
   code: string;
@@ -1692,18 +1700,23 @@ function StockListButton({
   const deleteTitle = deletePending ? "正在删除" : "从名单删除";
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Item
-        render={<button type="button" aria-label={`${stock.name} ${stock.code}`} />}
-        variant="outline"
-        size="sm"
+    <Item
+      variant="outline"
+      size="sm"
+      className={cn(
+        "group/stock-item min-w-0 flex-nowrap gap-2 bg-background/40 p-1 transition-[background-color,border-color,box-shadow]",
+        active
+          ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
+          : "border-transparent hover:border-border",
+      )}
+    >
+      <button
+        type="button"
         className={cn(
-          "min-w-0 flex-1 justify-start bg-background/40 px-3 py-3 text-left transition-[background-color,border-color,color,transform,box-shadow] active:scale-[0.96]",
-          active
-            ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
-            : "border-transparent bg-background/40 hover:border-border",
+          "flex min-w-0 flex-1 items-center rounded-md px-2 py-2 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50",
           draggable && "cursor-grab active:cursor-grabbing",
         )}
+        aria-label={`${stock.name} ${stock.code}`}
         aria-pressed={active}
         draggable={draggable}
         onDragStart={draggable ? onDragStart : undefined}
@@ -1714,26 +1727,33 @@ function StockListButton({
           <span className="truncate font-medium">{stock.name}</span>
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
         </span>
-      </Item>
+      </button>
       {onDeleteFromFilterList ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-10 shrink-0 rounded-lg border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
-          aria-label={deleteTitle}
-          title={deleteTitle}
-          disabled={deletePending}
-          onClick={onDeleteFromFilterList}
-        >
-          {deletePending ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            <Trash2 />
+        <ItemActions
+          className={cn(
+            stockItemActionClassName,
+            deletePending && "md:w-8 md:translate-x-0 md:opacity-100",
           )}
-        </Button>
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-md border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
+            aria-label={deleteTitle}
+            title={deleteTitle}
+            disabled={deletePending}
+            onClick={onDeleteFromFilterList}
+          >
+            {deletePending ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <Trash2 />
+            )}
+          </Button>
+        </ItemActions>
       ) : null}
-    </div>
+    </Item>
   );
 }
 
@@ -1981,47 +2001,65 @@ function StockImportDialog({
                 {error}
               </div>
             ) : visibleStocks.length > 0 ? (
-              <div className="flex flex-col gap-2">
+              <ItemGroup className="gap-2">
                 {visibleStocks.map((stock) => {
                   const inTargetList = isStockInList(stock, stockGroups[targetList]);
                   const inOppositeList = isStockInList(stock, stockGroups[oppositeList]);
                   const isImporting = importPendingCode === getComparableStockCode(stock.code);
+                  const importTitle = inOppositeList ? "移入名单" : "添加到名单";
 
                   return (
-                    <div
+                    <Item
                       key={stock.code}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-background/45 px-3 py-2.5"
+                      variant="outline"
+                      size="sm"
+                      className="group/stock-item flex-nowrap gap-2 bg-background/45 p-2"
                     >
-                      <div className="min-w-0">
+                      <ItemContent className="min-w-0 gap-1">
                         <div className="flex min-w-0 items-baseline gap-2">
-                          <span className="truncate text-sm font-medium">{stock.name}</span>
-                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
+                          <ItemTitle className="min-w-0 flex-1 truncate">{stock.name}</ItemTitle>
+                          <ItemDescription className="m-0 shrink-0 text-xs tabular-nums">{stock.code}</ItemDescription>
                         </div>
-                        {inOppositeList && !inTargetList ? (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            已在{stockListMeta[oppositeList].label}
-                          </div>
+                        {inTargetList ? (
+                          <ItemDescription className="m-0 text-xs">
+                            已在{meta.label}
+                          </ItemDescription>
                         ) : null}
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={inTargetList ? "secondary" : "outline"}
-                        className="h-8 shrink-0 bg-background/55"
-                        disabled={inTargetList || Boolean(importPendingCode)}
-                        onClick={() => void handleImportStock(stock)}
-                      >
-                        {isImporting ? (
-                          <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                        ) : inTargetList ? null : (
-                          <Plus data-icon="inline-start" />
-                        )}
-                        {inTargetList ? "已添加" : isImporting ? "添加中" : "添加"}
-                      </Button>
-                    </div>
+                        {inOppositeList && !inTargetList ? (
+                          <ItemDescription className="m-0 text-xs">
+                            已在{stockListMeta[oppositeList].label}
+                          </ItemDescription>
+                        ) : null}
+                      </ItemContent>
+                      {!inTargetList ? (
+                        <ItemActions
+                          className={cn(
+                            stockItemActionClassName,
+                            isImporting && "md:w-8 md:translate-x-0 md:opacity-100",
+                          )}
+                        >
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="size-8 rounded-md bg-background/55"
+                            aria-label={`${importTitle}：${stock.name} ${stock.code}`}
+                            title={importTitle}
+                            disabled={Boolean(importPendingCode)}
+                            onClick={() => void handleImportStock(stock)}
+                          >
+                            {isImporting ? (
+                              <LoaderCircle className="animate-spin" />
+                            ) : (
+                              <Plus />
+                            )}
+                          </Button>
+                        </ItemActions>
+                      ) : null}
+                    </Item>
                   );
                 })}
-              </div>
+              </ItemGroup>
             ) : (
               <div className="flex min-h-48 items-center justify-center text-sm text-muted-foreground">
                 暂无匹配股票
