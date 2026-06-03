@@ -11,24 +11,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { LoginCredentials } from "@/lib/auth-api";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 
 const Threads = lazy(() => import("@/components/threads"));
+const darkThreadsColor: [number, number, number] = [0.92, 0.18, 0.12];
+const lightThreadsColor: [number, number, number] = [0.74, 0.11, 0.08];
 
 type LoginPageProps = {
   themeMode: ThemeMode;
   onThemeToggle: () => void;
-  onLogin: () => void;
+  onLogin: (credentials: LoginCredentials) => void;
+  isLoginPending: boolean;
+  loginError: string | null;
 };
 
 export function LoginPage({
   themeMode,
   onThemeToggle,
   onLogin,
+  isLoginPending,
+  loginError,
 }: LoginPageProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onLogin();
+    const formData = new FormData(event.currentTarget);
+    const username = String(formData.get("username") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    onLogin({ username, password });
   }
 
   return (
@@ -38,7 +49,7 @@ export function LoginPage({
         <Suspense fallback={null}>
           <Threads
             className="absolute inset-0 opacity-70"
-            color={themeMode === "dark" ? [0.92, 0.18, 0.12] : [0.74, 0.11, 0.08]}
+            color={themeMode === "dark" ? darkThreadsColor : lightThreadsColor}
             amplitude={1.4}
             distance={0.18}
           />
@@ -62,10 +73,10 @@ export function LoginPage({
               </div>
               <div>
                 <CardTitle className="text-2xl">登录</CardTitle>
-                <CardDescription>使用演示账号进入股票筛选工作台</CardDescription>
+                <CardDescription>使用账号密码进入股票筛选工作台</CardDescription>
               </div>
             </CardHeader>
-            <CardContent className="gap-4">
+            <CardContent className="flex flex-col gap-4">
               <label className="flex flex-col gap-2 text-sm font-medium">
                 账号
                 <span className="relative">
@@ -75,6 +86,9 @@ export function LoginPage({
                     name="username"
                     placeholder="stockpick"
                     autoComplete="username"
+                    required
+                    disabled={isLoginPending}
+                    aria-invalid={loginError ? true : undefined}
                   />
                 </span>
               </label>
@@ -88,14 +102,25 @@ export function LoginPage({
                     type="password"
                     placeholder="password"
                     autoComplete="current-password"
+                    required
+                    disabled={isLoginPending}
+                    aria-invalid={loginError ? true : undefined}
                   />
                 </span>
               </label>
+              {loginError ? (
+                <p
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
+                  {loginError}
+                </p>
+              ) : null}
             </CardContent>
             <CardFooter>
-              <Button type="submit" size="lg" className="h-11 w-full text-base">
+              <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={isLoginPending}>
                 <LogIn data-icon="inline-start" />
-                进入看板
+                {isLoginPending ? "登录中..." : "进入看板"}
               </Button>
             </CardFooter>
           </Card>

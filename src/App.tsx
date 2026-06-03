@@ -1,13 +1,22 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 
 import { LoginPage } from "@/components/login-page";
+import {
+  clearStoredAuthToken,
+  getStoredAuthToken,
+  login,
+  storeAuthToken,
+  type LoginCredentials,
+} from "@/lib/auth-api";
 import type { ThemeMode } from "@/types/theme";
 
 const StockDashboard = lazy(() => import("@/features/stock-board/stock-dashboard"));
 const themeStorageKey = "stockpick-theme";
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(getStoredAuthToken()));
+  const [isLoginPending, setIsLoginPending] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const storedTheme = window.localStorage.getItem(themeStorageKey);
@@ -28,16 +37,41 @@ function App() {
     }
   }, [themeMode]);
 
-  function toggleThemeMode() {
+  const toggleThemeMode = useCallback(() => {
     setThemeMode((mode) => (mode === "dark" ? "light" : "dark"));
-  }
+  }, []);
+
+  const handleLogin = useCallback(async (credentials: LoginCredentials) => {
+    setIsLoginPending(true);
+    setLoginError(null);
+
+    try {
+      const { token } = await login(credentials);
+
+      storeAuthToken(token);
+      setIsLoggedIn(true);
+    } catch (error) {
+      clearStoredAuthToken();
+      setIsLoggedIn(false);
+      setLoginError(error instanceof Error ? error.message : "登录失败，请稍后重试。");
+    } finally {
+      setIsLoginPending(false);
+    }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    clearStoredAuthToken();
+    setIsLoggedIn(false);
+  }, []);
 
   if (!isLoggedIn) {
     return (
       <LoginPage
         themeMode={themeMode}
         onThemeToggle={toggleThemeMode}
-        onLogin={() => setIsLoggedIn(true)}
+        onLogin={handleLogin}
+        isLoginPending={isLoginPending}
+        loginError={loginError}
       />
     );
   }
@@ -47,7 +81,7 @@ function App() {
       <StockDashboard
         themeMode={themeMode}
         onThemeToggle={toggleThemeMode}
-        onLogout={() => setIsLoggedIn(false)}
+        onLogout={handleLogout}
       />
     </Suspense>
   );
