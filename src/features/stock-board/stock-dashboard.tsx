@@ -57,7 +57,7 @@ import { Label } from "@/components/ui/label";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
-import { addStockFilter, deleteStockFilter, listStockFilters, listStocks, type StockFilter, type StockInfo } from "@/lib/stock-api";
+import { addStockFilter, deleteStockFilter, listKlineCache, listStockFilters, listStocks, type DailyKline, type StockFilter, type StockInfo } from "@/lib/stock-api";
 import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
@@ -72,6 +72,8 @@ const mockDaySecs = 24 * 60 * 60;
 const liveTicksPerCandle = 3;
 const realtimeSeedBars = 2;
 const realtimeWindowBars = 60;
+const dailyKVisibleDays = 5;
+const klineCacheLookbackDays = 30;
 const weekWindowOffsetSecs = 0.05;
 const heroChartPadding = { top: 260, right: 86, bottom: 72, left: 24 };
 const compactHeroChartPadding = { top: 292, right: 52, bottom: 54, left: 12 };
@@ -87,12 +89,17 @@ const dayRangeOptions = [
   { id: "prev-6", label: "前6日", offset: 6 },
   { id: "prev-7", label: "前7日", offset: 7 },
 ] as const;
-type ChartRangeId = "realtime" | (typeof dayRangeOptions)[number]["id"] | "week";
+type ChartRangeId = "realtime" | "daily" | (typeof dayRangeOptions)[number]["id"] | "week";
 type ChartMode = "line" | "candle";
 const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
 ];
+const stockDataViewOptions = [
+  { id: "daily-detail" as const, label: "日 K 明细" },
+  { id: "five-day-trend" as const, label: "近 5 日走势" },
+];
+type StockDataViewId = (typeof stockDataViewOptions)[number]["id"];
 const stockImportResultLimit = 80;
 const exactCodePrefixPattern = /^(SH|SZ)/i;
 const stockItemActionClassName = cn(
@@ -640,6 +647,13 @@ type ActiveStockBoardState = {
   liveResetKey: number;
 };
 
+type KlineCacheState = {
+  key: string;
+  records: StockDailyRecord[];
+  error: string | null;
+  isLoading: boolean;
+};
+
 type ActiveStockBoardAction =
   | { type: "select-range"; rangeId: ChartRangeId }
   | { type: "set-chart-mode"; chartMode: ChartMode }
@@ -709,10 +723,19 @@ function ActiveStockBoard({
     chartRangeId,
     chartMode,
     detailsOpen,
-    isLoading,
+    isLoading: isResetLoading,
     liveResetKey,
   } = boardState;
-  const live = useLiveMockStock(stock, liveResetKey, isLoading, chartRangeId === "realtime");
+  const klineCache = useKlineCache(stock, liveResetKey);
+  const chartStock = useMemo(
+    () => ({
+      ...stock,
+      records: klineCache.records,
+    }),
+    [klineCache.records, stock],
+  );
+  const isLoading = isResetLoading || klineCache.isLoading;
+  const live = useLiveMockStock(chartStock, liveResetKey, isLoading, chartRangeId === "realtime");
   const chartView = useMemo(
     () => createChartView(live, chartRangeId),
     [chartRangeId, live],
@@ -736,6 +759,11 @@ function ActiveStockBoard({
         id: "realtime" as const,
         label: "实时",
         secs: realtimeWindowBars * candleWidthSecs,
+      },
+      {
+        id: "daily" as const,
+        label: "日K",
+        secs: getDailyKWindowSecs(live.historicalRecords),
       },
       ...dayRangeOptions.map((option) => ({
         id: option.id,
@@ -931,7 +959,7 @@ function ActiveStockBoard({
           <StockDetailsPanel
             id="stock-details-panel"
             open={detailsOpen}
-            records={records}
+            records={live.historicalRecords}
           />
         </div>
 
@@ -943,7 +971,7 @@ function ActiveStockBoard({
               mode="candle"
               candles={closedCandles}
               liveCandle={chartLiveCandle}
-              candleWidth={candleWidthSecs}
+              candleWidth={chartView.candleWidth}
               lineMode={chartMode === "line"}
               lineData={chartView.lineData}
               lineValue={latest?.close}
@@ -969,12 +997,12 @@ function ActiveStockBoard({
                   : undefined
               }
               formatValue={(value) => value.toFixed(2)}
-              formatTime={formatChartTime}
+              formatTime={chartRangeId === "daily" ? formatChartDate : formatChartTime}
               padding={chartPadding}
               className="size-full"
             />
           ) : (
-            <EmptyChart error={stock.records[0]?.error} />
+            <EmptyChart error={klineCache.error ?? chartStock.records[0]?.error} />
           )}
         </div>
 
@@ -1000,7 +1028,7 @@ function activeStockBoardReducer(
       return {
         ...state,
         chartRangeId: action.rangeId,
-        chartMode: action.rangeId === "realtime" || action.rangeId === "today" ? "candle" : "line",
+        chartMode: action.rangeId === "realtime" || action.rangeId === "daily" || action.rangeId === "today" ? "candle" : "line",
       };
     case "set-chart-mode":
       return { ...state, chartMode: action.chartMode };
@@ -1347,6 +1375,8 @@ function StockDetailsPanel({
   open: boolean;
   records: StockDailyRecord[];
 }) {
+  const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
+
   return (
     <div
       id={id}
@@ -1362,72 +1392,319 @@ function StockDetailsPanel({
           open ? "max-h-[360px] sm:max-h-[430px]" : "max-h-0",
         )}
       >
-        <div className="max-h-[360px] overflow-y-auto p-4 sm:max-h-[430px]">
-          <RecentRecordsSection records={records} />
+        <div className="border-b p-3">
+          <div className="flex w-max max-w-full gap-1 overflow-x-auto rounded-lg bg-background/45 p-1 [-webkit-overflow-scrolling:touch]">
+            {stockDataViewOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={cn(
+                  "h-8 whitespace-nowrap rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                  option.id === activeViewId
+                    ? "bg-secondary text-secondary-foreground"
+                    : "hover:bg-accent hover:text-accent-foreground",
+                )}
+                aria-pressed={option.id === activeViewId}
+                onClick={() => setActiveViewId(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto p-4 sm:max-h-[360px]">
+          {activeViewId === "daily-detail" ? (
+            <DailyKlineDetailSection records={records} />
+          ) : (
+            <FiveDayTrendSection records={records} />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function RecentRecordsSection({ records }: { records: StockDailyRecord[] }) {
-  const visibleRecords = records.slice(-7);
+function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
+  return (
+    <section>
+      <div className="mb-3 gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold">日 K 明细</h2>
+          <p className="mt-1 text-sm text-muted-foreground">当前股票日 K 原始字段</p>
+        </div>
+        <span className="text-xs text-muted-foreground">记录 {records.length}</span>
+      </div>
+      {records.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-[1100px] w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="px-3 py-2 text-left font-medium">code</th>
+                <th className="px-3 py-2 text-left font-medium">trade_date/date</th>
+                <th className="px-3 py-2 text-right font-medium">open</th>
+                <th className="px-3 py-2 text-right font-medium">close</th>
+                <th className="px-3 py-2 text-right font-medium">high</th>
+                <th className="px-3 py-2 text-right font-medium">low</th>
+                <th className="px-3 py-2 text-right font-medium">last</th>
+                <th className="px-3 py-2 text-right font-medium">limit_up</th>
+                <th className="px-3 py-2 text-right font-medium">limit_down</th>
+                <th className="px-3 py-2 text-right font-medium">limit_pct</th>
+                <th className="px-3 py-2 text-right font-medium">volume</th>
+                <th className="px-3 py-2 text-right font-medium">amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((record) => (
+                <tr key={`${record.code}:${record.date}`} className="border-b border-border/60 last:border-b-0">
+                  <td className="whitespace-nowrap px-3 py-2 font-medium tabular-nums">{record.code}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground tabular-nums">{record.date}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.open)}</td>
+                  <td className={cn("whitespace-nowrap px-3 py-2 text-right tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
+                    {formatPrice(record.close)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.high)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.low)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.last)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_up)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_down)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPercent(record.limit_pct)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatRawNumber(record.volume)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatRawNumber(record.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <StockDataEmptyState label="暂无日 K 明细数据" />
+      )}
+    </section>
+  );
+}
+
+function FiveDayTrendSection({ records }: { records: StockDailyRecord[] }) {
+  const visibleRecords = records.slice(-dailyKVisibleDays);
+  const firstRecord = visibleRecords[0];
+  const latestRecord = visibleRecords.at(-1);
+  const rangeChangePct = firstRecord && latestRecord && firstRecord.close !== 0
+    ? ((latestRecord.close - firstRecord.close) / firstRecord.close) * 100
+    : null;
+  const limitHitCount = visibleRecords.filter(hasTouchedLimitUp).length;
+  const startIndex = records.length - visibleRecords.length;
 
   return (
     <section>
       <div className="mb-3 gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-sm font-semibold">最近 7 日 OHLC</h2>
-          <p className="mt-1 text-sm text-muted-foreground">用于快速校验当前走势和日线位置</p>
+          <h2 className="text-sm font-semibold">近 5 日走势</h2>
+          <p className="mt-1 text-sm text-muted-foreground">基于当前股票日 K 明细</p>
         </div>
-        <span className="text-xs text-muted-foreground">数据为模拟行情，仅供参考</span>
+        <div className="mt-2 flex flex-wrap gap-2 lg:mt-0">
+          <TrendSummaryMetric
+            label="收盘变化"
+            value={rangeChangePct === null ? "--" : `${formatSigned(rangeChangePct)}%`}
+            tone={rangeChangePct === null ? undefined : rangeChangePct >= 0 ? "up" : "down"}
+          />
+          <TrendSummaryMetric label="触及涨停" value={`${limitHitCount} 次`} />
+        </div>
       </div>
-      <div>
-        {visibleRecords.length > 0 ? (
-          <div className="overflow-x-auto">
-            <div className="min-w-[560px] sm:min-w-[620px]">
-              <div className="grid grid-cols-[1.1fr_repeat(5,0.8fr)] border-b px-3 py-2 text-xs text-muted-foreground">
-                <span>日期</span>
-                <span className="text-right">开盘</span>
-                <span className="text-right">最高</span>
-                <span className="text-right">最低</span>
-                <span className="text-right">收盘</span>
-                <span className="text-right">涨跌幅</span>
-              </div>
-              {visibleRecords.map((record) => {
-                const recordIndex = records.findIndex((item) => item.date === record.date);
-                const previous = recordIndex > 0 ? records[recordIndex - 1] : undefined;
-                const dailyChangePct = previous ? ((record.close - previous.close) / previous.close) * 100 : 0;
-                const dailyPositive = dailyChangePct >= 0;
+      {visibleRecords.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-[720px] w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="px-3 py-2 text-left font-medium">日期</th>
+                <th className="px-3 py-2 text-right font-medium">收盘价</th>
+                <th className="px-3 py-2 text-right font-medium">涨跌幅</th>
+                <th className="px-3 py-2 text-right font-medium">涨停价</th>
+                <th className="px-3 py-2 text-right font-medium">是否触及</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRecords.map((record, index) => {
+                const previous = records[startIndex + index - 1];
+                const dailyChangePct = getDailyChangePct(record, previous);
+                const dailyPositive = dailyChangePct === null || dailyChangePct >= 0;
+                const touchedLimitUp = hasTouchedLimitUp(record);
 
                 return (
-                  <div
-                    key={record.date}
-                    className="grid grid-cols-[1.1fr_repeat(5,0.8fr)] border-b border-border/60 px-3 py-2.5 text-sm last:border-b-0"
-                  >
-                    <span className="truncate text-muted-foreground">{record.date}</span>
-                    <span className="text-right tabular-nums">{record.open.toFixed(2)}</span>
-                    <span className="text-right tabular-nums">{record.high.toFixed(2)}</span>
-                    <span className="text-right tabular-nums">{record.low.toFixed(2)}</span>
-                    <span className={cn("text-right tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
-                      {record.close.toFixed(2)}
-                    </span>
-                    <span className={cn("text-right tabular-nums", dailyPositive ? "text-stock-up" : "text-stock-down")}>
-                      {previous ? `${formatSigned(dailyChangePct)}%` : "--"}
-                    </span>
-                  </div>
+                  <tr key={`${record.code}:${record.date}`} className="border-b border-border/60 last:border-b-0">
+                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground tabular-nums">{record.date}</td>
+                    <td className={cn("whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
+                      {formatPrice(record.close)}
+                    </td>
+                    <td className={cn("whitespace-nowrap px-3 py-2 text-right tabular-nums", dailyPositive ? "text-stock-up" : "text-stock-down")}>
+                      {dailyChangePct === null ? "--" : `${formatSigned(dailyChangePct)}%`}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_up)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                      <Badge
+                        variant={touchedLimitUp ? "secondary" : "outline"}
+                        className={cn("bg-background/45", touchedLimitUp && "text-stock-up")}
+                      >
+                        {touchedLimitUp ? "触及" : "未触及"}
+                      </Badge>
+                    </td>
+                  </tr>
                 );
               })}
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
-            暂无日线数据
-          </div>
-        )}
-      </div>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <StockDataEmptyState label="暂无近 5 日走势数据" />
+      )}
     </section>
   );
+}
+
+function TrendSummaryMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "up" | "down";
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-background/45 px-2.5 py-1 text-xs text-muted-foreground">
+      <span>{label}</span>
+      <span
+        className={cn(
+          "font-medium text-foreground tabular-nums",
+          tone === "up" && "text-stock-up",
+          tone === "down" && "text-stock-down",
+        )}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function StockDataEmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
+function useKlineCache(stock: StockCandidate, resetKey: number): KlineCacheState {
+  const cacheKey = `${stock.code}:${resetKey}`;
+  const [cacheState, setCacheState] = useState<KlineCacheState>(() => ({
+    key: cacheKey,
+    records: [],
+    error: null,
+    isLoading: true,
+  }));
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setCacheState({
+      key: cacheKey,
+      records: [],
+      error: null,
+      isLoading: true,
+    });
+
+    void listKlineCache({
+      code: stock.code,
+      ...createKlineCacheDateRange(new Date()),
+    }, controller.signal)
+      .then((dailyKlines) => {
+        const records = createDailyRecordsFromKlines(dailyKlines, stock);
+
+        setCacheState({
+          key: cacheKey,
+          records: records.length > 0
+            ? records
+            : [createKlineNoDataRecord(stock, "后端暂无该股票日 K 缓存")],
+          error: records.length > 0 ? null : "后端暂无该股票日 K 缓存",
+          isLoading: false,
+        });
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "日 K 缓存加载失败。";
+
+        setCacheState({
+          key: cacheKey,
+          records: [createKlineNoDataRecord(stock, message)],
+          error: message,
+          isLoading: false,
+        });
+      });
+
+    return () => controller.abort();
+  }, [cacheKey, stock]);
+
+  return cacheState.key === cacheKey ? cacheState : {
+    key: cacheKey,
+    records: [],
+    error: null,
+    isLoading: true,
+  };
+}
+
+function createDailyRecordsFromKlines(
+  dailyKlines: DailyKline[],
+  stock: StockCandidate,
+): StockDailyRecord[] {
+  return dailyKlines.flatMap((dailyKline) => {
+    const date = formatTradeDate(dailyKline.trade_date);
+
+    if (
+      !date
+      || !isFiniteNumber(dailyKline.open)
+      || !isFiniteNumber(dailyKline.high)
+      || !isFiniteNumber(dailyKline.low)
+      || !isFiniteNumber(dailyKline.close)
+    ) {
+      return [];
+    }
+
+    const code = dailyKline.code?.trim() || stock.code;
+    const name = dailyKline.name?.trim() || stock.name;
+
+    return [{
+      code,
+      name,
+      date,
+      open: dailyKline.open,
+      high: dailyKline.high,
+      low: dailyKline.low,
+      close: dailyKline.close,
+      volume: dailyKline.volume ?? 0,
+      amount: dailyKline.amount ?? 0,
+      last: dailyKline.last,
+      limit_up: dailyKline.limit_up,
+      limit_down: dailyKline.limit_down,
+      limit_pct: dailyKline.limit_pct,
+      status: "成功" as const,
+    }];
+  }).sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function createKlineNoDataRecord(stock: StockCandidate, error: string): StockDailyRecord {
+  return {
+    code: stock.code,
+    name: stock.name,
+    date: formatRecordDate(new Date()),
+    open: 0,
+    high: 0,
+    low: 0,
+    close: 0,
+    volume: 0,
+    amount: 0,
+    status: "无数据",
+    error,
+  };
 }
 
 function useLiveMockStock(
@@ -1440,7 +1717,15 @@ function useLiveMockStock(
     () => stock.records.filter((record) => record.status === "成功"),
     [stock],
   );
-  const liveKey = `${stock.code}:${resetKey}`;
+  const latestSourceRecord = sourceRecords.at(-1);
+  const liveKey = [
+    stock.code,
+    resetKey,
+    sourceRecords.length,
+    sourceRecords[0]?.date ?? "",
+    latestSourceRecord?.date ?? "",
+    latestSourceRecord?.close ?? "",
+  ].join(":");
   const [liveState, setLiveState] = useState(() => ({
     key: liveKey,
     live: createLiveSnapshot(sourceRecords),
@@ -1786,7 +2071,7 @@ function createImportedNoDataRecord(code: string, name: string): StockDailyRecor
     volume: 0,
     amount: 0,
     status: "无数据",
-    error: "通过股票列表导入，等待行情接口接入",
+    error: "通过股票列表导入，选择后加载日线缓存",
   };
 }
 
@@ -1817,6 +2102,43 @@ function formatRecordDate(date: Date) {
   const day = `${date.getDate()}`.padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function createKlineCacheDateRange(dateTo: Date) {
+  const dateFrom = new Date(dateTo);
+
+  dateFrom.setDate(dateFrom.getDate() - klineCacheLookbackDays);
+
+  return {
+    date_from: formatCompactDate(dateFrom),
+    date_to: formatCompactDate(dateTo),
+  };
+}
+
+function formatCompactDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+
+  return `${year}${month}${day}`;
+}
+
+function formatTradeDate(tradeDate: string | undefined) {
+  const value = tradeDate?.trim();
+
+  if (!value) {
+    return null;
+  }
+
+  if (/^\d{8}$/.test(value)) {
+    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function getStockListAction({
@@ -2453,10 +2775,23 @@ function createChartView(
       records: live.records,
       candles: live.liveCandles,
       lineData: live.lineData,
+      candleWidth: candleWidthSecs,
     };
   }
 
   const history = live.historicalRecords;
+
+  if (rangeId === "daily") {
+    const records = history.slice(-dailyKVisibleDays);
+    const candles = createDailyCandles(records);
+
+    return {
+      records,
+      candles,
+      lineData: createLineDataFromCandles(candles, mockDaySecs),
+      candleWidth: mockDaySecs,
+    };
+  }
 
   if (rangeId === "week") {
     const latest = history.at(-1);
@@ -2481,6 +2816,7 @@ function createChartView(
       records: indices.length > 0 ? history.slice(Math.max(0, indices[0] - 1), indices.at(-1)! + 1) : [],
       candles,
       lineData: createLineDataFromCandles(candles),
+      candleWidth: candleWidthSecs,
     };
   }
 
@@ -2493,7 +2829,18 @@ function createChartView(
     records: history.slice(Math.max(0, dayIndex - 6), dayIndex + 1),
     candles,
     lineData: createLineDataFromCandles(candles),
+    candleWidth: candleWidthSecs,
   };
+}
+
+function createDailyCandles(records: StockDailyRecord[]): CandlePoint[] {
+  return records.map((record) => ({
+    time: getRecordTime(record),
+    open: record.open,
+    high: record.high,
+    low: record.low,
+    close: record.close,
+  }));
 }
 
 function packHistoricalCandles(candles: CandlePoint[], dayIndices: number[]) {
@@ -2594,7 +2941,10 @@ function createIntradayClosePath(record: StockDailyRecord, count: number) {
   return values;
 }
 
-function createLineDataFromCandles(candles: CandlePoint[]): LivelinePoint[] {
+function createLineDataFromCandles(
+  candles: CandlePoint[],
+  width = candleWidthSecs,
+): LivelinePoint[] {
   return candles.flatMap((candle) => {
     const midValue = Math.abs(candle.high - candle.close) > Math.abs(candle.low - candle.close)
       ? candle.high
@@ -2602,8 +2952,8 @@ function createLineDataFromCandles(candles: CandlePoint[]): LivelinePoint[] {
 
     return [
       { time: candle.time, value: candle.open },
-      { time: candle.time + candleWidthSecs * 0.45, value: midValue },
-      { time: candle.time + candleWidthSecs, value: candle.close },
+      { time: candle.time + width * 0.45, value: midValue },
+      { time: candle.time + width, value: candle.close },
     ];
   });
 }
@@ -2643,10 +2993,26 @@ function formatChartTime(time: number) {
   return `${hour}:${minute}:${second}`;
 }
 
+function formatChartDate(time: number) {
+  return formatRecordDate(new Date(time * 1000));
+}
+
 function formatSigned(value: number) {
   const fixed = value.toFixed(2);
 
   return value > 0 ? `+${fixed}` : fixed;
+}
+
+function formatPrice(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "--";
+}
+
+function formatPercent(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(2)}%` : "--";
+}
+
+function formatRawNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("zh-CN") : "--";
 }
 
 function formatVolume(volume: number) {
@@ -2669,6 +3035,32 @@ function getPackedRangeWindowSecs(dayCount: number) {
   return dayCount * tradingSessionSecs + Math.max(0, dayCount - 1) * dayGapSecs;
 }
 
+function getDailyKWindowSecs(records: StockDailyRecord[]) {
+  const visibleRecords = records.slice(-dailyKVisibleDays);
+
+  if (visibleRecords.length <= 1) {
+    return mockDaySecs * dailyKVisibleDays;
+  }
+
+  const firstTime = getRecordTime(visibleRecords[0]);
+  const lastTime = getRecordTime(visibleRecords.at(-1)!);
+
+  return Math.max(mockDaySecs * visibleRecords.length, lastTime - firstTime + mockDaySecs);
+}
+
+function getDailyChangePct(
+  record: StockDailyRecord,
+  previous: StockDailyRecord | undefined,
+) {
+  const base = previous?.close ?? record.last;
+
+  return typeof base === "number" && base !== 0 ? ((record.close - base) / base) * 100 : null;
+}
+
+function hasTouchedLimitUp(record: StockDailyRecord) {
+  return typeof record.limit_up === "number" && record.limit_up > 0 && record.high >= record.limit_up;
+}
+
 function getCurrentWeekTradingDayCount(records: StockDailyRecord[]) {
   const latest = records.at(-1);
 
@@ -2680,6 +3072,12 @@ function getCurrentWeekTradingDayCount(records: StockDailyRecord[]) {
   const count = records.filter((record) => new Date(`${record.date}T12:00:00`) >= weekStart).length;
 
   return Math.min(7, Math.max(1, count));
+}
+
+function getRecordTime(record: StockDailyRecord) {
+  const time = new Date(`${record.date}T12:00:00`).getTime() / 1000;
+
+  return Number.isFinite(time) ? time : Date.now() / 1000;
 }
 
 function getWeekStartDate(date: string) {
