@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "postinstall": "node scripts/patch-liveline-a-share-colors.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

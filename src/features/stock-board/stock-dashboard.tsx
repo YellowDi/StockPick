@@ -69,10 +69,10 @@ import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
-const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
+const listOrder: StockListKey[] = ["selected", "initial", "whitelist", "blacklist"];
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
-const chartRightGapSecs = daySecs;
+const axisLabelMatchThresholdSecs = daySecs / 2;
 const chartLineWidth = 2.5;
 const heroChartPadding = { top: 260, right: 88, bottom: 72, left: 24 };
 const compactHeroChartPadding = { top: 292, right: 60, bottom: 54, left: 12 };
@@ -91,6 +91,10 @@ const emptyStockGroups: StockGroups = {
 };
 type ChartRangeId = (typeof chartRangeOptionsBase)[number]["id"];
 type ChartMode = "line" | "candle";
+type ChartAxisDateLabel = {
+  time: number;
+  date: string;
+};
 const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
@@ -519,7 +523,16 @@ function StockDashboardLayout({
           />
         </div>
       </div>
-      <div className="hidden h-dvh overflow-hidden md:grid md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="hidden h-dvh overflow-hidden md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
+        <DesktopStockBoard
+          stock={selectedStock}
+          isLoading={state.scanLoading}
+          error={state.scanError}
+          themeMode={themeMode}
+          onThemeToggle={onThemeToggle}
+          onLogout={onLogout}
+          onReload={reloadStrategyScan}
+        />
         <DesktopStockSidebar
           activeListKey={state.desktopListKey}
           filterListsError={state.filterListsError}
@@ -529,15 +542,6 @@ function StockDashboardLayout({
           onOpenImport={openImportDialog}
           onStrategySave={setStrategyConfig}
           {...sharedStockListProps}
-        />
-        <DesktopStockBoard
-          stock={selectedStock}
-          isLoading={state.scanLoading}
-          error={state.scanError}
-          themeMode={themeMode}
-          onThemeToggle={onThemeToggle}
-          onLogout={onLogout}
-          onReload={reloadStrategyScan}
         />
       </div>
       {state.importTargetList ? (
@@ -1135,7 +1139,7 @@ function ActiveStockBoard({
                   : undefined
               }
               formatValue={(value) => value.toFixed(2)}
-              formatTime={formatChartDate}
+              formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
               padding={chartPadding}
               className="size-full"
             />
@@ -1417,13 +1421,12 @@ function DesktopStockSidebar({
   onStrategySave: (config: StrategyConfig) => void;
 } & StockListSharedProps) {
   return (
-    <aside className="flex min-h-0 flex-col gap-4 border-r bg-card/82 p-4">
+    <aside className="flex min-h-0 flex-col gap-4 border-l border-border/45 bg-transparent p-4">
       <div className="shrink-0">
-        <BrandLockup />
         <StrategySwitchButton
           config={strategyConfig}
-          className="mt-4 justify-start"
-          buttonClassName="h-10 w-full justify-start bg-background/70 px-3 shadow-sm"
+          className="mt-0 justify-start"
+          buttonClassName="h-10 w-full justify-start bg-background/45 px-3 shadow-sm"
           onSave={onStrategySave}
         />
         {filterListsError ? (
@@ -1641,6 +1644,26 @@ function DesktopStockBoard({
   );
 }
 
+function DesktopPageHeader({ onLogout }: { onLogout: () => void }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-3 pt-4">
+      <BrandLockup />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="bg-background/55"
+        aria-label="退出登录"
+        title="退出登录"
+        onClick={onLogout}
+      >
+        <LogOut data-icon="inline-start" />
+        退出登录
+      </Button>
+    </div>
+  );
+}
+
 function DesktopActiveStockBoard({
   stock,
   isLoading,
@@ -1680,6 +1703,7 @@ function DesktopActiveStockBoard({
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
       <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col">
+        <DesktopPageHeader onLogout={onLogout} />
         <DesktopStockChartPanel
           stock={chartStock}
           sourceRecords={sourceRecords}
@@ -1700,7 +1724,6 @@ function DesktopActiveStockBoard({
           error={error}
           themeMode={themeMode}
           onThemeToggle={onThemeToggle}
-          onLogout={onLogout}
           onReload={onReload}
           onRangeSelect={(rangeId) => dispatchBoard({ type: "select-range", rangeId })}
           onChartModeChange={(nextChartMode) => dispatchBoard({ type: "set-chart-mode", chartMode: nextChartMode })}
@@ -1739,7 +1762,6 @@ function DesktopStockChartPanel({
   error,
   themeMode,
   onThemeToggle,
-  onLogout,
   onReload,
   onRangeSelect,
   onChartModeChange,
@@ -1763,7 +1785,6 @@ function DesktopStockChartPanel({
   error: string | null;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
-  onLogout: () => void;
   onReload: () => void;
   onRangeSelect: (rangeId: ChartRangeId) => void;
   onChartModeChange: (chartMode: ChartMode) => void;
@@ -1842,18 +1863,6 @@ function DesktopStockChartPanel({
                 {themeMode === "dark" ? "亮色" : "暗色"}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-background/55"
-              aria-label="退出登录"
-              title="退出登录"
-              onClick={onLogout}
-            >
-              <LogOut data-icon="inline-start" />
-              退出登录
-            </Button>
           </div>
         </div>
 
@@ -1934,7 +1943,7 @@ function DesktopStockChartPanel({
                     : undefined
                 }
                 formatValue={(value) => value.toFixed(2)}
-                formatTime={formatChartDate}
+                formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
                 padding={desktopChartPadding}
                 className="size-full"
               />
@@ -2074,6 +2083,7 @@ function DesktopStockBoardLoading({
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
       <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col">
+        <DesktopPageHeader onLogout={onLogout} />
         <section
           className="relative pt-4"
         >
@@ -2137,18 +2147,6 @@ function DesktopStockBoardLoading({
                 {themeMode === "dark" ? "亮色" : "暗色"}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-background/55"
-              aria-label="退出登录"
-              title="退出登录"
-              onClick={onLogout}
-            >
-              <LogOut data-icon="inline-start" />
-              退出登录
-            </Button>
           </div>
         </section>
       </div>
@@ -3408,39 +3406,49 @@ function createChartView(
 ) {
   if (rangeId === "daily") {
     const records = history.slice(-dailyKVisibleDays);
-    const candles = createDisplayDailyCandles(records);
+    const { candles, axisDateLabels } = createDisplayDailyCandles(records);
 
     return {
       records,
       candles,
+      axisDateLabels,
       lineData: createLineDataFromCandles(candles, daySecs),
       candleWidth: daySecs,
     };
   }
 
   const records = history.slice(-1);
-  const candles = createDisplayDailyCandles(records);
+  const { candles, axisDateLabels } = createDisplayDailyCandles(records);
 
   return {
     records,
     candles,
+    axisDateLabels,
     lineData: createLineDataFromCandles(candles, daySecs),
     candleWidth: daySecs,
   };
 }
 
-function createDisplayDailyCandles(records: StockDailyRecord[]): CandlePoint[] {
-  const windowSecs = getDailyKWindowSecs(records);
-  const rightEdge = Date.now() / 1000 + windowSecs * 0.015;
-  const latestStartTime = rightEdge - chartRightGapSecs;
+function createDisplayDailyCandles(records: StockDailyRecord[]) {
+  const latestAxisTime = getLocalDayStartSecs(new Date());
+  const axisDateLabels: ChartAxisDateLabel[] = [];
+  const candles = records.map((record, index) => {
+    const axisTime = latestAxisTime - (records.length - 1 - index) * daySecs;
+    axisDateLabels.push({ time: axisTime, date: record.date });
 
-  return records.map((record, index) => ({
-    time: latestStartTime - (records.length - 1 - index) * daySecs,
-    open: record.open,
-    high: record.high,
-    low: record.low,
-    close: record.close,
-  }));
+    return {
+      time: axisTime - daySecs / 2,
+      open: record.open,
+      high: record.high,
+      low: record.low,
+      close: record.close,
+    };
+  });
+
+  return {
+    candles,
+    axisDateLabels,
+  };
 }
 
 function createLineDataFromCandles(
@@ -3462,6 +3470,19 @@ function createLineDataFromCandles(
 
 function formatChartDate(time: number) {
   return formatRecordDate(new Date(time * 1000));
+}
+
+function formatChartAxisDate(time: number, labels: ChartAxisDateLabel[]) {
+  const matched = labels.find((label) => Math.abs(label.time - time) < axisLabelMatchThresholdSecs);
+
+  return matched?.date ?? formatChartDate(time);
+}
+
+function getLocalDayStartSecs(date: Date) {
+  const localDate = new Date(date);
+  localDate.setHours(0, 0, 0, 0);
+
+  return localDate.getTime() / 1000;
 }
 
 function formatSigned(value: number) {
@@ -3505,7 +3526,7 @@ function getDailyKWindowSecs(records: StockDailyRecord[]) {
     return daySecs * dailyKVisibleDays;
   }
 
-  return daySecs * visibleRecords.length;
+  return daySecs * dailyKVisibleDays;
 }
 
 function getDailyChangePct(
