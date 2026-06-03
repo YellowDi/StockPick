@@ -1634,10 +1634,13 @@ function DesktopActiveStockBoard({
 
   return (
     <section
-      className="min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
+      className="relative min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
       style={{ background: "var(--chart-hero-background)" }}
     >
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
+      <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
+
+      <div className="relative z-20 flex w-full flex-col gap-5">
         <DesktopStockChartPanel
           stock={chartStock}
           latest={latest}
@@ -1707,7 +1710,7 @@ function DesktopStockChartPanel({
   onChartModeChange: (chartMode: ChartMode) => void;
 }) {
   return (
-    <section className="rounded-lg border bg-card/88 p-3 shadow-sm">
+    <section className="w-full">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <ChartRangeControls
           className="shadow-none"
@@ -1750,46 +1753,50 @@ function DesktopStockChartPanel({
         </div>
       </div>
 
-      <div className="relative mx-auto h-[clamp(320px,44vh,440px)] max-w-[980px] overflow-hidden rounded-lg bg-background/45">
-        {latest || isLoading ? (
-          <Liveline
-            data={latest ? chartView.lineData : []}
-            value={latest?.close ?? 0}
-            mode="candle"
-            candles={chartView.candles}
-            candleWidth={chartView.candleWidth}
-            lineMode={chartMode === "line"}
-            lineData={chartView.lineData}
-            lineValue={latest?.close}
-            theme={themeMode}
-            color={chartColor}
-            window={selectedRangeSecs}
-            grid
-            scrub
-            badge={true}
-            badgeVariant="minimal"
-            badgeTail
-            momentum={momentum}
-            pulse
-            loading={isLoading}
-            showValue
-            valueMomentumColor
-            referenceLine={
-              latest?.last
-                ? {
-                    value: latest.last,
-                    label: "昨收",
-                  }
-                : undefined
-            }
-            formatValue={(value) => value.toFixed(2)}
-            formatTime={formatChartDate}
-            padding={desktopChartPadding}
-            className="size-full"
-          />
-        ) : (
-          <EmptyChart error={error ?? stock.records[0]?.error} className="min-h-0" />
-        )}
+      <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-background/75 to-transparent" />
+        <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24" />
+        <div className="absolute inset-0 z-0">
+          {latest || isLoading ? (
+            <Liveline
+              data={latest ? chartView.lineData : []}
+              value={latest?.close ?? 0}
+              mode="candle"
+              candles={chartView.candles}
+              candleWidth={chartView.candleWidth}
+              lineMode={chartMode === "line"}
+              lineData={chartView.lineData}
+              lineValue={latest?.close}
+              theme={themeMode}
+              color={chartColor}
+              window={selectedRangeSecs}
+              grid
+              scrub
+              badge={true}
+              badgeVariant="minimal"
+              badgeTail
+              momentum={momentum}
+              pulse
+              loading={isLoading}
+              showValue
+              valueMomentumColor
+              referenceLine={
+                latest?.last
+                  ? {
+                      value: latest.last,
+                      label: "昨收",
+                    }
+                  : undefined
+              }
+              formatValue={(value) => value.toFixed(2)}
+              formatTime={formatChartDate}
+              padding={desktopChartPadding}
+              className="size-full"
+            />
+          ) : (
+            <EmptyChart error={error ?? stock.records[0]?.error} className="min-h-0" />
+          )}
+        </div>
       </div>
     </section>
   );
@@ -1823,8 +1830,8 @@ function DesktopStockInfoPanel({
   const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
 
   return (
-    <Card className="gap-0 bg-card/88 shadow-sm">
-      <CardHeader className="gap-4 px-4 py-4">
+    <section className="w-full pb-6">
+      <div className="grid gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1898,9 +1905,9 @@ function DesktopStockInfoPanel({
           <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
           <HeroMetric label="记录" value={`${sourceRecords.length}`} />
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="border-t px-4 py-4">
+      <div className="mt-5 border-t border-border/60 pt-4">
         <div className="flex w-max max-w-full gap-1 overflow-x-auto rounded-lg bg-background/45 p-1 [-webkit-overflow-scrolling:touch]">
           {stockDataViewOptions.map((option) => (
             <button
@@ -1926,8 +1933,8 @@ function DesktopStockInfoPanel({
             <FiveDayTrendSection records={sourceRecords} />
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -1950,11 +1957,14 @@ function DesktopStockBoardLoading({
 
   return (
     <section
-      className="min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
+      className="relative min-h-0 overflow-y-auto px-5 py-4 lg:px-8"
       style={{ background: "var(--chart-hero-background)" }}
     >
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
-        <section className="rounded-lg border bg-card/88 p-3 shadow-sm">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
+      <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" />
+
+      <div className="relative z-20 flex w-full flex-col gap-5">
+        <section className="w-full">
           <div className="mb-3 flex justify-end">
             <Button
               type="button"
@@ -1970,65 +1980,67 @@ function DesktopStockBoardLoading({
               {isLoading ? "加载中" : "重载"}
             </Button>
           </div>
-          <div className="relative mx-auto h-[clamp(320px,44vh,440px)] max-w-[980px] overflow-hidden rounded-lg bg-background/45">
-            <Liveline
-              data={[]}
-              value={0}
-              mode="candle"
-              candles={[]}
-              candleWidth={daySecs}
-              theme={themeMode}
-              color={chartColor}
-              window={daySecs * dailyKVisibleDays}
-              grid
-              loading={isLoading}
-              momentum="flat"
-              padding={desktopChartPadding}
-              className="size-full"
-            />
+          <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-background/75 to-transparent" />
+            <div className="chart-hero-bottom-mask pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24" />
+            <div className="absolute inset-0 z-0">
+              <Liveline
+                data={[]}
+                value={0}
+                mode="candle"
+                candles={[]}
+                candleWidth={daySecs}
+                theme={themeMode}
+                color={chartColor}
+                window={daySecs * dailyKVisibleDays}
+                grid
+                loading={isLoading}
+                momentum="flat"
+                padding={desktopChartPadding}
+                className="size-full"
+              />
+            </div>
           </div>
         </section>
 
-        <Card className="gap-0 bg-card/88 shadow-sm">
-          <CardHeader className="flex flex-row items-start justify-between gap-3 px-4 py-4">
-            <div className="min-w-0">
-              <CardTitle className="text-2xl text-balance">
-                {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
-              </CardTitle>
-              <CardDescription className="mt-2 text-pretty">
-                {error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "当前策略没有返回候选股票")}
-              </CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {isThemeToggleVisible(themeMode) ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="bg-background/55"
-                  aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                  title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                  onClick={onThemeToggle}
-                >
-                  {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-                  {themeMode === "dark" ? "亮色" : "暗色"}
-                </Button>
-              ) : null}
+        <section className="flex flex-row items-start justify-between gap-3 pb-6">
+          <div className="min-w-0">
+            <CardTitle className="text-2xl text-balance">
+              {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
+            </CardTitle>
+            <CardDescription className="mt-2 text-pretty">
+              {error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "当前策略没有返回候选股票")}
+            </CardDescription>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {isThemeToggleVisible(themeMode) ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="bg-background/55"
-                aria-label="退出登录"
-                title="退出登录"
-                onClick={onLogout}
+                aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                onClick={onThemeToggle}
               >
-                <LogOut data-icon="inline-start" />
-                退出登录
+                {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                {themeMode === "dark" ? "亮色" : "暗色"}
               </Button>
-            </div>
-          </CardHeader>
-        </Card>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-background/55"
+              aria-label="退出登录"
+              title="退出登录"
+              onClick={onLogout}
+            >
+              <LogOut data-icon="inline-start" />
+              退出登录
+            </Button>
+          </div>
+        </section>
       </div>
     </section>
   );
