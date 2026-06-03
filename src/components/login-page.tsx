@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { ThemeMode } from "@/types/theme";
+import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 
 const Threads = lazy(() => import("@/components/threads"));
 
@@ -48,15 +48,17 @@ export function LoginPage({
             <CardHeader className="gap-4">
               <div className="flex items-start justify-between gap-4">
                 <BrandLockup />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={themeMode === "dark" ? "切换亮色模式" : "切换暗色模式"}
-                  onClick={onThemeToggle}
-                >
-                  {themeMode === "dark" ? <Sun /> : <Moon />}
-                </Button>
+                {isThemeToggleVisible(themeMode) ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={themeMode === "dark" ? "切换亮色模式" : "切换暗色模式"}
+                    onClick={onThemeToggle}
+                  >
+                    {themeMode === "dark" ? <Sun /> : <Moon />}
+                  </Button>
+                ) : null}
               </div>
               <div>
                 <CardTitle className="text-2xl">登录</CardTitle>

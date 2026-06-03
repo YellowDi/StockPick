@@ -33,7 +33,7 @@ import {
 import { defaultStrategyConfig, StrategySwitchButton, type StrategyConfig } from "@/features/strategy-switch/strategy-switch-button";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
 import { cn } from "@/lib/utils";
-import type { ThemeMode } from "@/types/theme";
+import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
 const listOrder: StockListKey[] = ["initial", "selected", "whitelist", "blacklist"];
@@ -590,18 +590,20 @@ function ActiveStockBoard({
                 </button>
               ))}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-              aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-              title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-              onClick={onThemeToggle}
-            >
-              {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-              {themeMode === "dark" ? "亮色" : "暗色"}
-            </Button>
+            {isThemeToggleVisible(themeMode) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
+                aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                onClick={onThemeToggle}
+              >
+                {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                {themeMode === "dark" ? "亮色" : "暗色"}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -722,18 +724,20 @@ function StockBoardLoading({
           </div>
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:col-start-3 lg:justify-end lg:justify-self-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-              aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-              title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-              onClick={onThemeToggle}
-            >
-              {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-              {themeMode === "dark" ? "亮色" : "暗色"}
-            </Button>
+            {isThemeToggleVisible(themeMode) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
+                aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+                onClick={onThemeToggle}
+              >
+                {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                {themeMode === "dark" ? "亮色" : "暗色"}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -941,18 +945,27 @@ function MobileAccountActions({
   onThemeToggle: () => void;
   onLogout: () => void;
 }) {
+  const showThemeToggle = isThemeToggleVisible(themeMode);
+
   return (
-    <div className="mt-4 grid grid-cols-2 gap-2 pb-4 md:hidden">
-      <Button
-        type="button"
-        variant="outline"
-        className="h-10 bg-card/88 backdrop-blur-xl"
-        aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-        onClick={onThemeToggle}
-      >
-        {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-        {themeMode === "dark" ? "亮色模式" : "暗色模式"}
-      </Button>
+    <div
+      className={cn(
+        "mt-4 grid gap-2 pb-4 md:hidden",
+        showThemeToggle ? "grid-cols-2" : "grid-cols-1",
+      )}
+    >
+      {showThemeToggle ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 bg-card/88 backdrop-blur-xl"
+          aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+          onClick={onThemeToggle}
+        >
+          {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+          {themeMode === "dark" ? "亮色模式" : "暗色模式"}
+        </Button>
+      ) : null}
       <Button
         type="button"
         variant="outline"
