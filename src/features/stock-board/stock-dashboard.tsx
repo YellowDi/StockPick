@@ -1656,7 +1656,7 @@ function StockListButton({
   return (
     <div className="flex min-w-0 items-center gap-2">
       <Item
-        render={<button type="button" />}
+        render={<button type="button" aria-label={`${stock.name} ${stock.code}`} />}
         variant="outline"
         size="sm"
         className={cn(
