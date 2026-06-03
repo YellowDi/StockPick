@@ -14,7 +14,6 @@ import {
   Import as ImportIcon,
   ListFilter,
   LogOut,
-  ListRestart,
   LoaderCircle,
   Moon,
   Plus,
@@ -23,6 +22,7 @@ import {
   ShieldCheck,
   ShieldX,
   Sun,
+  Trash2,
 } from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
 
@@ -44,6 +44,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Item, ItemGroup } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
 import { defaultStrategyConfig, StrategySwitchButton, type StrategyConfig } from "@/features/strategy-switch/strategy-switch-button";
 import { mockStockGroups, stockListMeta } from "@/data/mock-stocks";
@@ -217,45 +218,29 @@ export default function StockDashboard({
     scrollBoardIntoViewOnMobile();
   }
 
-  function moveListedStockToInitial(stock: StockCandidate, fromList: ReturnableListKey) {
+  function removeStockFromFilterList(stock: StockCandidate, fromList: ReturnableListKey) {
     setStockGroups((currentGroups) => {
-      const sourceStock = currentGroups[fromList].find((item) => item.code === stock.code);
-
-      if (!sourceStock) {
+      if (!currentGroups[fromList].some((item) => item.code === stock.code)) {
         return currentGroups;
       }
-
-      const existsInSelected = currentGroups.selected.some((item) => item.code === stock.code);
-      const existsInInitial = currentGroups.initial.some((item) => item.code === stock.code);
 
       return {
         ...currentGroups,
         [fromList]: currentGroups[fromList].filter((item) => item.code !== stock.code),
-        initial: existsInSelected || existsInInitial
-          ? currentGroups.initial
-          : [
-              ...currentGroups.initial,
-              {
-                code: sourceStock.code,
-                name: sourceStock.name,
-                records: sourceStock.records,
-                list: "initial",
-              },
-            ],
       };
     });
     setChartSelection((selection) => (
       selection?.listKey === fromList && selection.code === stock.code
-        ? { code: stock.code, listKey: selectedStockCodes.has(stock.code) ? "selected" : "initial" }
+        ? null
         : selection
     ));
   }
 
-  async function returnListedStockToInitial(stock: StockCandidate, fromList: ReturnableListKey) {
+  async function deleteStockFromFilterList(stock: StockCandidate, fromList: ReturnableListKey) {
     const filterId = stock.filterId;
 
     if (!filterId) {
-      moveListedStockToInitial(stock, fromList);
+      removeStockFromFilterList(stock, fromList);
       return;
     }
 
@@ -266,7 +251,7 @@ export default function StockDashboard({
 
     try {
       await deleteStockFilter(filterId);
-      moveListedStockToInitial(stock, fromList);
+      removeStockFromFilterList(stock, fromList);
       await syncFilterLists();
     } catch (error) {
       setFilterListsError(error instanceof Error ? error.message : "删除黑白名单失败。");
@@ -377,7 +362,7 @@ export default function StockDashboard({
   function handleStockDragStart(
     stock: StockCandidate,
     fromList: StockListKey,
-    event: DragEvent<HTMLButtonElement>,
+    event: DragEvent<HTMLElement>,
   ) {
     const nextDraggedStock = {
       code: stock.code,
@@ -429,7 +414,7 @@ export default function StockDashboard({
     chartSelection,
     filterDeletePendingIds,
     onToggleChart: toggleSelectedStock,
-    onReturnToInitial: returnListedStockToInitial,
+    onDeleteFromFilterList: deleteStockFromFilterList,
   };
 
   return (
@@ -1029,7 +1014,7 @@ function MobileStockTabs({
   onOpenImport,
   onActiveListChange,
   onToggleChart,
-  onReturnToInitial,
+  onDeleteFromFilterList,
 }: {
   activeListKey: StockListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
@@ -1038,7 +1023,7 @@ function MobileStockTabs({
   onOpenImport: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
   onToggleChart: (code: string, listKey: StockListKey) => void;
-  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
+  onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }) {
   const stocks = stockGroups[activeListKey];
   const meta = stockListMeta[activeListKey];
@@ -1084,19 +1069,21 @@ function MobileStockTabs({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 pb-5">
+      <CardContent className="pb-5">
         {stocks.length > 0 ? (
-          stocks.map((stock) => (
-            <StockListButton
-              key={stock.code}
-              stock={stock}
-              active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
-              draggable={false}
-              onClick={() => onToggleChart(stock.code, activeListKey)}
-              returnPending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
-              onReturnToInitial={returnableListKey ? () => void onReturnToInitial(stock, returnableListKey) : undefined}
-            />
-          ))
+          <ItemGroup className="gap-2">
+            {stocks.map((stock) => (
+              <StockListButton
+                key={stock.code}
+                stock={stock}
+                active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
+                draggable={false}
+                onClick={() => onToggleChart(stock.code, activeListKey)}
+                deletePending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
+                onDeleteFromFilterList={returnableListKey ? () => void onDeleteFromFilterList(stock, returnableListKey) : undefined}
+              />
+            ))}
+          </ItemGroup>
         ) : (
           <div className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
             暂无股票
@@ -1452,7 +1439,7 @@ function StockColumn({
   canDrop,
   isDropTarget,
   onToggleChart,
-  onReturnToInitial,
+  onDeleteFromFilterList,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -1467,11 +1454,11 @@ function StockColumn({
   canDrop: boolean;
   isDropTarget: boolean;
   onToggleChart: (code: string, listKey: StockListKey) => void;
-  onReturnToInitial: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
+  onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
   onDragStart: (
     stock: StockCandidate,
     fromList: StockListKey,
-    event: DragEvent<HTMLButtonElement>,
+    event: DragEvent<HTMLElement>,
   ) => void;
   onDragEnd: () => void;
   onDragOver: (listKey: StockListKey, event: DragEvent<HTMLDivElement>) => void;
@@ -1515,19 +1502,21 @@ function StockColumn({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 pb-5">
-        {stocks.map((stock) => (
-          <StockListButton
-            key={stock.code}
-            stock={stock}
-            active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
-            onDragStart={(event) => onDragStart(stock, listKey, event)}
-            onDragEnd={onDragEnd}
-            onClick={() => onToggleChart(stock.code, listKey)}
-            returnPending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
-            onReturnToInitial={returnableListKey ? () => void onReturnToInitial(stock, returnableListKey) : undefined}
-          />
-        ))}
+      <CardContent className="pb-5">
+        <ItemGroup className="gap-2">
+          {stocks.map((stock) => (
+            <StockListButton
+              key={stock.code}
+              stock={stock}
+              active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
+              onDragStart={(event) => onDragStart(stock, listKey, event)}
+              onDragEnd={onDragEnd}
+              onClick={() => onToggleChart(stock.code, listKey)}
+              deletePending={Boolean(stock.filterId && filterDeletePendingIds.includes(stock.filterId))}
+              onDeleteFromFilterList={returnableListKey ? () => void onDeleteFromFilterList(stock, returnableListKey) : undefined}
+            />
+          ))}
+        </ItemGroup>
       </CardContent>
     </Card>
   );
@@ -1647,30 +1636,31 @@ function StockListButton({
   stock,
   active,
   draggable = true,
-  returnPending = false,
+  deletePending = false,
   onDragStart,
   onDragEnd,
   onClick,
-  onReturnToInitial,
+  onDeleteFromFilterList,
 }: {
   stock: StockCandidate;
   active: boolean;
   draggable?: boolean;
-  returnPending?: boolean;
-  onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
+  deletePending?: boolean;
+  onDragStart?: (event: DragEvent<HTMLElement>) => void;
   onDragEnd?: () => void;
   onClick: () => void;
-  onReturnToInitial?: () => void;
+  onDeleteFromFilterList?: () => void;
 }) {
-  const returnTitle = returnPending ? "正在移回待选" : "移回待选";
+  const deleteTitle = deletePending ? "正在删除" : "从名单删除";
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <Button
-        type="button"
-        variant={active ? "secondary" : "ghost"}
+      <Item
+        render={<button type="button" />}
+        variant="outline"
+        size="sm"
         className={cn(
-          "h-auto min-w-0 flex-1 justify-start rounded-lg border px-3 py-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96]",
+          "min-w-0 flex-1 justify-start bg-background/40 px-3 py-3 text-left transition-[background-color,border-color,color,transform,box-shadow] active:scale-[0.96]",
           active
             ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
             : "border-transparent bg-background/40 hover:border-border",
@@ -1686,22 +1676,22 @@ function StockListButton({
           <span className="truncate font-medium">{stock.name}</span>
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
         </span>
-      </Button>
-      {onReturnToInitial ? (
+      </Item>
+      {onDeleteFromFilterList ? (
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="size-10 shrink-0 rounded-lg border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
-          aria-label={returnTitle}
-          title={returnTitle}
-          disabled={returnPending}
-          onClick={onReturnToInitial}
+          aria-label={deleteTitle}
+          title={deleteTitle}
+          disabled={deletePending}
+          onClick={onDeleteFromFilterList}
         >
-          {returnPending ? (
-            <LoaderCircle className="size-4 animate-spin" />
+          {deletePending ? (
+            <LoaderCircle className="animate-spin" />
           ) : (
-            <ListRestart className="size-4" />
+            <Trash2 />
           )}
         </Button>
       ) : null}
