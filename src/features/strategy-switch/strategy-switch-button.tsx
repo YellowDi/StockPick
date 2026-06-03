@@ -140,7 +140,7 @@ export function StrategySwitchButton({
                     id="strategy-name"
                     className="h-11 bg-background/55"
                     value={draft.name}
-                    onChange={(event) => setDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+                    onValueChange={(value) => setDraft((current) => ({ ...current, name: value }))}
                   />
                 </div>
 

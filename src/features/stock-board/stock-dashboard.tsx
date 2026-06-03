@@ -1904,8 +1904,8 @@ function StockImportDialog({
                   className="h-10 bg-background/70"
                   value={codeQuery}
                   placeholder="600519 / SH600519"
-                  onChange={(event) => (
-                    setDialogState((current) => ({ ...current, codeQuery: event.currentTarget.value }))
+                  onValueChange={(value) => (
+                    setDialogState((current) => ({ ...current, codeQuery: value }))
                   )}
                 />
               </div>
@@ -1916,8 +1916,8 @@ function StockImportDialog({
                   className="h-10 bg-background/70"
                   value={nameQuery}
                   placeholder="贵州茅台"
-                  onChange={(event) => (
-                    setDialogState((current) => ({ ...current, nameQuery: event.currentTarget.value }))
+                  onValueChange={(value) => (
+                    setDialogState((current) => ({ ...current, nameQuery: value }))
                   )}
                 />
               </div>
