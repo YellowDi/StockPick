@@ -19,12 +19,14 @@ StockPick 是一个前端股票筛选看板原型，用于展示 A 股候选标�
 
 ## 本地运行
 
-用户已经手动将项目运行在 5173 端口：
+用户已经手动将项目运行在 5174 端口：
 
-- 本地地址：`http://localhost:5173/`
+- 本地地址：`http://localhost:5174/`
 - 开发命令：`npm run dev`
 - 构建验证：`npm run build`
 - 预览命令：`npm run preview`
+- 开发阶段账号：admin
+- 开发者阶段密码：123456
 
 除非用户明确要求，不要重复启动 dev server。
 

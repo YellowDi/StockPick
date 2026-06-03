@@ -28,6 +28,12 @@ import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
 import { toast } from "sonner";
 
 import { BrandLockup } from "@/components/brand-lockup";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +60,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
 import { stockListMeta } from "@/data/mock-stocks";
@@ -1458,7 +1465,18 @@ function DesktopStockAccordion({
   onOpenImport: (listKey: ReturnableListKey) => void;
 } & StockListSharedProps) {
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-2" aria-label="股票列表">
+    <Accordion
+      className="min-h-0 flex-1"
+      value={[activeListKey]}
+      onValueChange={(value) => {
+        const nextListKey = value.at(-1) as StockListKey | undefined;
+
+        if (nextListKey) {
+          onActiveListChange(nextListKey);
+        }
+      }}
+      aria-label="股票列表"
+    >
       {listOrder.map((key) => (
         <DesktopStockAccordionItem
           key={key}
@@ -1468,7 +1486,6 @@ function DesktopStockAccordion({
           chartSelection={chartSelection}
           filterDeletePendingIds={filterDeletePendingIds}
           selectedStockCodes={selectedStockCodes}
-          onActiveListChange={onActiveListChange}
           onOpenImport={onOpenImport}
           onAddToSelected={onAddToSelected}
           onRemoveFromSelected={onRemoveFromSelected}
@@ -1476,7 +1493,7 @@ function DesktopStockAccordion({
           onDeleteFromFilterList={onDeleteFromFilterList}
         />
       ))}
-    </section>
+    </Accordion>
   );
 }
 
@@ -1487,7 +1504,6 @@ function DesktopStockAccordionItem({
   chartSelection,
   filterDeletePendingIds,
   selectedStockCodes,
-  onActiveListChange,
   onOpenImport,
   onAddToSelected,
   onRemoveFromSelected,
@@ -1497,89 +1513,79 @@ function DesktopStockAccordionItem({
   listKey: StockListKey;
   stocks: StockCandidate[];
   expanded: boolean;
-  onActiveListChange: (key: StockListKey) => void;
   onOpenImport: (listKey: ReturnableListKey) => void;
 } & StockListSharedProps) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
   const returnableListKey = getReturnableListKey(listKey);
-  const contentId = `desktop-stock-list-${listKey}`;
 
   return (
-    <Card
+    <AccordionItem
+      value={listKey}
       className={cn(
-        "gap-0 overflow-hidden bg-background/58 shadow-sm",
-        expanded ? "min-h-0 flex-1" : "shrink-0",
+        "border-border/45 bg-transparent",
+        expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
       )}
     >
-      <CardHeader className="px-3 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <button
-            type="button"
-            className="group flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50"
-            aria-expanded={expanded}
-            aria-controls={contentId}
-            onClick={() => onActiveListChange(listKey)}
-          >
-            <Icon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
-            <span className="min-w-0 flex-1">
-              <span className="flex min-w-0 items-center gap-2">
-                <CardTitle className="truncate text-sm">{meta.label}</CardTitle>
-                <Badge variant="secondary" className="shrink-0">{stocks.length}</Badge>
-              </span>
-              <CardDescription className="mt-0.5 truncate text-xs">{meta.description}</CardDescription>
+      <div className="flex min-w-0 items-center gap-1">
+        <AccordionTrigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
+          <Icon className="size-4 shrink-0 text-muted-foreground transition-colors group-hover/accordion-trigger:text-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium leading-none">{meta.label}</span>
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{stocks.length}</span>
             </span>
-            <ChevronDown
-              className={cn(
-                "size-4 shrink-0 text-muted-foreground transition-transform duration-150",
-                expanded && "rotate-180",
-              )}
-            />
-          </button>
-          {returnableListKey ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              className="shrink-0 bg-background/70"
-              aria-label={`导入${meta.label}`}
-              title={`导入${meta.label}`}
-              onClick={() => onOpenImport(returnableListKey)}
-            >
-              <ImportIcon />
-            </Button>
-          ) : null}
-        </div>
-      </CardHeader>
+            <span className="mt-1 block truncate text-xs text-muted-foreground">{meta.description}</span>
+          </span>
+        </AccordionTrigger>
+        {returnableListKey ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+            aria-label={`导入${meta.label}`}
+            title={`导入${meta.label}`}
+            onClick={() => onOpenImport(returnableListKey)}
+          >
+            <ImportIcon />
+          </Button>
+        ) : null}
+      </div>
 
-      {expanded ? (
-        <CardContent id={contentId} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <AccordionContent
+        panelClassName="min-h-0 flex flex-1 flex-col"
+        className="flex !h-full min-h-0 flex-col pb-0"
+      >
+        <div className="min-h-0 flex-1 pb-3 pl-7">
           {stocks.length > 0 ? (
-            <ItemGroup className="gap-2">
-              {stocks.map((stock) => (
-                <StockListButton
-                  key={stock.code}
-                  stock={stock}
-                  active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
-                  onClick={() => onToggleChart(stock.code, listKey)}
-                  action={getStockListAction({
-                    stock,
-                    listKey,
-                    selectedStockCodes,
-                    filterDeletePendingIds,
-                    onAddToSelected,
-                    onRemoveFromSelected,
-                    onDeleteFromFilterList,
-                  })}
-                />
-              ))}
-            </ItemGroup>
+            <ScrollArea className="h-full pr-2">
+              <ItemGroup className="gap-2">
+                {stocks.map((stock) => (
+                  <StockListButton
+                    key={stock.code}
+                    stock={stock}
+                    active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
+                    onClick={() => onToggleChart(stock.code, listKey)}
+                    action={getStockListAction({
+                      stock,
+                      listKey,
+                      selectedStockCodes,
+                      filterDeletePendingIds,
+                      onAddToSelected,
+                      onRemoveFromSelected,
+                      onDeleteFromFilterList,
+                    })}
+                  />
+                ))}
+              </ItemGroup>
+            </ScrollArea>
           ) : (
             <DesktopStockListEmptyState listKey={listKey} />
           )}
-        </CardContent>
-      ) : null}
-    </Card>
+        </div>
+      </AccordionContent>
+    </AccordionItem>
   );
 }
 
@@ -1591,7 +1597,7 @@ function DesktopStockListEmptyState({ listKey }: { listKey: StockListKey }) {
       : "点击上方导入添加股票";
 
   return (
-    <div className="flex min-h-32 flex-col items-center justify-center gap-1 rounded-md border border-dashed bg-background/35 px-3 text-center">
+    <div className="flex h-full min-h-20 flex-col justify-center gap-1 px-1 text-left">
       <div className="text-sm font-medium">暂无股票</div>
       <div className="text-xs text-muted-foreground text-pretty">{message}</div>
     </div>
@@ -2841,10 +2847,10 @@ function StockListButton({
       variant="outline"
       size="sm"
       className={cn(
-        "group/stock-item min-w-0 flex-nowrap gap-2 bg-background/40 p-1 transition-[background-color,border-color,box-shadow]",
+        "group/stock-item min-w-0 flex-nowrap gap-2 bg-background/40 p-1 transition-[background-color,border-color]",
         active
-          ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
-          : "border-transparent hover:border-border",
+          ? "border-ring/70 bg-secondary/80"
+          : "border-transparent hover:border-border/80 hover:bg-muted/50 focus-within:bg-muted/50 [&:has(button:hover)]:bg-muted/50",
       )}
     >
       <button
