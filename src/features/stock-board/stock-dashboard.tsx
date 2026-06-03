@@ -1674,8 +1674,12 @@ function DesktopActiveStockBoard({
   } = useStockBoardModel(stock, chartRangeId, themeMode);
 
   return (
-    <section className="min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col">
+    <section className="relative min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[1120px]"
+        style={{ background: "var(--desktop-board-glow-background)" }}
+      />
+      <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col">
         <DesktopStockChartPanel
           stock={chartStock}
           sourceRecords={sourceRecords}
@@ -1768,10 +1772,6 @@ function DesktopStockChartPanel({
     <section
       className="relative pt-4"
     >
-      <div
-        className="pointer-events-none absolute left-1/2 top-0 z-0 h-full w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]"
-        style={{ background: "var(--chart-hero-background)" }}
-      />
       <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
 
       <div className="relative z-20 grid gap-0 py-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[300px_minmax(0,1fr)]">
@@ -2068,15 +2068,15 @@ function DesktopStockBoardLoading({
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
 
   return (
-    <section className="min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col">
+    <section className="relative min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[1120px]"
+        style={{ background: "var(--desktop-board-glow-background)" }}
+      />
+      <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col">
         <section
           className="relative pt-4"
         >
-          <div
-            className="pointer-events-none absolute left-1/2 top-0 z-0 h-full w-[calc(100vw-320px)] -translate-x-1/2 lg:w-[calc(100vw-360px)]"
-            style={{ background: "var(--chart-hero-background)" }}
-          />
           <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
           <div className="mb-3 flex justify-end">
             <Button
