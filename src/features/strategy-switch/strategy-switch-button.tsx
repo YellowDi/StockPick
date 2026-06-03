@@ -1,16 +1,8 @@
 import { type FormEvent, useReducer, useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/components/ui/combobox";
 import {
   Dialog,
   DialogClose,
@@ -23,70 +15,51 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { defaultStrategyConfig, type StrategyConfig, type StrategyId } from "@/features/strategy-switch/strategy-config";
+import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { cn } from "@/lib/utils";
 
-const strategyBaseDateOptions = [
-  { id: "today", label: "今天" },
-  { id: "prev-1", label: "前一交易日" },
-  { id: "prev-2", label: "前二交易日" },
-] as const;
-const strategyLimitPriceOptions = [
-  { id: "auto", label: "自动识别" },
-  { id: "ten-percent", label: "10% 涨停" },
-  { id: "twenty-percent", label: "20% 涨停" },
-] as const;
-const strategyMa5RatioOptions = [
-  { id: "0", label: "0%" },
-  { id: "1", label: "1%" },
-  { id: "2", label: "2%" },
-  { id: "3", label: "3%" },
-] as const;
-const strategyOptions = [
-  {
-    id: "limit-up",
-    label: "只看涨停",
-    description: "筛选基准日出现涨停的股票",
-  },
-  {
-    id: "limit-up-break-retrace",
-    label: "涨停后冲高回落",
-    description: "涨停后，下一交易日突破 P 并回落",
-  },
-  {
-    id: "limit-up-pullback-confirm",
-    label: "涨停后回踩确认",
-    description: "涨停后冲高回落，再观察回踩是否仍保持强势",
-  },
-] as const;
+const emptyStrategyConfigs: StrategyConfig[] = [];
 
 type StrategyDraftAction =
   | { type: "reset"; config: StrategyConfig }
   | { type: "restore-default" }
   | { type: "name"; value: string }
   | { type: "enabled"; value: boolean }
-  | { type: "base-date"; value: string }
-  | { type: "limit-price"; value: string }
-  | { type: "ma5-ratio"; value: string }
-  | { type: "strategy"; value: StrategyId };
+  | { type: "rule2"; value: boolean }
+  | { type: "rule3"; value: boolean }
+  | { type: "x"; value: string }
+  | { type: "y"; value: string };
 
 export function StrategySwitchButton({
   config,
+  configs = emptyStrategyConfigs,
+  configsLoading = false,
+  savePending = false,
+  deletePendingId = null,
   className,
   buttonClassName,
   onSave,
+  onSelect,
+  onDelete,
 }: {
   config: StrategyConfig;
+  configs?: StrategyConfig[];
+  configsLoading?: boolean;
+  savePending?: boolean;
+  deletePendingId?: number | null;
   className?: string;
   buttonClassName?: string;
-  onSave: (config: StrategyConfig) => void;
+  onSave: (config: StrategyConfig) => void | Promise<void>;
+  onSelect?: (config: StrategyConfig) => void;
+  onDelete?: (id: number) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [localSavePending, setLocalSavePending] = useState(false);
   const [draft, dispatchDraft] = useReducer(strategyDraftReducer, config);
-  const activeStrategy = getStrategyOption(config.strategyId);
+  const isSaving = savePending || localSavePending;
+  const visibleConfigs = configs.length > 0 ? configs : [config];
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -96,12 +69,24 @@ export function StrategySwitchButton({
     setOpen(nextOpen);
   }
 
-  function saveStrategy(event: FormEvent<HTMLFormElement>) {
+  async function saveStrategy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSave({
-      ...draft,
-      name: draft.name.trim() || defaultStrategyConfig.name,
-    });
+    setLocalSavePending(true);
+
+    try {
+      await onSave(normalizeStrategyConfig(draft));
+      setOpen(false);
+    } finally {
+      setLocalSavePending(false);
+    }
+  }
+
+  async function deleteStrategy() {
+    if (!draft.id || !onDelete) {
+      return;
+    }
+
+    await onDelete(draft.id);
     setOpen(false);
   }
 
@@ -120,24 +105,71 @@ export function StrategySwitchButton({
             />
           }
         >
-            <SlidersHorizontal data-icon="inline-start" />
-            策略切换
-            <Badge variant="secondary" className="hidden sm:inline-flex">
-              {config.enabled ? "启用" : "停用"} · {activeStrategy.label}
-            </Badge>
+          <SlidersHorizontal data-icon="inline-start" />
+          策略切换
+          <Badge variant="secondary" className="hidden sm:inline-flex">
+            {config.enabled ? "启用" : "停用"} · {getStrategyRulesLabel(config)}
+          </Badge>
         </DialogTrigger>
 
         <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
           <form onSubmit={saveStrategy}>
             <DialogHeader className="p-5 pr-12">
-              <DialogTitle className="text-xl text-balance">策略切换</DialogTitle>
-              <DialogDescription>选择一个筛选逻辑作为当前主策略</DialogDescription>
+              <DialogTitle className="text-xl text-balance">策略配置</DialogTitle>
+              <DialogDescription>管理后端策略配置，并选择当前扫描使用的配置</DialogDescription>
             </DialogHeader>
 
             <div className="flex max-h-[min(72vh,720px)] flex-col gap-5 overflow-y-auto px-5 pb-5">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <section>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">配置列表</h3>
+                  {configsLoading ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                      加载中
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground tabular-nums">{visibleConfigs.length}</span>
+                  )}
+                </div>
+                <div className="grid gap-2">
+                  {visibleConfigs.map((item, index) => {
+                    const active = isSameStrategyConfig(item, config);
+
+                    return (
+                      <button
+                        key={item.id ?? `${item.name}:${index}`}
+                        type="button"
+                        className={cn(
+                          "flex min-w-0 items-center gap-3 rounded-lg border bg-background/45 p-3 text-left transition-[background-color,border-color,box-shadow]",
+                          active
+                            ? "border-ring bg-secondary/70 shadow-[0_10px_34px_rgba(0,0,0,0.16)] ring-2 ring-ring/25"
+                            : "hover:border-border hover:bg-accent/60",
+                        )}
+                        aria-pressed={active}
+                        onClick={() => {
+                          dispatchDraft({ type: "reset", config: item });
+                          onSelect?.(item);
+                        }}
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background/70 text-muted-foreground">
+                          {active ? <CheckCircle2 className="size-4 text-primary" /> : <SlidersHorizontal className="size-4" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">{item.name}</span>
+                          <span className="mt-1 block truncate text-xs text-muted-foreground">
+                            {item.enabled ? "启用" : "停用"} · {getStrategyRulesLabel(item)}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <div className="flex min-w-0 flex-col gap-2">
-                  <Label htmlFor="strategy-name">策略名称</Label>
+                  <Label htmlFor="strategy-name">配置名称</Label>
                   <Input
                     id="strategy-name"
                     className="h-11 bg-background/55"
@@ -157,100 +189,94 @@ export function StrategySwitchButton({
                     />
                   </div>
                 </div>
-              </div>
+              </section>
 
               <section>
-                <h3 className="text-sm font-semibold">基础参数</h3>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <StrategyComboboxField
-                    label="基准日"
-                    value={draft.baseDate}
-                    options={strategyBaseDateOptions}
-                    onChange={(value) => dispatchDraft({ type: "base-date", value })}
-                  />
-                  <StrategyComboboxField
-                    label="涨停价 P"
-                    value={draft.limitPrice}
-                    options={strategyLimitPriceOptions}
-                    onChange={(value) => dispatchDraft({ type: "limit-price", value })}
-                  />
-                  <StrategyComboboxField
-                    label="高于 5 日线比例"
-                    value={draft.ma5Ratio}
-                    options={strategyMa5RatioOptions}
-                    onChange={(value) => dispatchDraft({ type: "ma5-ratio", value })}
-                  />
+                <h3 className="text-sm font-semibold">计算参数</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <Label htmlFor="strategy-x">往前推第 X 天</Label>
+                    <Input
+                      id="strategy-x"
+                      type="number"
+                      min={0}
+                      step={1}
+                      className="h-11 bg-background/55"
+                      value={String(draft.x)}
+                      onValueChange={(value) => dispatchDraft({ type: "x", value })}
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <Label htmlFor="strategy-y">MA5 百分比偏移</Label>
+                    <Input
+                      id="strategy-y"
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      className="h-11 bg-background/55"
+                      value={String(draft.y)}
+                      onValueChange={(value) => dispatchDraft({ type: "y", value })}
+                    />
+                  </div>
                 </div>
               </section>
 
-              <fieldset>
-                <legend className="text-sm font-semibold">主策略</legend>
-                <RadioGroup
-                  className="mt-3 gap-2"
-                  value={draft.strategyId}
-                  onValueChange={(value) => dispatchDraft({ type: "strategy", value: value as StrategyId })}
-                >
-                  {strategyOptions.map((option) => {
-                    const selected = draft.strategyId === option.id;
-                    const itemId = `strategy-${option.id}`;
-
-                    return (
-                      <div
-                        key={option.id}
-                        className={cn(
-                          "flex gap-3 rounded-lg border bg-background/45 p-3 transition-[background-color,border-color,box-shadow]",
-                          selected
-                            ? "border-ring bg-secondary/70 shadow-[0_10px_34px_rgba(0,0,0,0.16)] ring-2 ring-ring/25"
-                            : "hover:border-border hover:bg-accent/60",
-                        )}
-                      >
-                        <RadioGroupItem
-                          id={itemId}
-                          value={option.id}
-                          className="mt-0.5 size-5"
-                        />
-                        <Label
-                          htmlFor={itemId}
-                          className="min-w-0 flex-1 cursor-pointer flex-col items-start gap-1 leading-normal"
-                        >
-                          <span className="block text-sm font-medium text-foreground">
-                            {option.label}
-                          </span>
-                          <span className="block text-sm font-normal text-muted-foreground text-pretty">
-                            {option.description}
-                          </span>
-                        </Label>
-                      </div>
-                    );
-                  })}
-                </RadioGroup>
-              </fieldset>
-
               <section>
-                <h3 className="text-sm font-semibold">规则说明</h3>
-                <blockquote className="mt-3 rounded-lg bg-background/50 px-4 py-3 text-sm leading-6 text-muted-foreground">
-                  冲高：下一交易日最高价突破 P；回落：收盘价低于 P；站上 5 日线：收盘价高于 MA5 指定比例；区间内：收盘价位于基准日最高价和最低价之间。
-                </blockquote>
+                <h3 className="text-sm font-semibold">规则开关</h3>
+                <div className="mt-3 grid gap-2">
+                  <StrategyRuleSwitch
+                    id="strategy-rule2"
+                    label="规则 2：前日冲高回落"
+                    checked={draft.rule2Enabled}
+                    onCheckedChange={(value) => dispatchDraft({ type: "rule2", value })}
+                  />
+                  <StrategyRuleSwitch
+                    id="strategy-rule3"
+                    label="规则 3：MA5 区间确认"
+                    checked={draft.rule3Enabled}
+                    onCheckedChange={(value) => dispatchDraft({ type: "rule3", value })}
+                  />
+                </div>
               </section>
 
               <section>
                 <h3 className="text-sm font-semibold">策略预览</h3>
                 <p className="mt-3 rounded-lg bg-background/50 px-4 py-3 text-sm leading-6 text-foreground text-pretty">
-                  当前策略会筛选：{createStrategyPreview(draft)}
+                  当前配置会使用 X={draft.x}，{draft.rule2Enabled ? "启用" : "停用"}冲高回落规则，
+                  {draft.rule3Enabled ? `启用 MA5 区间规则，偏移 ${draft.y}%` : "停用 MA5 区间规则"}。
                 </p>
               </section>
             </div>
 
             <Separator />
             <DialogFooter className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                className="bg-background/55 transition-transform active:scale-[0.96]"
-                onClick={() => dispatchDraft({ type: "restore-default" })}
-              >
-                恢复默认
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-background/55 transition-transform active:scale-[0.96]"
+                  onClick={() => dispatchDraft({ type: "restore-default" })}
+                >
+                  <Plus data-icon="inline-start" />
+                  新建配置
+                </Button>
+                {draft.id && onDelete ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-background/55 text-destructive transition-transform hover:text-destructive active:scale-[0.96]"
+                    disabled={deletePendingId === draft.id}
+                    onClick={() => void deleteStrategy()}
+                  >
+                    {deletePendingId === draft.id ? (
+                      <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <Trash2 data-icon="inline-start" />
+                    )}
+                    删除
+                  </Button>
+                ) : null}
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <DialogClose
                   render={
@@ -263,8 +289,9 @@ export function StrategySwitchButton({
                 >
                   取消
                 </DialogClose>
-                <Button type="submit" className="transition-transform active:scale-[0.96]">
-                  保存为主策略
+                <Button type="submit" className="transition-transform active:scale-[0.96]" disabled={isSaving}>
+                  {isSaving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
+                  保存配置
                 </Button>
               </div>
             </DialogFooter>
@@ -275,49 +302,23 @@ export function StrategySwitchButton({
   );
 }
 
-function StrategyComboboxField({
+function StrategyRuleSwitch({
+  id,
   label,
-  value,
-  options,
-  onChange,
+  checked,
+  onCheckedChange,
 }: {
+  id: string;
   label: string;
-  value: string;
-  options: readonly { id: string; label: string }[];
-  onChange: (value: string) => void;
+  checked: boolean;
+  onCheckedChange: (value: boolean) => void;
 }) {
-  const comboboxItems = options.map((option) => option.id);
-
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <Label>{label}</Label>
-      <Combobox
-        items={comboboxItems}
-        value={value}
-        inputValue={getOptionLabel(options, value)}
-        itemToStringLabel={(item) => getOptionLabel(options, item)}
-        onInputValueChange={(nextValue) => {
-          const matchedOption = options.find((option) => option.label === nextValue);
-          onChange(matchedOption?.id ?? nextValue);
-        }}
-        onValueChange={(nextValue) => {
-          if (typeof nextValue === "string") {
-            onChange(nextValue);
-          }
-        }}
-      >
-        <ComboboxInput className="h-11 w-full bg-background/55" showClear />
-        <ComboboxContent>
-          <ComboboxList>
-            {(item: string) => (
-              <ComboboxItem key={item} value={item}>
-                {getOptionLabel(options, item)}
-              </ComboboxItem>
-            )}
-          </ComboboxList>
-          <ComboboxEmpty>无匹配，可直接输入</ComboboxEmpty>
-        </ComboboxContent>
-      </Combobox>
+    <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/45 p-3">
+      <Label htmlFor={id} className="min-w-0 flex-1 text-sm font-medium">
+        {label}
+      </Label>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
@@ -335,47 +336,48 @@ function strategyDraftReducer(
       return { ...state, name: action.value };
     case "enabled":
       return { ...state, enabled: action.value };
-    case "base-date":
-      return { ...state, baseDate: action.value };
-    case "limit-price":
-      return { ...state, limitPrice: action.value };
-    case "ma5-ratio":
-      return { ...state, ma5Ratio: action.value };
-    case "strategy":
-      return { ...state, strategyId: action.value };
+    case "rule2":
+      return { ...state, rule2Enabled: action.value };
+    case "rule3":
+      return { ...state, rule3Enabled: action.value };
+    case "x":
+      return { ...state, x: parseNumberInput(action.value, state.x) };
+    case "y":
+      return { ...state, y: parseNumberInput(action.value, state.y) };
   }
 
   return state;
 }
 
-function getStrategyOption(strategyId: StrategyId) {
-  return strategyOptions.find((option) => option.id === strategyId) ?? strategyOptions[0];
+function normalizeStrategyConfig(config: StrategyConfig): StrategyConfig {
+  return {
+    ...config,
+    name: config.name.trim() || defaultStrategyConfig.name,
+    x: Math.max(0, Math.round(config.x)),
+    y: Math.max(0, config.y),
+  };
 }
 
-function createStrategyPreview(config: StrategyConfig) {
-  const baseDate = getOptionLabel(strategyBaseDateOptions, config.baseDate);
-  const limitPriceLabel = getOptionLabel(strategyLimitPriceOptions, config.limitPrice);
-  const limitPrice = config.limitPrice === "auto" || limitPriceLabel === "自动识别"
-    ? "自动识别的涨停价"
-    : limitPriceLabel.includes("涨停") || limitPriceLabel.includes("价")
-      ? limitPriceLabel
-      : `${limitPriceLabel}涨停价`;
-  const ma5Ratio = getOptionLabel(strategyMa5RatioOptions, config.ma5Ratio);
+function parseNumberInput(value: string, fallback: number) {
+  const nextValue = Number(value);
 
-  if (config.strategyId === "limit-up") {
-    return `${baseDate}出现涨停的股票。`;
-  }
-
-  if (config.strategyId === "limit-up-break-retrace") {
-    return `${baseDate}出现涨停的股票；下一交易日最高价突破${limitPrice}后回落。`;
-  }
-
-  return `${baseDate}出现涨停的股票；下一交易日最高价突破${limitPrice}后回落；再下一交易日收盘价高于 5 日线 ${ma5Ratio}，并且收盘价位于${baseDate}的最高价和最低价之间。`;
+  return Number.isFinite(nextValue) ? nextValue : fallback;
 }
 
-function getOptionLabel(
-  options: readonly { id: string; label: string }[],
-  id: string,
-) {
-  return options.find((option) => option.id === id)?.label ?? id;
+function isSameStrategyConfig(left: StrategyConfig, right: StrategyConfig) {
+  if (left.id && right.id) {
+    return left.id === right.id;
+  }
+
+  return left.name === right.name;
+}
+
+function getStrategyRulesLabel(config: StrategyConfig) {
+  const rules = [
+    "规则1",
+    config.rule2Enabled ? "规则2" : null,
+    config.rule3Enabled ? "规则3" : null,
+  ].filter(Boolean).join("+");
+
+  return `X=${config.x} · Y=${config.y}% · ${rules}`;
 }

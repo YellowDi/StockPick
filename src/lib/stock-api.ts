@@ -47,6 +47,7 @@ export type DailyKline = {
 };
 
 export type StrategyScanRequest = {
+  code?: string;
   config_id?: number;
   x?: number;
   y?: number;
@@ -71,6 +72,50 @@ export type StrategyScanResult = {
   x_date?: string;
   x_high?: number;
   x_low?: number;
+};
+
+export type StrategyConfigDto = {
+  id?: number;
+  name?: string;
+  enabled?: boolean;
+  rule2_enabled?: boolean;
+  rule3_enabled?: boolean;
+  x?: number;
+  y?: number;
+};
+
+export type SelectionBatch = {
+  id: number;
+  name: string;
+  created_at?: string;
+  strategy_config_id?: number;
+  total?: number;
+};
+
+export type SelectionRecord = StrategyScanResult & {
+  id?: number;
+  batch_id?: number;
+  created_at?: string;
+};
+
+export type SelectionBatchListRequest = {
+  start_time?: string;
+  end_time?: string;
+  page_num?: number;
+  page_size?: number;
+};
+
+export type SelectionRecordListRequest = {
+  batch_id: number;
+  page_num?: number;
+  page_size?: number;
+};
+
+export type PagedResponse<T> = {
+  list: T[];
+  page_num: number;
+  page_size: number;
+  total: number;
 };
 
 export async function listStocks(
@@ -257,12 +302,16 @@ export async function scanStrategy(
 ): Promise<StrategyScanResult[]> {
   let response: Response;
   const token = getStoredAuthToken()?.trim();
+  const url = new URL(`${apiBaseUrl}/strategy`);
+
+  if (request.code?.trim()) {
+    url.searchParams.set("code", request.code.trim());
+  }
 
   try {
-    response = await fetch(`${apiBaseUrl}/strategy/scan`, {
+    response = await fetch(url, {
       method: "POST",
-      headers: createJsonAuthHeaders(token),
-      body: JSON.stringify(createStrategyScanRequestBody(request)),
+      headers: createAuthHeaders(token),
       signal,
     });
   } catch (error) {
@@ -292,6 +341,348 @@ export async function scanStrategy(
   }
 
   return getStrategyScanResults(payload);
+}
+
+export async function listStrategyConfigs(signal?: AbortSignal): Promise<StrategyConfigDto[]> {
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/strategy/config`, {
+      method: "POST",
+      headers: createAuthHeaders(token),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    throw new Error("无法连接策略配置接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "策略配置加载失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "策略配置加载失败。", response.status);
+  }
+
+  return getStrategyConfigs(payload);
+}
+
+export async function createStrategyConfig(config: StrategyConfigDto): Promise<StrategyConfigDto> {
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/strategy/config/create`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify(createStrategyConfigRequestBody(config)),
+    });
+  } catch {
+    throw new Error("无法连接创建策略配置接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "创建策略配置失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "创建策略配置失败。", response.status);
+  }
+
+  return getStrategyConfig(payload) ?? config;
+}
+
+export async function updateStrategyConfig(id: number, config: StrategyConfigDto): Promise<void> {
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("策略配置ID无效。");
+  }
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/strategy/config/${id}/update`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify(createStrategyConfigRequestBody(config)),
+    });
+  } catch {
+    throw new Error("无法连接更新策略配置接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "更新策略配置失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "更新策略配置失败。", response.status);
+  }
+}
+
+export async function deleteStrategyConfig(id: number): Promise<void> {
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("策略配置ID无效。");
+  }
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/strategy/config/${id}/delete`, {
+      method: "POST",
+      headers: createAuthHeaders(token),
+    });
+  } catch {
+    throw new Error("无法连接删除策略配置接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "删除策略配置失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "删除策略配置失败。", response.status);
+  }
+}
+
+export async function addSelection(results: StrategyScanResult[]): Promise<void> {
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/selection/add`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({ results }),
+    });
+  } catch {
+    throw new Error("无法连接添加选股批次接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "添加选股批次失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "添加选股批次失败。", response.status);
+  }
+}
+
+export async function deleteSelectionBatch(id: number): Promise<void> {
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("选股批次ID无效。");
+  }
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/selection/batch/delete`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    throw new Error("无法连接删除选股批次接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "删除选股批次失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "删除选股批次失败。", response.status);
+  }
+}
+
+export async function listSelectionBatches(
+  request: SelectionBatchListRequest = {},
+  signal?: AbortSignal,
+): Promise<PagedResponse<SelectionBatch>> {
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/selection/batch/list`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify(createSelectionBatchListRequestBody(request)),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    throw new Error("无法连接选股批次列表接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "选股批次列表加载失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "选股批次列表加载失败。", response.status);
+  }
+
+  return getSelectionBatchPage(payload);
+}
+
+export async function listSelectionRecords(
+  request: SelectionRecordListRequest,
+  signal?: AbortSignal,
+): Promise<PagedResponse<SelectionRecord>> {
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/selection/record/list`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify(createSelectionRecordListRequestBody(request)),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    throw new Error("无法连接选股记录列表接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "选股记录列表加载失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "选股记录列表加载失败。", response.status);
+  }
+
+  return getSelectionRecordPage(payload);
+}
+
+export async function deleteSelectionRecords(ids: number[]): Promise<void> {
+  const recordIds = ids.filter((id) => Number.isFinite(id) && id > 0);
+
+  if (recordIds.length === 0) {
+    throw new Error("选股记录ID无效。");
+  }
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/selection/record/delete`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({ ids: recordIds }),
+    });
+  } catch {
+    throw new Error("无法连接删除选股记录接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "删除选股记录失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "删除选股记录失败。", response.status);
+  }
 }
 
 async function readJson(response: Response) {
@@ -429,6 +820,135 @@ function getStrategyScanResults(payload: unknown) {
   });
 }
 
+function getStrategyConfigs(payload: unknown) {
+  return getPayloadCollection(payload).flatMap((item) => {
+    const config = getStrategyConfig(item);
+
+    return config ? [config] : [];
+  });
+}
+
+function getStrategyConfig(payload: unknown): StrategyConfigDto | null {
+  const item = unwrapDataRecord(payload);
+
+  if (!item) {
+    return null;
+  }
+
+  const config: StrategyConfigDto = {};
+
+  assignConfigNumberField(config, item, "id");
+  assignConfigNumberField(config, item, "x");
+  assignConfigNumberField(config, item, "y");
+  assignConfigStringField(config, item, "name");
+  assignConfigBooleanField(config, item, "enabled");
+  assignConfigBooleanField(config, item, "rule2_enabled");
+  assignConfigBooleanField(config, item, "rule3_enabled");
+
+  return Object.keys(config).length > 0 ? config : null;
+}
+
+function getSelectionBatchPage(payload: unknown): PagedResponse<SelectionBatch> {
+  const pageSource = getPageSource(payload);
+  const rawList = Array.isArray(pageSource.list) ? pageSource.list : [];
+
+  return {
+    list: rawList.flatMap((item) => {
+      const batch = getSelectionBatch(item);
+
+      return batch ? [batch] : [];
+    }),
+    page_num: getNumber(pageSource, "page_num") ?? 1,
+    page_size: getNumber(pageSource, "page_size") ?? rawList.length,
+    total: getNumber(pageSource, "total") ?? rawList.length,
+  };
+}
+
+function getSelectionRecordPage(payload: unknown): PagedResponse<SelectionRecord> {
+  const pageSource = getPageSource(payload);
+  const rawList = Array.isArray(pageSource.list) ? pageSource.list : [];
+
+  return {
+    list: rawList.flatMap((item) => {
+      const record = getSelectionRecord(item);
+
+      return record ? [record] : [];
+    }),
+    page_num: getNumber(pageSource, "page_num") ?? 1,
+    page_size: getNumber(pageSource, "page_size") ?? rawList.length,
+    total: getNumber(pageSource, "total") ?? rawList.length,
+  };
+}
+
+function getSelectionBatch(payload: unknown): SelectionBatch | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const id = getNumber(payload, "id") ?? getNumber(payload, "batch_id");
+
+  if (!id || id <= 0) {
+    return null;
+  }
+
+  const name = getString(payload, "name")
+    ?? getString(payload, "batch_name")
+    ?? getString(payload, "title")
+    ?? getString(payload, "strategy_name")
+    ?? `已选列表 #${id}`;
+  const batch: SelectionBatch = {
+    id,
+    name,
+  };
+  const createdAt = getString(payload, "created_at") ?? getString(payload, "create_time");
+  const strategyConfigId = getNumber(payload, "strategy_config_id") ?? getNumber(payload, "config_id");
+  const total = getNumber(payload, "total") ?? getNumber(payload, "record_count") ?? getNumber(payload, "count");
+
+  if (createdAt) {
+    batch.created_at = createdAt;
+  }
+
+  if (strategyConfigId) {
+    batch.strategy_config_id = strategyConfigId;
+  }
+
+  if (typeof total === "number") {
+    batch.total = total;
+  }
+
+  return batch;
+}
+
+function getSelectionRecord(payload: unknown): SelectionRecord | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const result = getStrategyScanResults(payload)[0] as SelectionRecord | undefined;
+
+  if (!result) {
+    return null;
+  }
+
+  const id = getNumber(payload, "id");
+  const batchId = getNumber(payload, "batch_id");
+  const createdAt = getString(payload, "created_at") ?? getString(payload, "create_time");
+
+  if (id) {
+    result.id = id;
+  }
+
+  if (batchId) {
+    result.batch_id = batchId;
+  }
+
+  if (createdAt) {
+    result.created_at = createdAt;
+  }
+
+  return result;
+}
+
 function getDataList(payload: unknown) {
   return Array.isArray(payload)
     ? payload
@@ -453,22 +973,97 @@ function getPayloadList(payload: unknown) {
   return isRecord(payload) ? [payload] : [];
 }
 
-function createStrategyScanRequestBody(request: StrategyScanRequest) {
-  const body: StrategyScanRequest = {};
-
-  if (typeof request.config_id === "number" && Number.isFinite(request.config_id)) {
-    body.config_id = request.config_id;
+function getPayloadCollection(payload: unknown) {
+  if (Array.isArray(payload)) {
+    return payload;
   }
 
-  if (typeof request.x === "number" && Number.isFinite(request.x)) {
-    body.x = request.x;
+  if (isRecord(payload) && Array.isArray(payload.data)) {
+    return payload.data;
   }
 
-  if (typeof request.y === "number" && Number.isFinite(request.y)) {
-    body.y = request.y;
+  if (isRecord(payload) && isRecord(payload.data) && Array.isArray(payload.data.list)) {
+    return payload.data.list;
+  }
+
+  if (isRecord(payload) && Array.isArray(payload.list)) {
+    return payload.list;
+  }
+
+  if (isRecord(payload) && isRecord(payload.data)) {
+    return [payload.data];
+  }
+
+  return isRecord(payload) ? [payload] : [];
+}
+
+function getPageSource(payload: unknown): Record<string, unknown> {
+  if (isRecord(payload) && isRecord(payload.data)) {
+    return payload.data;
+  }
+
+  return isRecord(payload) ? payload : {};
+}
+
+function unwrapDataRecord(payload: unknown) {
+  if (isRecord(payload) && isRecord(payload.data) && !Array.isArray(payload.data.list)) {
+    return payload.data;
+  }
+
+  return isRecord(payload) ? payload : null;
+}
+
+function createStrategyConfigRequestBody(config: StrategyConfigDto) {
+  const body: StrategyConfigDto = {};
+
+  if (typeof config.id === "number" && Number.isFinite(config.id)) {
+    body.id = config.id;
+  }
+
+  if (typeof config.name === "string") {
+    body.name = config.name.trim();
+  }
+
+  if (typeof config.enabled === "boolean") {
+    body.enabled = config.enabled;
+  }
+
+  if (typeof config.rule2_enabled === "boolean") {
+    body.rule2_enabled = config.rule2_enabled;
+  }
+
+  if (typeof config.rule3_enabled === "boolean") {
+    body.rule3_enabled = config.rule3_enabled;
+  }
+
+  if (typeof config.x === "number" && Number.isFinite(config.x)) {
+    body.x = config.x;
+  }
+
+  if (typeof config.y === "number" && Number.isFinite(config.y)) {
+    body.y = config.y;
   }
 
   return body;
+}
+
+function createSelectionBatchListRequestBody(request: SelectionBatchListRequest) {
+  const body = {
+    page_num: request.page_num ?? 1,
+    page_size: request.page_size ?? 20,
+    start_time: request.start_time ?? "",
+    end_time: request.end_time ?? "",
+  };
+
+  return body;
+}
+
+function createSelectionRecordListRequestBody(request: SelectionRecordListRequest) {
+  return {
+    batch_id: request.batch_id,
+    page_num: request.page_num ?? 1,
+    page_size: request.page_size ?? 200,
+  };
 }
 
 function assignStringField(
@@ -515,6 +1110,42 @@ function assignScanNumberField(
   }
 }
 
+function assignConfigStringField(
+  target: StrategyConfigDto,
+  source: Record<string, unknown>,
+  key: "name",
+) {
+  const value = source[key];
+
+  if (typeof value === "string" && value.trim()) {
+    target[key] = value.trim();
+  }
+}
+
+function assignConfigNumberField(
+  target: StrategyConfigDto,
+  source: Record<string, unknown>,
+  key: "id" | "x" | "y",
+) {
+  const value = source[key];
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    target[key] = value;
+  }
+}
+
+function assignConfigBooleanField(
+  target: StrategyConfigDto,
+  source: Record<string, unknown>,
+  key: "enabled" | "rule2_enabled" | "rule3_enabled",
+) {
+  const value = source[key];
+
+  if (typeof value === "boolean") {
+    target[key] = value;
+  }
+}
+
 function assignNumberField(
   target: DailyKline,
   source: Record<string, unknown>,
@@ -535,6 +1166,18 @@ function assignNumberField(
   if (typeof value === "number" && Number.isFinite(value)) {
     target[key] = value;
   }
+}
+
+function getString(source: Record<string, unknown>, key: string) {
+  const value = source[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getNumber(source: Record<string, unknown>, key: string) {
+  const value = source[key];
+
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function createAuthHeaders(token: string | null | undefined) {

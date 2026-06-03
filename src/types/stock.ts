@@ -1,3 +1,5 @@
+import type { StrategyScanResult } from "@/lib/stock-api";
+
 export type StockDataStatus = "成功" | "无数据";
 
 export type StockListKey = "initial" | "selected" | "whitelist" | "blacklist";
@@ -26,4 +28,7 @@ export interface StockCandidate {
   list: StockListKey;
   records: StockDailyRecord[];
   filterId?: number;
+  selectionBatchId?: number;
+  selectionRecordId?: number;
+  strategyResult?: StrategyScanResult;
 }
