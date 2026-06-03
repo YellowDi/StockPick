@@ -6,14 +6,12 @@ import {
   useState,
 } from "react";
 import {
-  Ban,
   ChevronDown,
   CheckCircle2,
   Database,
   ListFilter,
   LogOut,
   Moon,
-  Plus,
   RefreshCcw,
   ShieldCheck,
   ShieldX,
@@ -74,6 +72,11 @@ type DraggedStock = {
   fromList: StockListKey;
 };
 
+type ChartSelection = {
+  code: string;
+  listKey: StockListKey;
+};
+
 const listIcons = {
   initial: ListFilter,
   selected: CheckCircle2,
@@ -94,13 +97,13 @@ export default function StockDashboard({
 }: StockDashboardProps) {
   const stockBoardRef = useRef<HTMLDivElement>(null);
   const [stockGroups, setStockGroups] = useState(mockStockGroups);
-  const [selectedChartCode, setSelectedChartCode] = useState<string | null>(null);
+  const [chartSelection, setChartSelection] = useState<ChartSelection | null>(null);
   const [draggedStock, setDraggedStock] = useState<DraggedStock | null>(null);
   const [dropTarget, setDropTarget] = useState<StockListKey | null>(null);
   const [mobileListKey, setMobileListKey] = useState<StockListKey>("selected");
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>(defaultStrategyConfig);
-  const selectedStock = selectedChartCode
-    ? stockGroups.selected.find((stock) => stock.code === selectedChartCode) ?? null
+  const selectedStock = chartSelection
+    ? stockGroups[chartSelection.listKey].find((stock) => stock.code === chartSelection.code) ?? null
     : null;
   const selectedStockCodes = useMemo(
     () => new Set(stockGroups.selected.map((stock) => stock.code)),
@@ -117,14 +120,14 @@ export default function StockDashboard({
     });
   }
 
-  function toggleSelectedStock(code: string) {
-    if (selectedChartCode === code) {
-      setSelectedChartCode(null);
+  function toggleSelectedStock(code: string, listKey: StockListKey) {
+    if (chartSelection?.code === code && chartSelection.listKey === listKey) {
+      setChartSelection(null);
       scrollBoardIntoViewOnMobile();
       return;
     }
 
-    setSelectedChartCode(code);
+    setChartSelection({ code, listKey });
     scrollBoardIntoViewOnMobile();
   }
 
@@ -197,7 +200,9 @@ export default function StockDashboard({
             ],
       };
     });
-    setSelectedChartCode((code) => (code === stock.code ? null : code));
+    setChartSelection((selection) => (
+      selection?.listKey === "selected" && selection.code === stock.code ? null : selection
+    ));
   }
 
   function handleStockDragStart(
@@ -252,10 +257,8 @@ export default function StockDashboard({
   }
 
   const sharedStockListProps = {
-    selectedCode: selectedChartCode,
-    selectedStockCodes,
+    chartSelection,
     onToggleChart: toggleSelectedStock,
-    onAddToSelected: addToSelected,
   };
 
   return (
@@ -336,7 +339,7 @@ function StockBoard({
 
   return (
     <ActiveStockBoard
-      key={stock.code}
+      key={`${stock.list}:${stock.code}`}
       stock={stock}
       themeMode={themeMode}
       onThemeToggle={onThemeToggle}
@@ -827,23 +830,18 @@ function ChartRangeControls({
 function MobileStockTabs({
   activeListKey,
   stockGroups,
-  selectedCode,
-  selectedStockCodes,
+  chartSelection,
   onActiveListChange,
   onToggleChart,
-  onAddToSelected,
 }: {
   activeListKey: StockListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
-  selectedCode: string | null;
-  selectedStockCodes: Set<string>;
+  chartSelection: ChartSelection | null;
   onActiveListChange: (key: StockListKey) => void;
-  onToggleChart: (code: string) => void;
-  onAddToSelected: (stock: StockCandidate) => void;
+  onToggleChart: (code: string, listKey: StockListKey) => void;
 }) {
   const stocks = stockGroups[activeListKey];
   const meta = stockListMeta[activeListKey];
-  const opensChart = activeListKey === "selected";
 
   return (
     <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
@@ -877,17 +875,9 @@ function MobileStockTabs({
             <StockListButton
               key={stock.code}
               stock={stock}
-              active={opensChart && stock.code === selectedCode}
-              action={opensChart ? "open" : selectedStockCodes.has(stock.code) ? "added" : "add"}
+              active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
               draggable={false}
-              onClick={() => {
-                if (opensChart) {
-                  onToggleChart(stock.code);
-                  return;
-                }
-
-                onAddToSelected(stock);
-              }}
+              onClick={() => onToggleChart(stock.code, activeListKey)}
             />
           ))
         ) : (
@@ -1231,12 +1221,10 @@ function getRealtimeLiveStart(now: number) {
 function StockColumn({
   listKey,
   stocks,
-  selectedCode,
-  selectedStockCodes,
+  chartSelection,
   canDrop,
   isDropTarget,
   onToggleChart,
-  onAddToSelected,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -1245,12 +1233,10 @@ function StockColumn({
 }: {
   listKey: StockListKey;
   stocks: StockCandidate[];
-  selectedCode: string | null;
-  selectedStockCodes: Set<string>;
+  chartSelection: ChartSelection | null;
   canDrop: boolean;
   isDropTarget: boolean;
-  onToggleChart: (code: string) => void;
-  onAddToSelected: (stock: StockCandidate) => void;
+  onToggleChart: (code: string, listKey: StockListKey) => void;
   onDragStart: (
     stock: StockCandidate,
     fromList: StockListKey,
@@ -1263,7 +1249,6 @@ function StockColumn({
 }) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
-  const opensChart = listKey === "selected";
 
   return (
     <Card
@@ -1290,18 +1275,10 @@ function StockColumn({
           <StockListButton
             key={stock.code}
             stock={stock}
-            active={opensChart && stock.code === selectedCode}
-            action={opensChart ? "open" : selectedStockCodes.has(stock.code) ? "added" : "add"}
+            active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
             onDragStart={(event) => onDragStart(stock, listKey, event)}
             onDragEnd={onDragEnd}
-            onClick={() => {
-              if (opensChart) {
-                onToggleChart(stock.code);
-                return;
-              }
-
-              onAddToSelected(stock);
-            }}
+            onClick={() => onToggleChart(stock.code, listKey)}
           />
         ))}
       </CardContent>
@@ -1312,7 +1289,6 @@ function StockColumn({
 function StockListButton({
   stock,
   active,
-  action,
   draggable = true,
   onDragStart,
   onDragEnd,
@@ -1320,18 +1296,11 @@ function StockListButton({
 }: {
   stock: StockCandidate;
   active: boolean;
-  action: "open" | "add" | "added";
   draggable?: boolean;
   onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
   onDragEnd?: () => void;
   onClick: () => void;
 }) {
-  const latest = latestSuccessRecord(stock);
-  const previous = previousSuccessRecord(stock);
-  const changePct = latest && previous ? ((latest.close - previous.close) / previous.close) * 100 : 0;
-  const positive = changePct >= 0;
-  const disabled = action === "added";
-
   return (
     <Button
       type="button"
@@ -1341,44 +1310,17 @@ function StockListButton({
         active
           ? "border-ring bg-secondary shadow-[0_10px_32px_rgba(0,0,0,0.18)] ring-2 ring-ring/35"
           : "border-transparent bg-background/40 hover:border-border",
-        draggable && !disabled && "cursor-grab active:cursor-grabbing",
+        draggable && "cursor-grab active:cursor-grabbing",
       )}
       aria-pressed={active}
-      disabled={disabled}
-      draggable={draggable && !disabled}
+      draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
       onClick={onClick}
     >
-      <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="truncate font-medium">{stock.name}</span>
-          <span className="truncate text-xs tabular-nums text-muted-foreground">{stock.code}</span>
-        </span>
-        {latest ? (
-          <span className="flex shrink-0 flex-col items-end gap-1">
-            <span className="text-sm font-semibold tabular-nums text-foreground">{latest.close.toFixed(2)}</span>
-            <span className={cn("text-xs tabular-nums", positive ? "text-stock-up" : "text-stock-down")}>
-              {formatSigned(changePct)}%
-            </span>
-          </span>
-        ) : (
-          <span className="flex shrink-0 items-center gap-1 text-xs text-destructive">
-            <Ban className="size-3" />
-            无数据
-          </span>
-        )}
-      </span>
-      <span
-        className={cn(
-          "ml-2 flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground",
-          active && "border-ring/60 bg-background/35 text-foreground",
-          action === "add" && "border-border/80 bg-background/35",
-          action === "added" && "border-transparent bg-secondary/70 text-secondary-foreground",
-        )}
-      >
-        {action === "add" ? <Plus className="size-3" /> : null}
-        {active ? "显示中" : action === "added" ? "已选" : action === "add" ? "加入" : "图表"}
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="truncate font-medium">{stock.name}</span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
       </span>
     </Button>
   );
@@ -1394,14 +1336,6 @@ function EmptyChart({ error }: { error?: string }) {
       </div>
     </div>
   );
-}
-
-function latestSuccessRecord(stock: StockCandidate) {
-  return stock.records.filter((record) => record.status === "成功").at(-1);
-}
-
-function previousSuccessRecord(stock: StockCandidate) {
-  return stock.records.filter((record) => record.status === "成功").at(-2);
 }
 
 function createChartView(
