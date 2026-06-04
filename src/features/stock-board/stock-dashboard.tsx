@@ -1820,20 +1820,6 @@ function useStockBoardModel(
   const momentum: "up" | "down" | "flat" = change > 0 ? "up" : change < 0 ? "down" : "flat";
   const selectedRangeSecs = getDailyKWindowSecs(sourceRecords);
   const positive = change >= 0;
-  const trend = !latest
-    ? "暂无行情"
-    : change > 0
-      ? "多头走强"
-      : change < 0
-        ? "回落整理"
-        : "横盘震荡";
-  const strength = !latest
-    ? "--"
-    : Math.abs(changePct) >= 2
-      ? "强"
-      : Math.abs(changePct) >= 1
-        ? "中"
-        : "弱";
 
   return {
     chartStock,
@@ -1848,8 +1834,6 @@ function useStockBoardModel(
     momentum,
     selectedRangeSecs,
     positive,
-    trend,
-    strength,
   };
 }
 
@@ -2216,40 +2200,6 @@ function AnimatedDigits({ value }: { value: string }) {
         </span>
       ))}
     </span>
-  );
-}
-
-function JudgementMetricCard({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: "up" | "down";
-}) {
-  return (
-    <Card
-      className={cn(
-        "gap-2 rounded-lg bg-card/72 p-4 shadow-sm backdrop-blur-xl",
-        tone === "up" && "border-stock-up/25 bg-stock-up/5",
-        tone === "down" && "border-stock-down/25 bg-stock-down/5",
-      )}
-    >
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "min-w-0 truncate text-2xl font-semibold tabular-nums",
-          tone === "up" && "text-stock-up",
-          tone === "down" && "text-stock-down",
-        )}
-      >
-        {value}
-      </div>
-      <div className="min-w-0 truncate text-xs text-muted-foreground">{detail}</div>
-    </Card>
   );
 }
 
@@ -2823,8 +2773,6 @@ function DesktopActiveStockBoard({
     momentum,
     selectedRangeSecs,
     positive,
-    trend,
-    strength,
   } = useStockBoardModel(stock, themeMode);
 
   return (
@@ -2855,12 +2803,6 @@ function DesktopActiveStockBoard({
         />
         <DesktopStockInfoPanel
           sourceRecords={sourceRecords}
-          latest={latest}
-          change={change}
-          changePct={changePct}
-          positive={positive}
-          trend={trend}
-          strength={strength}
         />
       </div>
     </section>
@@ -3084,77 +3026,12 @@ function DesktopStockChartPanel({
 
 function DesktopStockInfoPanel({
   sourceRecords,
-  latest,
-  change,
-  changePct,
-  positive,
-  trend,
-  strength,
 }: {
   sourceRecords: StockDailyRecord[];
-  latest: StockDailyRecord | undefined;
-  change: number;
-  changePct: number;
-  positive: boolean;
-  trend: string;
-  strength: string;
 }) {
-  const visibleRecords = sourceRecords.slice(-dailyKVisibleDays);
-  const firstVisibleRecord = visibleRecords[0];
-  const latestVisibleRecord = visibleRecords.at(-1);
-  const rangeChangePct = firstVisibleRecord && latestVisibleRecord && firstVisibleRecord.close !== 0
-    ? ((latestVisibleRecord.close - firstVisibleRecord.close) / firstVisibleRecord.close) * 100
-    : null;
-  const intradayAmplitudePct = latest && latest.close !== 0
-    ? ((latest.high - latest.low) / latest.close) * 100
-    : null;
-  const limitUpDistancePct = latest?.limit_up && latest.close !== 0
-    ? ((latest.limit_up - latest.close) / latest.close) * 100
-    : null;
-  const limitHitCount = visibleRecords.filter(hasTouchedLimitUp).length;
-
   return (
     <section className="w-full pb-6 pt-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <JudgementMetricCard
-          label="趋势强度"
-          value={latest ? `${trend} / ${strength}` : "--"}
-          detail={latest ? `涨跌 ${formatSigned(change)} / ${formatSigned(changePct)}%` : "暂无成功行情"}
-          tone={latest ? positive ? "up" : "down" : undefined}
-        />
-        <JudgementMetricCard
-          label="日内振幅"
-          value={intradayAmplitudePct === null ? "--" : formatPercent(intradayAmplitudePct)}
-          detail={latest ? `${formatPrice(latest.low)} - ${formatPrice(latest.high)}` : "暂无最高/最低价"}
-        />
-        <JudgementMetricCard
-          label="距涨停"
-          value={limitUpDistancePct === null ? "--" : formatPercent(limitUpDistancePct)}
-          detail={latest?.limit_up ? `涨停价 ${formatPrice(latest.limit_up)}` : "暂无涨停价"}
-          tone={limitUpDistancePct !== null && limitUpDistancePct <= 0 ? "up" : undefined}
-        />
-        <JudgementMetricCard
-          label={`近 ${visibleRecords.length || dailyKVisibleDays} 日收盘`}
-          value={rangeChangePct === null ? "--" : `${formatSigned(rangeChangePct)}%`}
-          detail={firstVisibleRecord && latestVisibleRecord ? `${firstVisibleRecord.date} 至 ${latestVisibleRecord.date}` : "暂无区间数据"}
-          tone={rangeChangePct === null ? undefined : rangeChangePct >= 0 ? "up" : "down"}
-        />
-        <JudgementMetricCard
-          label="触及涨停"
-          value={`${limitHitCount} 次`}
-          detail={`近 ${visibleRecords.length} 条成功记录`}
-          tone={limitHitCount > 0 ? "up" : undefined}
-        />
-        <JudgementMetricCard
-          label="成交活跃度"
-          value={latest ? formatAmount(latest.amount) : "--"}
-          detail={latest ? `成交量 ${formatVolume(latest.volume)}` : "暂无量额数据"}
-        />
-      </div>
-
-      <div className="mt-5 border-t border-border/60 pt-4">
-        <DailyKlineDetailSection records={sourceRecords} />
-      </div>
+      <DailyKlineDetailSection records={sourceRecords} />
     </section>
   );
 }
@@ -3546,13 +3423,6 @@ function StockDetailsPanel({
 function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
   return (
     <section>
-      <div className="mb-3 gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold">日 K 明细</h2>
-          <p className="mt-1 text-sm text-muted-foreground">当前股票日 K 原始字段</p>
-        </div>
-        <span className="text-xs text-muted-foreground">记录 {records.length}</span>
-      </div>
       {records.length > 0 ? (
         <Table aria-label="日 K 明细" variant="secondary">
           <Table.ScrollContainer>
@@ -5152,22 +5022,6 @@ function formatRawNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("zh-CN") : "--";
 }
 
-function formatVolume(volume: number) {
-  if (volume >= 100_000_000) {
-    return `${(volume / 100_000_000).toFixed(2)} 亿`;
-  }
-
-  return `${(volume / 10_000).toFixed(1)} 万`;
-}
-
-function formatAmount(amount: number) {
-  if (amount >= 100_000_000) {
-    return `${(amount / 100_000_000).toFixed(2)} 亿`;
-  }
-
-  return `${(amount / 10_000).toFixed(1)} 万`;
-}
-
 function getDailyKWindowSecs(records: StockDailyRecord[]) {
   const visibleRecords = records.slice(-dailyKVisibleDays);
 
@@ -5176,8 +5030,4 @@ function getDailyKWindowSecs(records: StockDailyRecord[]) {
   }
 
   return daySecs * dailyKVisibleDays;
-}
-
-function hasTouchedLimitUp(record: StockDailyRecord) {
-  return typeof record.limit_up === "number" && record.limit_up > 0 && record.high >= record.limit_up;
 }
