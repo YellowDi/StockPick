@@ -3473,7 +3473,7 @@ function StockDetailsPanel({
   return (
     <div
       id={id}
-      className="mt-4 rounded-lg border border-border/60 bg-background/35 p-3 backdrop-blur-xl"
+      className="mt-4"
     >
       <div className="grid gap-4">
         <section>
