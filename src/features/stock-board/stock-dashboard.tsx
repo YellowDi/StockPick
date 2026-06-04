@@ -2253,7 +2253,9 @@ function DesktopSelectionBatchAccordionItem({
     >
       <div className="flex min-w-0 items-center gap-1">
         <AccordionTrigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
-          <CheckCircle2 className="size-4 shrink-0 text-primary transition-colors" />
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary transition-colors">
+            <CheckCircle2 className="size-4" />
+          </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-sm font-medium leading-none">{batch.name}</span>
@@ -2284,7 +2286,7 @@ function DesktopSelectionBatchAccordionItem({
         panelClassName="min-h-0 flex flex-1 flex-col"
         className="flex !h-full min-h-0 flex-col pb-0"
       >
-        <div className="min-h-0 flex-1 pb-3 pl-7">
+        <div className="min-h-0 flex-1 pb-3 pl-10">
           {batch.error ? (
             <div className="flex h-full min-h-20 flex-col justify-center gap-1 px-1 text-left">
               <div className="text-sm font-medium text-destructive">记录加载失败</div>
@@ -2375,7 +2377,9 @@ function DesktopStockAccordionItem({
     >
       <div className="flex min-w-0 items-center gap-1">
         <AccordionTrigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
-          <Icon className="size-4 shrink-0 text-muted-foreground transition-colors group-hover/accordion-trigger:text-foreground" />
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/55 bg-background/65 text-muted-foreground transition-colors group-hover/accordion-trigger:border-border group-hover/accordion-trigger:bg-muted/55 group-hover/accordion-trigger:text-foreground">
+            <Icon className="size-4" />
+          </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-sm font-medium leading-none">{meta.label}</span>
@@ -2404,7 +2408,7 @@ function DesktopStockAccordionItem({
         panelClassName="min-h-0 flex flex-1 flex-col"
         className="flex !h-full min-h-0 flex-col pb-0"
       >
-        <div className="min-h-0 flex-1 pb-3 pl-7">
+        <div className="min-h-0 flex-1 pb-3 pl-10">
           {stocks.length > 0 ? (
             <ScrollArea className="h-full pr-2">
               <ItemGroup className="gap-2">
