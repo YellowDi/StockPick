@@ -4331,7 +4331,7 @@ function FilterListDialog({
         <Modal.Trigger className="hidden" />
         <Modal.Backdrop variant="blur">
           <Modal.Container size="lg" scroll="inside">
-            <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-4xl">
+            <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
               <Modal.CloseTrigger className="z-20" />
               <Modal.Header className="p-5 pr-12">
                 <div className="flex min-w-0 items-center gap-3">
@@ -4527,16 +4527,6 @@ function FilterListCurrentStocks({
 
   return (
     <section className="shrink-0 px-5 pb-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold">当前{meta.label}</h3>
-          <p className="mt-1 truncate text-xs text-muted-foreground">点击股票查看行情，使用右侧按钮删除</p>
-        </div>
-        <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
-          {stocks.length}
-        </Chip>
-      </div>
-
       {stocks.length > 0 ? (
         <ScrollShadow orientation="vertical" className="max-h-56 pr-2">
           <div className="flex w-full flex-col gap-2">
