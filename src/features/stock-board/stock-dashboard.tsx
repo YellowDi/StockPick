@@ -1,11 +1,6 @@
 import {
-  createContext,
-  type ComponentPropsWithoutRef,
   type FormEvent,
-  type Key,
-  type MouseEvent,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useReducer,
@@ -32,12 +27,15 @@ import {
   RiSunLine as Sun,
 } from "@remixicon/react";
 import {
+  Badge,
   Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  Disclosure,
+  DisclosureGroup,
   Input,
   Label,
   Modal,
@@ -118,132 +116,6 @@ const stockItemActionClassName = cn(
   "md:group-hover/stock-item:w-8 md:group-hover/stock-item:translate-x-0 md:group-hover/stock-item:opacity-100",
 );
 
-type DashboardAccordionContextValue = {
-  allowsMultipleExpanded: boolean;
-  expandedKeys: Set<Key>;
-  onExpandedChange?: (keys: Set<Key>) => void;
-};
-
-const DashboardAccordionContext = createContext<DashboardAccordionContextValue>({
-  allowsMultipleExpanded: false,
-  expandedKeys: new Set(),
-});
-const DashboardAccordionItemContext = createContext<{ id: Key } | null>(null);
-
-function DashboardAccordionRoot({
-  allowsMultipleExpanded = false,
-  children,
-  expandedKeys = new Set(),
-  onExpandedChange,
-  ...props
-}: ComponentPropsWithoutRef<"div"> & {
-  allowsMultipleExpanded?: boolean;
-  expandedKeys?: Set<Key>;
-  onExpandedChange?: (keys: Set<Key>) => void;
-}) {
-  const contextValue = useMemo(
-    () => ({ allowsMultipleExpanded, expandedKeys, onExpandedChange }),
-    [allowsMultipleExpanded, expandedKeys, onExpandedChange],
-  );
-
-  return (
-    <DashboardAccordionContext.Provider value={contextValue}>
-      <div {...props}>{children}</div>
-    </DashboardAccordionContext.Provider>
-  );
-}
-
-function DashboardAccordionItem({
-  children,
-  id,
-  ...props
-}: Omit<ComponentPropsWithoutRef<"div">, "id"> & { id: Key }) {
-  return (
-    <DashboardAccordionItemContext.Provider value={{ id }}>
-      <div data-accordion-id={String(id)} {...props}>
-        {children}
-      </div>
-    </DashboardAccordionItemContext.Provider>
-  );
-}
-
-function DashboardAccordionHeading(props: ComponentPropsWithoutRef<"div">) {
-  return <div {...props} />;
-}
-
-function DashboardAccordionTrigger({
-  children,
-  className,
-  onClick,
-  type = "button",
-  ...props
-}: ComponentPropsWithoutRef<"button">) {
-  const accordion = useContext(DashboardAccordionContext);
-  const item = useContext(DashboardAccordionItemContext);
-  const isExpanded = item ? accordion.expandedKeys.has(item.id) : false;
-
-  function handleClick(event: MouseEvent<HTMLButtonElement>) {
-    onClick?.(event);
-
-    if (!item || event.defaultPrevented) {
-      return;
-    }
-
-    const nextExpandedKeys = accordion.allowsMultipleExpanded
-      ? new Set(accordion.expandedKeys)
-      : new Set<Key>();
-
-    if (accordion.allowsMultipleExpanded && nextExpandedKeys.has(item.id)) {
-      nextExpandedKeys.delete(item.id);
-    } else {
-      nextExpandedKeys.add(item.id);
-    }
-
-    accordion.onExpandedChange?.(nextExpandedKeys);
-  }
-
-  return (
-    <button
-      type={type}
-      aria-expanded={isExpanded}
-      className={cn("flex items-center text-left", className)}
-      onClick={handleClick}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-}
-
-function DashboardAccordionPanel({
-  children,
-  hidden,
-  ...props
-}: ComponentPropsWithoutRef<"div">) {
-  const accordion = useContext(DashboardAccordionContext);
-  const item = useContext(DashboardAccordionItemContext);
-  const isExpanded = item ? accordion.expandedKeys.has(item.id) : true;
-  const isHidden = hidden ?? !isExpanded;
-
-  return (
-    <div hidden={isHidden} {...props}>
-      {children}
-    </div>
-  );
-}
-
-function DashboardAccordionBody(props: ComponentPropsWithoutRef<"div">) {
-  return <div {...props} />;
-}
-
-const Accordion = Object.assign(DashboardAccordionRoot, {
-  Body: DashboardAccordionBody,
-  Heading: DashboardAccordionHeading,
-  Item: DashboardAccordionItem,
-  Panel: DashboardAccordionPanel,
-  Trigger: DashboardAccordionTrigger,
-});
-
 type ChartSelection = {
   code: string;
   listKey: StockListKey;
@@ -310,6 +182,79 @@ const listIcons = {
   whitelist: ShieldCheck,
   blacklist: ShieldX,
 } satisfies Record<StockListKey, typeof ListFilter>;
+
+type StockSectionIcon = typeof ListFilter;
+
+function StockSectionIconBox({
+  icon: Icon,
+  active = false,
+}: {
+  icon: StockSectionIcon;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+        active
+          ? "border-primary/20 bg-primary/10 text-primary"
+          : "border-border/55 bg-background/65 text-muted-foreground group-hover/disclosure-trigger:border-border group-hover/disclosure-trigger:bg-muted/55 group-hover/disclosure-trigger:text-foreground",
+      )}
+    >
+      <Icon className="size-4" />
+    </span>
+  );
+}
+
+function StockCountBadge({
+  count,
+  active = false,
+}: {
+  count: number | string;
+  active?: boolean;
+}) {
+  return (
+    <Badge
+      variant="soft"
+      color={active ? "accent" : "default"}
+      size="sm"
+      className="shrink-0 tabular-nums"
+      style={{ position: "static", transform: "none" }}
+    >
+      {count}
+    </Badge>
+  );
+}
+
+function StockDisclosureTitle({
+  icon,
+  title,
+  description,
+  count,
+  active = false,
+}: {
+  icon: StockSectionIcon;
+  title: string;
+  description?: string;
+  count: number | string;
+  active?: boolean;
+}) {
+  return (
+    <>
+      <span className="flex min-w-0 flex-1 items-center gap-3">
+        <StockSectionIconBox icon={icon} active={active} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium leading-none">{title}</span>
+          {description ? (
+            <span className="mt-1 block truncate text-xs text-muted-foreground">{description}</span>
+          ) : null}
+        </span>
+      </span>
+      <StockCountBadge count={count} active={active} />
+      <Disclosure.Indicator className="ml-0 size-4 shrink-0 text-muted-foreground" />
+    </>
+  );
+}
 
 type StockDashboardProps = {
   themeMode: ThemeMode;
@@ -1258,7 +1203,7 @@ function syncSelectionBatchesState(
     stockGroups,
     selectionBatches,
   });
-  const activeSelectionBatchId = getSelectionBatchIdFromAccordionValue(state.desktopListKey);
+  const activeSelectionBatchId = getSelectionBatchIdFromDisclosureValue(state.desktopListKey);
   const desktopListKey = activeSelectionBatchId && !selectionBatches.some((batch) => batch.id === activeSelectionBatchId)
     ? "initial"
     : state.desktopListKey;
@@ -2269,7 +2214,7 @@ function DesktopStockSidebar({
         ) : null}
       </div>
 
-      <DesktopStockAccordion
+      <DesktopStockDisclosureGroup
         activeListKey={activeListKey}
         stockGroups={stockGroups}
         selectionBatches={selectionBatches}
@@ -2290,7 +2235,7 @@ function DesktopStockSidebar({
   );
 }
 
-function DesktopStockAccordion({
+function DesktopStockDisclosureGroup({
   activeListKey,
   stockGroups,
   selectionBatches,
@@ -2333,18 +2278,7 @@ function DesktopStockAccordion({
   const visibleListOrder = getVisibleStockListOrder(desktopStaticListOrder, stockGroups);
 
   return (
-    <Accordion
-      className="min-h-0 flex-1"
-      expandedKeys={new Set([activeListKey])}
-      onExpandedChange={(keys) => {
-        const nextListKey = Array.from(keys).at(-1);
-
-        if (nextListKey) {
-          onActiveListChange(String(nextListKey));
-        }
-      }}
-      aria-label="股票列表"
-    >
+    <div className="min-h-0 flex flex-1 flex-col">
       <DesktopSelectionHistoryHeader
         loading={selectionBatchesLoading}
         pageNum={selectionBatchesPageNum}
@@ -2352,48 +2286,61 @@ function DesktopStockAccordion({
         total={selectionBatchesTotal}
         onPageChange={onSelectionHistoryPageChange}
       />
-      {selectionBatches.map((batch) => (
-        <SelectionBatchAccordionItem
-          key={batch.id}
-          batch={batch}
-          expanded={getSelectionBatchAccordionValue(batch.id) === activeListKey}
-          chartSelection={chartSelection}
-          selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-          deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
-          onDeleteSelectionBatch={onDeleteSelectionBatch}
-          onRemoveFromHistory={onRemoveFromHistory}
-          onToggleChart={onToggleChart}
-        />
-      ))}
-      {selectionBatches.length === 0 && selectionBatchesLoading ? (
-        <DesktopSelectionBatchesLoadingState />
-      ) : selectionBatches.length === 0 ? (
-        <DesktopSelectionHistoryEmptyState />
-      ) : null}
-      {visibleListOrder.map((key) => (
-        <DesktopStockAccordionItem
-          key={key}
-          listKey={key}
-          stocks={stockGroups[key]}
-          expanded={key === activeListKey}
-          chartSelection={chartSelection}
-          filterDeletePendingIds={filterDeletePendingIds}
-          selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-          candidateStockCodes={candidateStockCodes}
-          candidateSavePending={candidateSavePending}
-          onOpenImport={onOpenImport}
-          onSaveCandidateSelection={onSaveCandidateSelection}
-          onAddToCandidate={onAddToCandidate}
-          onRemoveFromCandidate={onRemoveFromCandidate}
-          onToggleChart={onToggleChart}
-          onDeleteFromFilterList={onDeleteFromFilterList}
-        />
-      ))}
-    </Accordion>
+      <DisclosureGroup
+        className="flex min-h-0 flex-1 flex-col"
+        expandedKeys={new Set([activeListKey])}
+        onExpandedChange={(keys) => {
+          const nextListKey = Array.from(keys).at(-1);
+
+          if (nextListKey) {
+            onActiveListChange(String(nextListKey));
+          }
+        }}
+        aria-label="股票列表"
+      >
+        {selectionBatches.map((batch) => (
+          <SelectionBatchDisclosureItem
+            key={batch.id}
+            batch={batch}
+            expanded={getSelectionBatchDisclosureValue(batch.id) === activeListKey}
+            chartSelection={chartSelection}
+            selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+            deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
+            onDeleteSelectionBatch={onDeleteSelectionBatch}
+            onRemoveFromHistory={onRemoveFromHistory}
+            onToggleChart={onToggleChart}
+          />
+        ))}
+        {selectionBatches.length === 0 && selectionBatchesLoading ? (
+          <DesktopSelectionBatchesLoadingState />
+        ) : selectionBatches.length === 0 ? (
+          <DesktopSelectionHistoryEmptyState />
+        ) : null}
+        {visibleListOrder.map((key) => (
+          <DesktopStockDisclosureItem
+            key={key}
+            listKey={key}
+            stocks={stockGroups[key]}
+            expanded={key === activeListKey}
+            chartSelection={chartSelection}
+            filterDeletePendingIds={filterDeletePendingIds}
+            selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+            candidateStockCodes={candidateStockCodes}
+            candidateSavePending={candidateSavePending}
+            onOpenImport={onOpenImport}
+            onSaveCandidateSelection={onSaveCandidateSelection}
+            onAddToCandidate={onAddToCandidate}
+            onRemoveFromCandidate={onRemoveFromCandidate}
+            onToggleChart={onToggleChart}
+            onDeleteFromFilterList={onDeleteFromFilterList}
+          />
+        ))}
+      </DisclosureGroup>
+    </div>
   );
 }
 
-function SelectionBatchAccordionItem({
+function SelectionBatchDisclosureItem({
   batch,
   expanded,
   chartSelection,
@@ -2409,35 +2356,28 @@ function SelectionBatchAccordionItem({
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
 } & Pick<StockListSharedProps, "chartSelection" | "selectionRecordDeletePendingIds" | "onToggleChart">) {
-  const value = getSelectionBatchAccordionValue(batch.id);
+  const value = getSelectionBatchDisclosureValue(batch.id);
 
   return (
-    <Accordion.Item
+    <Disclosure
       id={value}
       className={cn(
-        "border-border/45 bg-primary/5",
+        "border-b border-border/45 bg-primary/5",
         expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
-        <Accordion.Heading className="flex min-w-0 flex-1">
-          <Accordion.Trigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary transition-colors">
-              <CheckCircle2 className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium leading-none">{batch.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {batch.isLoading ? "..." : batch.stocks.length || batch.total}
-                </span>
-              </span>
-              <span className="mt-1 block truncate text-xs text-muted-foreground">
-                历史选股{batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}
-              </span>
-            </span>
-          </Accordion.Trigger>
-        </Accordion.Heading>
+        <Disclosure.Heading className="flex min-w-0 flex-1">
+          <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
+            <StockDisclosureTitle
+              icon={CheckCircle2}
+              title={batch.name}
+              description={`历史选股${batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}`}
+              count={batch.isLoading ? "..." : batch.stocks.length || batch.total}
+              active
+            />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
         <Button
           type="button"
           variant="ghost"
@@ -2451,8 +2391,7 @@ function SelectionBatchAccordionItem({
         </Button>
       </div>
 
-      <Accordion.Panel className="min-h-0 flex flex-1 flex-col">
-        <Accordion.Body className="flex !h-full min-h-0 flex-col pb-0">
+      <Disclosure.Content className={cn("min-h-0 flex flex-1 flex-col overflow-hidden", expanded && "!h-full")}>
         <div className="min-h-0 flex-1 pb-3 pl-10">
           {batch.error ? (
             <div className="flex h-full min-h-20 flex-col justify-center gap-1 px-1 text-left">
@@ -2496,9 +2435,8 @@ function SelectionBatchAccordionItem({
             <DesktopStockListEmptyState listKey="selected" />
           )}
         </div>
-        </Accordion.Body>
-      </Accordion.Panel>
-    </Accordion.Item>
+      </Disclosure.Content>
+    </Disclosure>
   );
 }
 
@@ -2527,13 +2465,15 @@ function DesktopSelectionHistoryHeader({
   return (
     <div className="flex shrink-0 border-b border-border/45 py-3">
       <div className="flex min-w-0 w-full items-center justify-between gap-3">
-        <div className="min-w-0 truncate text-sm font-medium">
-          历史选股
+        <div className="flex min-w-0 items-center gap-3">
+          <StockSectionIconBox icon={Database} active />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium leading-none">历史选股</div>
+            <div className="mt-1 truncate text-xs text-muted-foreground">已保存选股批次</div>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Chip variant="soft" className="shrink-0 tabular-nums">
-            {loading ? "..." : total}
-          </Chip>
+          <StockCountBadge count={loading ? "..." : total} active />
           <SelectionHistoryPagination
             loading={loading}
             pageNum={pageNum}
@@ -2613,7 +2553,7 @@ function SelectionHistoryPagination({
   );
 }
 
-function DesktopStockAccordionItem({
+function DesktopStockDisclosureItem({
   listKey,
   stocks,
   expanded,
@@ -2642,28 +2582,25 @@ function DesktopStockAccordionItem({
   const showCandidateSave = listKey === "candidate";
 
   return (
-    <Accordion.Item
+    <Disclosure
       id={listKey}
       className={cn(
-        "border-border/45 bg-transparent",
+        "border-b border-border/45 bg-transparent",
         expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
-        <Accordion.Heading className="flex min-w-0 flex-1">
-          <Accordion.Trigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/55 bg-background/65 text-muted-foreground transition-colors group-hover/accordion-trigger:border-border group-hover/accordion-trigger:bg-muted/55 group-hover/accordion-trigger:text-foreground">
-              <Icon className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium leading-none">{meta.label}</span>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{stocks.length}</span>
-              </span>
-              <span className="mt-1 block truncate text-xs text-muted-foreground">{meta.description}</span>
-            </span>
-          </Accordion.Trigger>
-        </Accordion.Heading>
+        <Disclosure.Heading className="flex min-w-0 flex-1">
+          <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
+            <StockDisclosureTitle
+              icon={Icon}
+              title={meta.label}
+              description={meta.description}
+              count={stocks.length}
+              active={expanded}
+            />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
         {showCandidateSave ? (
           <Button
             type="button"
@@ -2694,8 +2631,7 @@ function DesktopStockAccordionItem({
         ) : null}
       </div>
 
-      <Accordion.Panel className="min-h-0 flex flex-1 flex-col">
-        <Accordion.Body className="flex !h-full min-h-0 flex-col pb-0">
+      <Disclosure.Content className={cn("min-h-0 flex flex-1 flex-col overflow-hidden", expanded && "!h-full")}>
         <div className="min-h-0 flex-1 pb-3 pl-10">
           {stocks.length > 0 ? (
             <ScrollShadow orientation="vertical" className="h-full pr-2">
@@ -2725,9 +2661,8 @@ function DesktopStockAccordionItem({
             <DesktopStockListEmptyState listKey={listKey} />
           )}
         </div>
-        </Accordion.Body>
-      </Accordion.Panel>
-    </Accordion.Item>
+      </Disclosure.Content>
+    </Disclosure>
   );
 }
 
@@ -3425,18 +3360,18 @@ function MobileSelectionHistory({
       </CardHeader>
       <CardContent className="pb-5">
         {selectionBatches.length > 0 ? (
-          <Accordion
+          <DisclosureGroup
             allowsMultipleExpanded
-            className="min-h-0"
+            className="flex min-h-0 flex-col"
             expandedKeys={new Set(openItems)}
             onExpandedChange={(keys) => setOpenItems(Array.from(keys, String))}
             aria-label="历史选股"
           >
             {selectionBatches.map((batch) => {
-              const value = getSelectionBatchAccordionValue(batch.id);
+              const value = getSelectionBatchDisclosureValue(batch.id);
 
               return (
-                <SelectionBatchAccordionItem
+                <SelectionBatchDisclosureItem
                   key={batch.id}
                   batch={batch}
                   expanded={openItems.includes(value)}
@@ -3449,7 +3384,7 @@ function MobileSelectionHistory({
                 />
               );
             })}
-          </Accordion>
+          </DisclosureGroup>
         ) : selectionBatchesLoading ? (
           <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
@@ -3934,11 +3869,11 @@ function getComparableStockCode(code: string) {
   return code.trim().replace(exactCodePrefixPattern, "").toUpperCase();
 }
 
-function getSelectionBatchAccordionValue(id: number) {
+function getSelectionBatchDisclosureValue(id: number) {
   return `selected:${id}`;
 }
 
-function getSelectionBatchIdFromAccordionValue(value: string) {
+function getSelectionBatchIdFromDisclosureValue(value: string) {
   const match = value.match(/^selected:(\d+)$/);
 
   return match ? Number(match[1]) : null;
