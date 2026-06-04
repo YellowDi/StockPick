@@ -220,8 +220,7 @@ function StockCountBadge({
       variant="soft"
       color={active ? "accent" : "default"}
       size="sm"
-      className="shrink-0 tabular-nums"
-      style={{ position: "static", transform: "none" }}
+      className="tabular-nums"
     >
       {count}
     </Badge>
@@ -244,7 +243,10 @@ function StockDisclosureTitle({
   return (
     <>
       <span className="flex min-w-0 flex-1 items-center gap-3">
-        <StockSectionIconBox icon={icon} active={active} />
+        <Badge.Anchor>
+          <StockSectionIconBox icon={icon} active={active} />
+          <StockCountBadge count={count} active={active} />
+        </Badge.Anchor>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium leading-none">{title}</span>
           {description ? (
@@ -252,7 +254,6 @@ function StockDisclosureTitle({
           ) : null}
         </span>
       </span>
-      <StockCountBadge count={count} active={active} />
       <Disclosure.Indicator className="ml-0 size-4 shrink-0 text-muted-foreground" />
     </>
   );
@@ -1732,8 +1733,6 @@ function ActiveStockBoard({
     momentum,
     selectedRangeSecs,
     positive,
-    trend,
-    strength,
   } = useStockBoardModel(stock, themeMode);
   const isCompactViewport = useIsCompactViewport();
   const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
@@ -1801,14 +1800,8 @@ function ActiveStockBoard({
                 />
               </span>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 min-[430px]:grid-cols-3 sm:flex sm:flex-wrap">
-              <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
-              <HeroMetric label="强度" value={strength} />
-              <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
-              <HeroMetric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
-              <HeroMetric label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
-              <HeroMetric label="成交量" value={latest ? formatVolume(latest.volume) : "--"} />
-              <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
+            <div className="mt-3 max-w-md">
+              <StrategyBasicInfo strategyResult={stock.strategyResult} />
             </div>
           </div>
 
@@ -2048,31 +2041,6 @@ function AnimatedDigits({ value }: { value: string }) {
           {char === " " ? "\u00a0" : char}
         </span>
       ))}
-    </span>
-  );
-}
-
-function HeroMetric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "up" | "down";
-}) {
-  return (
-    <span className="flex min-w-0 items-center justify-between gap-1 rounded-md bg-background/35 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-xl sm:inline-flex sm:justify-start">
-      <span className="shrink-0">{label}</span>
-      <span
-        className={cn(
-          "min-w-0 truncate font-medium text-foreground tabular-nums",
-          tone === "up" && "text-stock-up",
-          tone === "down" && "text-stock-down",
-        )}
-      >
-        {value}
-      </span>
     </span>
   );
 }
@@ -2465,14 +2433,16 @@ function DesktopSelectionHistoryHeader({
     <div className="flex shrink-0 border-b border-border/45 py-3">
       <div className="flex min-w-0 w-full items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <StockSectionIconBox icon={Database} active />
+          <Badge.Anchor>
+            <StockSectionIconBox icon={Database} active />
+            <StockCountBadge count={loading ? "..." : total} active />
+          </Badge.Anchor>
           <div className="min-w-0">
             <div className="truncate text-sm font-medium leading-none">历史选股</div>
             <div className="mt-1 truncate text-xs text-muted-foreground">已保存选股批次</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <StockCountBadge count={loading ? "..." : total} active />
           <SelectionHistoryPagination
             loading={loading}
             pageNum={pageNum}
@@ -2776,13 +2746,10 @@ function DesktopActiveStockBoard({
         <DesktopPageHeader onLogout={onLogout} />
         <DesktopStockChartPanel
           stock={chartStock}
-          sourceRecords={sourceRecords}
           latest={latest}
           change={change}
           changePct={changePct}
           positive={positive}
-          trend={trend}
-          strength={strength}
           chartView={chartView}
           chartMode={chartMode}
           chartColor={chartColor}
@@ -2811,13 +2778,10 @@ function DesktopActiveStockBoard({
 
 function DesktopStockChartPanel({
   stock,
-  sourceRecords,
   latest,
   change,
   changePct,
   positive,
-  trend,
-  strength,
   chartView,
   chartMode,
   chartColor,
@@ -2831,13 +2795,10 @@ function DesktopStockChartPanel({
   onChartModeChange,
 }: {
   stock: StockCandidate;
-  sourceRecords: StockDailyRecord[];
   latest: StockDailyRecord | undefined;
   change: number;
   changePct: number;
   positive: boolean;
-  trend: string;
-  strength: string;
   chartView: ReturnType<typeof createChartView>;
   chartMode: ChartMode;
   chartColor: string;
@@ -2900,13 +2861,8 @@ function DesktopStockChartPanel({
                 />
               </span>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <HeroMetric label="趋势" value={trend} tone={latest ? positive ? "up" : "down" : undefined} />
-              <HeroMetric label="强度" value={strength} />
-              <HeroMetric label="最高" value={latest ? latest.high.toFixed(2) : "--"} />
-              <HeroMetric label="最低" value={latest ? latest.low.toFixed(2) : "--"} />
-              <HeroMetric label="昨收" value={latest?.last ? latest.last.toFixed(2) : "--"} />
-              <HeroMetric label="记录" value={`${sourceRecords.length}`} />
+            <div className="mt-5">
+              <StrategyBasicInfo strategyResult={stock.strategyResult} />
             </div>
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
@@ -3530,6 +3486,102 @@ function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
         <StockDataEmptyState label="暂无日 K 明细数据" />
       )}
     </section>
+  );
+}
+
+function StrategyBasicInfo({ strategyResult }: { strategyResult?: StrategyScanResult }) {
+  if (!strategyResult) {
+    return (
+      <div className="rounded-md bg-background/35 px-3 py-2 text-xs text-muted-foreground backdrop-blur-xl">
+        暂无策略命中数据
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <StrategyRuleChip
+          shortLabel="综合命中"
+          fullLabel="综合命中"
+          value={strategyResult.matched}
+        />
+        <StrategyRuleChip
+          shortLabel="规则1 涨停"
+          fullLabel="规则1：涨停"
+          value={strategyResult.rule1_limit_up}
+        />
+        <StrategyRuleChip
+          shortLabel="规则2 冲高回落"
+          fullLabel="规则2：前日冲高回落"
+          value={strategyResult.rule2_surge_fall}
+        />
+        <StrategyRuleChip
+          shortLabel="规则3 MA5区间"
+          fullLabel="规则3：X-2日收盘在MA5之上且在X日高低价区间内"
+          value={strategyResult.rule3_above_ma5_in_range}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <StrategyInfoItem label="第X天日期" value={strategyResult.x_date ?? "--"} />
+        <StrategyInfoItem label="第X天涨停价" value={formatPrice(strategyResult.limit_up_price)} />
+        <StrategyInfoItem label="第X天收盘价" value={formatPrice(strategyResult.x_close)} />
+        <StrategyInfoItem label="第X天最高价" value={formatPrice(strategyResult.x_high)} />
+        <StrategyInfoItem label="第X天最低价" value={formatPrice(strategyResult.x_low)} />
+        <StrategyInfoItem label="第X-1天收盘价" value={formatPrice(strategyResult.x1_close)} />
+        <StrategyInfoItem label="第X-1天最高价" value={formatPrice(strategyResult.x1_high)} />
+        <StrategyInfoItem label="第X-2天收盘价" value={formatPrice(strategyResult.x2_close)} />
+        <StrategyInfoItem label="第X-2天的MA5均线值" value={formatPrice(strategyResult.x2_ma5)} />
+      </div>
+    </div>
+  );
+}
+
+function StrategyRuleChip({
+  shortLabel,
+  fullLabel,
+  value,
+}: {
+  shortLabel: string;
+  fullLabel: string;
+  value?: boolean;
+}) {
+  const known = typeof value === "boolean";
+  const hit = known && value;
+
+  return (
+    <span
+      title={`${fullLabel}：${known ? (value ? "命中" : "未命中") : "无数据"}`}
+      className={cn(
+        "inline-flex items-center gap-1 text-xs font-medium",
+        hit ? "text-stock-up" : "text-muted-foreground",
+      )}
+    >
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          hit ? "bg-stock-up" : known ? "bg-stock-down/70" : "bg-muted-foreground/40",
+        )}
+      />
+      {shortLabel}
+    </span>
+  );
+}
+
+function StrategyInfoItem({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-w-0 py-0.5", className)} title={label}>
+      <div className="truncate text-[11px] text-muted-foreground">{label}</div>
+      <div className="truncate text-sm font-medium tabular-nums text-foreground">{value}</div>
+    </div>
   );
 }
 
