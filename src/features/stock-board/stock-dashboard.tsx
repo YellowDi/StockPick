@@ -9,6 +9,8 @@ import {
 } from "react";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Database,
   Import as ImportIcon,
@@ -65,8 +67,6 @@ import {
   PaginationContent,
   PaginationItem,
   PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
 } from "@/components/ui/pagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
@@ -2516,25 +2516,24 @@ function DesktopSelectionHistoryHeader({
   onPageChange: (pageNum: number) => void;
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-b border-border/45 py-3">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">历史选股</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            每页 5 条历史选股
-          </div>
+    <div className="flex shrink-0 border-b border-border/45 py-3">
+      <div className="flex min-w-0 w-full items-center justify-between gap-3">
+        <div className="min-w-0 truncate text-sm font-medium">
+          历史选股
         </div>
-        <Badge variant="secondary" className="shrink-0 tabular-nums">
-          {loading ? "..." : total}
-        </Badge>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Badge variant="secondary" className="shrink-0 tabular-nums">
+            {loading ? "..." : total}
+          </Badge>
+          <SelectionHistoryPagination
+            loading={loading}
+            pageNum={pageNum}
+            pageCount={pageCount}
+            total={total}
+            onPageChange={onPageChange}
+          />
+        </div>
       </div>
-      <SelectionHistoryPagination
-        loading={loading}
-        pageNum={pageNum}
-        pageCount={pageCount}
-        total={total}
-        onPageChange={onPageChange}
-      />
     </div>
   );
 }
@@ -2584,37 +2583,33 @@ function SelectionHistoryPagination({
   }
 
   return (
-    <Pagination className={cn("justify-start", className)}>
+    <Pagination className={cn("mx-0 w-auto justify-end", className)}>
       <PaginationContent>
         <PaginationItem>
-          <PaginationPrevious
+          <PaginationLink
             href="#"
-            text="上一页"
+            size="icon"
             aria-disabled={!canGoPrevious}
+            aria-label="上一页"
             tabIndex={canGoPrevious ? undefined : -1}
             className={cn(!canGoPrevious && disabledClassName)}
             onClick={(event) => handlePageClick(event, pageNum - 1, canGoPrevious)}
-          />
+          >
+            <ChevronLeft data-icon="inline-start" />
+          </PaginationLink>
         </PaginationItem>
         <PaginationItem>
           <PaginationLink
             href="#"
-            isActive
-            size="default"
-            onClick={(event) => event.preventDefault()}
-          >
-            {pageNum} / {pageCount}
-          </PaginationLink>
-        </PaginationItem>
-        <PaginationItem>
-          <PaginationNext
-            href="#"
-            text="下一页"
+            size="icon"
             aria-disabled={!canGoNext}
+            aria-label="下一页"
             tabIndex={canGoNext ? undefined : -1}
             className={cn(!canGoNext && disabledClassName)}
             onClick={(event) => handlePageClick(event, pageNum + 1, canGoNext)}
-          />
+          >
+            <ChevronRight data-icon="inline-start" />
+          </PaginationLink>
         </PaginationItem>
       </PaginationContent>
     </Pagination>
@@ -3469,23 +3464,24 @@ function MobileSelectionHistory({
 
   return (
     <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
-      <CardHeader className="gap-3">
+      <CardHeader className="gap-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="truncate text-base">历史选股</CardTitle>
-            <CardDescription className="mt-1 truncate">每页 5 条历史选股</CardDescription>
           </div>
-          <Badge variant="secondary" className="shrink-0 tabular-nums">
-            {selectionBatchesLoading ? "..." : selectionBatchesTotal}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Badge variant="secondary" className="shrink-0 tabular-nums">
+              {selectionBatchesLoading ? "..." : selectionBatchesTotal}
+            </Badge>
+            <SelectionHistoryPagination
+              loading={selectionBatchesLoading}
+              pageNum={selectionBatchesPageNum}
+              pageCount={pageCount}
+              total={selectionBatchesTotal}
+              onPageChange={onPageChange}
+            />
+          </div>
         </div>
-        <SelectionHistoryPagination
-          loading={selectionBatchesLoading}
-          pageNum={selectionBatchesPageNum}
-          pageCount={pageCount}
-          total={selectionBatchesTotal}
-          onPageChange={onPageChange}
-        />
       </CardHeader>
       <CardContent className="pb-5">
         {selectionBatches.length > 0 ? (
