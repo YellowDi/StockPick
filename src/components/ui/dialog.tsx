@@ -1,9 +1,37 @@
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
+import { motion, type HTMLMotionProps, type Variants } from "motion/react"
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+
+const easeOut = [0.2, 0, 0, 1] as const
+const easeIn = [0.4, 0, 1, 1] as const
+
+const dialogOverlayVariants: Variants = {
+  open: {
+    opacity: 1,
+    transition: { duration: 0.16, ease: easeOut },
+  },
+  closed: {
+    opacity: 0,
+    transition: { duration: 0.12, ease: easeIn },
+  },
+}
+
+const dialogContentVariants: Variants = {
+  open: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: "spring", duration: 0.24, bounce: 0 },
+  },
+  closed: {
+    opacity: 0,
+    scale: 0.96,
+    transition: { type: "spring", duration: 0.16, bounce: 0 },
+  },
+}
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -29,8 +57,16 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs",
         className
+      )}
+      render={(renderProps, state) => (
+        <motion.div
+          {...(renderProps as HTMLMotionProps<"div">)}
+          initial={false}
+          animate={state.open ? "open" : "closed"}
+          variants={dialogOverlayVariants}
+        />
       )}
       {...props}
     />
@@ -51,8 +87,16 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm",
           className
+        )}
+        render={(renderProps, state) => (
+          <motion.div
+            {...(renderProps as HTMLMotionProps<"div">)}
+            initial={false}
+            animate={state.open ? "open" : "closed"}
+            variants={dialogContentVariants}
+          />
         )}
         {...props}
       >
