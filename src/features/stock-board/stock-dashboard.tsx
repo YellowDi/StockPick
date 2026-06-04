@@ -2388,13 +2388,14 @@ function DesktopStockAccordionItem({
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
-            className="size-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+            size="sm"
+            className="h-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
             aria-label={`导入${meta.label}`}
             title={`导入${meta.label}`}
             onClick={() => onOpenImport(returnableListKey)}
           >
-            <ImportIcon />
+            <ImportIcon data-icon="inline-start" />
+            导入
           </Button>
         ) : null}
       </div>
