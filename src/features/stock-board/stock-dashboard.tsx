@@ -2447,9 +2447,7 @@ function DesktopStockDisclosureGroup({
         onExpandedChange={(keys) => {
           const nextListKey = Array.from(keys).at(-1);
 
-          if (nextListKey) {
-            onActiveListChange(String(nextListKey));
-          }
+          onActiveListChange(nextListKey ? String(nextListKey) : "");
         }}
         aria-label="股票列表"
       >
