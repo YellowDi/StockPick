@@ -189,13 +189,13 @@ export async function listStockFilters(
       throw error;
     }
 
-    throw new Error("无法连接黑白名单接口，请确认后端服务或跨域配置。");
+    throw new Error("无法连接名单接口，请确认后端服务或跨域配置。");
   }
 
   const payload = await readJson(response);
 
   if (!response.ok) {
-    const message = getErrorMessage(payload) ?? "黑白名单加载失败。";
+    const message = getErrorMessage(payload) ?? "名单加载失败。";
 
     if (isAuthFailureStatus(response.status)) {
       notifyAuthExpired();
@@ -207,7 +207,7 @@ export async function listStockFilters(
   const apiStatus = getApiStatus(payload);
 
   if (apiStatus !== null && apiStatus !== 0) {
-    throw new ApiError(getErrorMessage(payload) ?? "黑白名单加载失败。", response.status);
+    throw new ApiError(getErrorMessage(payload) ?? "名单加载失败。", response.status);
   }
 
   return getStockFilters(payload, type);
@@ -235,13 +235,13 @@ export async function addStockFilter(request: AddStockFilterRequest): Promise<vo
       }),
     });
   } catch {
-    throw new Error("无法连接添加黑白名单接口，请确认后端服务或跨域配置。");
+    throw new Error("无法连接添加名单接口，请确认后端服务或跨域配置。");
   }
 
   const payload = await readJson(response);
 
   if (!response.ok) {
-    const message = getErrorMessage(payload) ?? "添加黑白名单失败。";
+    const message = getErrorMessage(payload) ?? "添加名单失败。";
 
     if (isAuthFailureStatus(response.status)) {
       notifyAuthExpired();
@@ -253,7 +253,7 @@ export async function addStockFilter(request: AddStockFilterRequest): Promise<vo
   const apiStatus = getApiStatus(payload);
 
   if (apiStatus !== null && apiStatus !== 0) {
-    throw new ApiError(getErrorMessage(payload) ?? "添加黑白名单失败。", response.status);
+    throw new ApiError(getErrorMessage(payload) ?? "添加名单失败。", response.status);
   }
 }
 
@@ -271,13 +271,13 @@ export async function deleteStockFilter(id: number): Promise<void> {
       headers: createAuthHeaders(token),
     });
   } catch {
-    throw new Error("无法连接删除黑白名单接口，请确认后端服务或跨域配置。");
+    throw new Error("无法连接删除名单接口，请确认后端服务或跨域配置。");
   }
 
   const payload = await readJson(response);
 
   if (!response.ok) {
-    const message = getErrorMessage(payload) ?? "删除黑白名单失败。";
+    const message = getErrorMessage(payload) ?? "删除名单失败。";
 
     if (isAuthFailureStatus(response.status)) {
       notifyAuthExpired();
@@ -289,7 +289,7 @@ export async function deleteStockFilter(id: number): Promise<void> {
   const apiStatus = getApiStatus(payload);
 
   if (apiStatus !== null && apiStatus !== 0) {
-    throw new ApiError(getErrorMessage(payload) ?? "删除黑白名单失败。", response.status);
+    throw new ApiError(getErrorMessage(payload) ?? "删除名单失败。", response.status);
   }
 }
 

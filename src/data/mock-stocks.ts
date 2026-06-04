@@ -6,7 +6,7 @@ const listLabels: Record<StockListKey, string> = {
   initial: "待选",
   candidate: "候选",
   selected: "历史选股",
-  whitelist: "白名单",
+  whitelist: "红名单",
   blacklist: "黑名单",
 };
 

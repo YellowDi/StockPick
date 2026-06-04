@@ -85,8 +85,9 @@ import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
-const mobileListOrder: StockListKey[] = ["candidate", "initial", "whitelist", "blacklist"];
-const desktopStaticListOrder: StockListKey[] = ["candidate", "initial", "whitelist", "blacklist"];
+const mobileListOrder: StockListKey[] = ["candidate", "initial"];
+const desktopStaticListOrder: StockListKey[] = ["candidate", "initial"];
+const filterListButtonOrder: ReturnableListKey[] = ["whitelist", "blacklist"];
 const selectionHistoryPageSize = 5;
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
@@ -272,7 +273,7 @@ type StockDashboardState = {
   chartSelection: ChartSelection | null;
   mobileListKey: StockListKey;
   desktopListKey: string;
-  importTargetList: ReturnableListKey | null;
+  filterDialogList: ReturnableListKey | null;
   scanError: string | null;
   scanLoading: boolean;
   filterListsError: string | null;
@@ -296,8 +297,8 @@ type StockDashboardAction =
   | { type: "set-chart-selection"; selection: ChartSelection | null }
   | { type: "set-mobile-list"; listKey: StockListKey }
   | { type: "set-desktop-list"; listKey: string }
-  | { type: "open-import"; listKey: ReturnableListKey }
-  | { type: "close-import" }
+  | { type: "open-filter-dialog"; listKey: ReturnableListKey }
+  | { type: "close-filter-dialog" }
   | { type: "scan-start" }
   | { type: "scan-success"; stocks: StockCandidate[] }
   | { type: "scan-error"; error: string }
@@ -335,7 +336,7 @@ const initialStockDashboardState: StockDashboardState = {
   chartSelection: null,
   mobileListKey: "initial",
   desktopListKey: "initial",
-  importTargetList: null,
+  filterDialogList: null,
   scanError: null,
   scanLoading: false,
   filterListsError: null,
@@ -484,10 +485,10 @@ function useStockDashboard() {
           return;
         }
 
-        const message = error instanceof Error ? error.message : "黑白名单加载失败。";
+        const message = error instanceof Error ? error.message : "名单加载失败。";
 
         dispatch({ type: "set-filter-error", error: message });
-        toast.danger("黑白名单加载失败", {
+        toast.danger("名单加载失败", {
           description: message,
         });
       });
@@ -569,18 +570,18 @@ function useStockDashboard() {
       try {
         await syncFilterLists();
       } catch (syncError) {
-        const message = syncError instanceof Error ? syncError.message : "黑白名单同步失败。";
+        const message = syncError instanceof Error ? syncError.message : "名单同步失败。";
 
         dispatch({ type: "set-filter-error", error: message });
-        toast.danger("黑白名单同步失败", {
+        toast.danger("名单同步失败", {
           description: message,
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "删除黑白名单失败。";
+      const message = error instanceof Error ? error.message : "删除名单失败。";
 
       dispatch({ type: "set-filter-error", error: message });
-      toast.danger("删除黑白名单失败", {
+      toast.danger("删除名单失败", {
         description: message,
       });
     } finally {
@@ -588,12 +589,12 @@ function useStockDashboard() {
     }
   }
 
-  const openImportDialog = useCallback((listKey: ReturnableListKey) => {
-    dispatch({ type: "open-import", listKey });
+  const openFilterListDialog = useCallback((listKey: ReturnableListKey) => {
+    dispatch({ type: "open-filter-dialog", listKey });
   }, []);
 
-  const closeImportDialog = useCallback(() => {
-    dispatch({ type: "close-import" });
+  const closeFilterListDialog = useCallback(() => {
+    dispatch({ type: "close-filter-dialog" });
   }, []);
 
   const importStockToList = useCallback(async (stock: StockInfo, targetList: ReturnableListKey) => {
@@ -605,10 +606,10 @@ function useStockDashboard() {
     try {
       await syncFilterLists();
     } catch (syncError) {
-      const message = syncError instanceof Error ? syncError.message : "黑白名单同步失败。";
+      const message = syncError instanceof Error ? syncError.message : "名单同步失败。";
 
       dispatch({ type: "set-filter-error", error: message });
-      toast.danger("黑白名单同步失败", {
+      toast.danger("名单同步失败", {
         description: message,
       });
     }
@@ -852,8 +853,8 @@ function useStockDashboard() {
     visibleStockGroups,
     selectedStock,
     candidateStockCodes,
-    openImportDialog,
-    closeImportDialog,
+    openFilterListDialog,
+    closeFilterListDialog,
     importStockToList,
     addStockToCandidate,
     removeStockFromCandidate,
@@ -882,8 +883,8 @@ function StockDashboardLayout({
   visibleStockGroups,
   selectedStock,
   candidateStockCodes,
-  openImportDialog,
-  closeImportDialog,
+  openFilterListDialog,
+  closeFilterListDialog,
   importStockToList,
   addStockToCandidate,
   removeStockFromCandidate,
@@ -953,7 +954,7 @@ function StockDashboardLayout({
               className="mx-auto mt-3 max-w-[720px] rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
               role="alert"
             >
-              黑白名单操作失败：{state.filterListsError}
+              名单操作失败：{state.filterListsError}
             </p>
           ) : null}
           {state.selectionBatchesError ? (
@@ -969,7 +970,7 @@ function StockDashboardLayout({
             activeListKey={state.mobileListKey}
             stockGroups={visibleStockGroups}
             candidateSavePending={state.candidateSavePending}
-            onOpenImport={openImportDialog}
+            onOpenFilterList={openFilterListDialog}
             onActiveListChange={setMobileListKey}
             onSaveCandidateSelection={saveCandidateSelection}
             {...sharedStockListProps}
@@ -1024,7 +1025,7 @@ function StockDashboardLayout({
           strategyDeletePendingId={state.strategyDeletePendingId}
           scanLoading={state.scanLoading}
           onActiveListChange={setDesktopListKey}
-          onOpenImport={openImportDialog}
+          onOpenFilterList={openFilterListDialog}
           onSaveCandidateSelection={saveCandidateSelection}
           onRemoveFromHistory={removeStockFromHistory}
           onDeleteSelectionBatch={removeSelectionBatch}
@@ -1036,12 +1037,21 @@ function StockDashboardLayout({
           {...sharedStockListProps}
         />
       </div>
-      {state.importTargetList ? (
-        <StockImportDialog
-          targetList={state.importTargetList}
-          stockGroups={state.stockGroups}
-          onClose={closeImportDialog}
+      {state.filterDialogList ? (
+        <FilterListDialog
+          targetList={state.filterDialogList}
+          stocks={visibleStockGroups[state.filterDialogList]}
+          stockGroups={visibleStockGroups}
+          chartSelection={state.chartSelection}
+          filterDeletePendingIds={state.filterDeletePendingIds}
+          selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
+          candidateStockCodes={candidateStockCodes}
+          onClose={closeFilterListDialog}
           onImportStock={importStockToList}
+          onAddToCandidate={addStockToCandidate}
+          onRemoveFromCandidate={removeStockFromCandidate}
+          onToggleChart={toggleSelectedStock}
+          onDeleteFromFilterList={deleteStockFromFilterList}
         />
       ) : null}
     </main>
@@ -1059,10 +1069,10 @@ function stockDashboardReducer(
       return { ...state, mobileListKey: action.listKey };
     case "set-desktop-list":
       return { ...state, desktopListKey: action.listKey };
-    case "open-import":
-      return { ...state, importTargetList: action.listKey };
-    case "close-import":
-      return { ...state, importTargetList: null };
+    case "open-filter-dialog":
+      return { ...state, filterDialogList: action.listKey };
+    case "close-filter-dialog":
+      return { ...state, filterDialogList: null };
     case "scan-start":
       return { ...state, scanLoading: true, scanError: null };
     case "scan-success":
@@ -2126,7 +2136,7 @@ function DesktopStockSidebar({
   strategyDeletePendingId,
   scanLoading,
   onActiveListChange,
-  onOpenImport,
+  onOpenFilterList,
   onSaveCandidateSelection,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
@@ -2155,7 +2165,7 @@ function DesktopStockSidebar({
   strategyDeletePendingId: number | null;
   scanLoading: boolean;
   onActiveListChange: (key: string) => void;
-  onOpenImport: (listKey: ReturnableListKey) => void;
+  onOpenFilterList: (listKey: ReturnableListKey) => void;
   onSaveCandidateSelection: () => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
@@ -2196,7 +2206,7 @@ function DesktopStockSidebar({
             className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
             role="alert"
           >
-            黑白名单操作失败：{filterListsError}
+            名单操作失败：{filterListsError}
           </p>
         ) : null}
         {selectionBatchesError ? (
@@ -2219,7 +2229,7 @@ function DesktopStockSidebar({
         selectionBatchDeletePendingIds={selectionBatchDeletePendingIds}
         candidateSavePending={candidateSavePending}
         onActiveListChange={onActiveListChange}
-        onOpenImport={onOpenImport}
+        onOpenFilterList={onOpenFilterList}
         onSaveCandidateSelection={onSaveCandidateSelection}
         onRemoveFromHistory={onRemoveFromHistory}
         onDeleteSelectionBatch={onDeleteSelectionBatch}
@@ -2244,7 +2254,7 @@ function DesktopStockDisclosureGroup({
   selectionRecordDeletePendingIds,
   candidateStockCodes,
   onActiveListChange,
-  onOpenImport,
+  onOpenFilterList,
   onSaveCandidateSelection,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
@@ -2263,7 +2273,7 @@ function DesktopStockDisclosureGroup({
   selectionBatchDeletePendingIds: number[];
   candidateSavePending: boolean;
   onActiveListChange: (key: string) => void;
-  onOpenImport: (listKey: ReturnableListKey) => void;
+  onOpenFilterList: (listKey: ReturnableListKey) => void;
   onSaveCandidateSelection: () => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
@@ -2280,6 +2290,12 @@ function DesktopStockDisclosureGroup({
         pageCount={pageCount}
         total={selectionBatchesTotal}
         onPageChange={onSelectionHistoryPageChange}
+      />
+      <FilterListButtonGroup
+        stockGroups={stockGroups}
+        className="shrink-0 border-b border-border/45 py-3"
+        buttonClassName="h-11 bg-background/35 px-3"
+        onOpenFilterList={onOpenFilterList}
       />
       <DisclosureGroup
         className="flex min-h-0 flex-1 flex-col"
@@ -2322,7 +2338,6 @@ function DesktopStockDisclosureGroup({
             selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
             candidateStockCodes={candidateStockCodes}
             candidateSavePending={candidateSavePending}
-            onOpenImport={onOpenImport}
             onSaveCandidateSelection={onSaveCandidateSelection}
             onAddToCandidate={onAddToCandidate}
             onRemoveFromCandidate={onRemoveFromCandidate}
@@ -2550,6 +2565,44 @@ function SelectionHistoryPagination({
   );
 }
 
+function FilterListButtonGroup({
+  stockGroups,
+  className,
+  buttonClassName,
+  onOpenFilterList,
+}: {
+  stockGroups: Pick<StockGroups, ReturnableListKey>;
+  className?: string;
+  buttonClassName?: string;
+  onOpenFilterList: (listKey: ReturnableListKey) => void;
+}) {
+  return (
+    <div className={cn("grid grid-cols-2 gap-2", className)}>
+      {filterListButtonOrder.map((listKey) => {
+        const Icon = listIcons[listKey];
+        const meta = stockListMeta[listKey];
+
+        return (
+          <Button
+            key={listKey}
+            type="button"
+            variant="outline"
+            className={cn("min-w-0 justify-start", buttonClassName)}
+            aria-label={`打开${meta.label}`}
+            onClick={() => onOpenFilterList(listKey)}
+          >
+            <Icon data-icon="inline-start" className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-left">{meta.label}</span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              {stockGroups[listKey].length}
+            </span>
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 function DesktopStockDisclosureItem({
   listKey,
   stocks,
@@ -2559,7 +2612,6 @@ function DesktopStockDisclosureItem({
   selectionRecordDeletePendingIds,
   candidateStockCodes,
   candidateSavePending,
-  onOpenImport,
   onSaveCandidateSelection,
   onAddToCandidate,
   onRemoveFromCandidate,
@@ -2570,12 +2622,10 @@ function DesktopStockDisclosureItem({
   stocks: StockCandidate[];
   expanded: boolean;
   candidateSavePending: boolean;
-  onOpenImport: (listKey: ReturnableListKey) => void;
   onSaveCandidateSelection: () => void | Promise<void>;
 } & StockListSharedProps) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
-  const returnableListKey = getReturnableListKey(listKey);
   const showCandidateSave = listKey === "candidate";
 
   return (
@@ -2613,17 +2663,6 @@ function DesktopStockDisclosureItem({
               <CheckCircle2 data-icon="inline-start" />
             )}
             保存
-          </Button>
-        ) : returnableListKey ? (
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
-            aria-label={`导入${meta.label}`}
-            onClick={() => onOpenImport(returnableListKey)}
-          >
-            <ImportIcon data-icon="inline-start" />
-            导入
           </Button>
         ) : null}
       </div>
@@ -2670,7 +2709,7 @@ function DesktopStockListEmptyState({ listKey }: { listKey: StockListKey }) {
       ? "从待选列表添加股票"
     : listKey === "selected"
       ? "保存候选后生成历史选股"
-      : "点击上方导入添加股票";
+      : "打开名单浮窗添加股票";
 
   return (
     <div className="flex h-full min-h-20 flex-col justify-center gap-1 px-1 text-left">
@@ -3195,7 +3234,7 @@ function MobileStockTabs({
   selectionRecordDeletePendingIds,
   candidateStockCodes,
   candidateSavePending,
-  onOpenImport,
+  onOpenFilterList,
   onActiveListChange,
   onSaveCandidateSelection,
   onAddToCandidate,
@@ -3210,7 +3249,7 @@ function MobileStockTabs({
   selectionRecordDeletePendingIds: number[];
   candidateStockCodes: Set<string>;
   candidateSavePending: boolean;
-  onOpenImport: (listKey: ReturnableListKey) => void;
+  onOpenFilterList: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
   onSaveCandidateSelection: () => void | Promise<void>;
   onAddToCandidate: (stock: StockCandidate) => void;
@@ -3222,12 +3261,16 @@ function MobileStockTabs({
   const currentListKey = visibleListOrder.includes(activeListKey) ? activeListKey : "initial";
   const stocks = stockGroups[currentListKey];
   const meta = stockListMeta[currentListKey];
-  const returnableListKey = getReturnableListKey(currentListKey);
   const showCandidateSave = currentListKey === "candidate";
 
   return (
     <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
       <CardHeader className="gap-3">
+        <FilterListButtonGroup
+          stockGroups={stockGroups}
+          buttonClassName="h-9 bg-background/45 px-3"
+          onOpenFilterList={onOpenFilterList}
+        />
         <div
           className="grid gap-1 rounded-lg bg-background/45 p-1"
           style={{ gridTemplateColumns: `repeat(${visibleListOrder.length}, minmax(0, 1fr))` }}
@@ -3268,16 +3311,6 @@ function MobileStockTabs({
                 <CheckCircle2 data-icon="inline-start" />
               )}
               保存
-            </Button>
-          ) : returnableListKey ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-8 shrink-0 bg-background/45"
-              onClick={() => onOpenImport(returnableListKey)}
-            >
-              <ImportIcon data-icon="inline-start" />
-              导入
             </Button>
           ) : null}
         </div>
@@ -3956,7 +3989,7 @@ function createImportedNoDataRecord(code: string, name: string): StockDailyRecor
     volume: 0,
     amount: 0,
     status: "无数据",
-    error: "通过股票列表导入，等待策略扫描返回日 K 数据",
+    error: "通过股票列表添加，等待策略扫描返回日 K 数据",
   };
 }
 
@@ -4159,17 +4192,34 @@ function StockListButton({
   );
 }
 
-function StockImportDialog({
+function FilterListDialog({
   targetList,
+  stocks: currentStocks,
   stockGroups,
+  chartSelection,
+  filterDeletePendingIds,
+  selectionRecordDeletePendingIds,
+  candidateStockCodes,
   onClose,
   onImportStock,
+  onAddToCandidate,
+  onRemoveFromCandidate,
+  onToggleChart,
+  onDeleteFromFilterList,
 }: {
   targetList: ReturnableListKey;
-  stockGroups: Record<StockListKey, StockCandidate[]>;
+  stocks: StockCandidate[];
+  stockGroups: StockGroups;
+  chartSelection: ChartSelection | null;
+  filterDeletePendingIds: number[];
+  selectionRecordDeletePendingIds: number[];
+  candidateStockCodes: Set<string>;
   onClose: () => void;
   onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
-}) {
+} & Pick<
+  StockListSharedProps,
+  "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
+>) {
   const importDialog = useStockImportDialog(targetList, onImportStock);
   const modalState = useOverlayState({
     isOpen: true,
@@ -4184,7 +4234,7 @@ function StockImportDialog({
     oppositeList,
     codeQuery,
     nameQuery,
-    stocks,
+    stocks: importStocks,
     isLoading,
     error,
     importPendingCode,
@@ -4196,55 +4246,152 @@ function StockImportDialog({
     handleSearch,
     handleImportStock,
   } = importDialog;
+  const Icon = listIcons[targetList];
 
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="hidden" />
       <Modal.Backdrop variant="blur">
         <Modal.Container size="lg" scroll="inside">
-          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-4xl">
             <Modal.CloseTrigger className="z-20" />
             <Modal.Header className="p-5 pr-12">
-              <div className="flex flex-col gap-2">
-                <Modal.Heading className="text-xl text-balance">导入{meta.label}</Modal.Heading>
-                <p className="text-sm text-muted-foreground">从股票列表添加标的</p>
+              <div className="flex min-w-0 items-center gap-3">
+                <Badge.Anchor>
+                  <StockSectionIconBox icon={Icon} active />
+                  <StockCountBadge count={currentStocks.length} active />
+                </Badge.Anchor>
+                <div className="min-w-0">
+                  <Modal.Heading className="truncate text-xl text-balance">{meta.label}</Modal.Heading>
+                  <p className="mt-1 text-sm text-muted-foreground">管理名单股票，支持添加和删除</p>
+                </div>
               </div>
             </Modal.Header>
 
-            <Modal.Body className="flex max-h-[min(78vh,760px)] flex-col overflow-hidden p-0">
-              <StockImportSearchForm
-                codeQuery={codeQuery}
-                nameQuery={nameQuery}
-                isLoading={isLoading}
-                onCodeQueryChange={setCodeQuery}
-                onNameQueryChange={setNameQuery}
-                onSearch={handleSearch}
+            <Modal.Body className="flex max-h-[min(82vh,780px)] min-h-0 flex-col overflow-hidden p-0">
+              <FilterListCurrentStocks
+                listKey={targetList}
+                stocks={currentStocks}
+                chartSelection={chartSelection}
+                filterDeletePendingIds={filterDeletePendingIds}
+                selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                candidateStockCodes={candidateStockCodes}
+                onAddToCandidate={onAddToCandidate}
+                onRemoveFromCandidate={onRemoveFromCandidate}
+                onToggleChart={onToggleChart}
+                onDeleteFromFilterList={onDeleteFromFilterList}
               />
-              <StockImportSummary
-                listLabel={meta.label}
-                filteredCount={filteredStocks.length}
-                visibleCount={visibleStocks.length}
-              />
-              {importError ? (
-                <StockImportError message={importError} />
-              ) : null}
-              <StockImportResults
-                targetList={targetList}
-                oppositeList={oppositeList}
-                metaLabel={meta.label}
-                stockGroups={stockGroups}
-                stocks={stocks}
-                visibleStocks={visibleStocks}
-                isLoading={isLoading}
-                error={error}
-                importPendingCode={importPendingCode}
-                onImportStock={handleImportStock}
-              />
+
+              <section className="flex min-h-0 flex-1 flex-col border-t border-border/60">
+                <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+                      <ImportIcon className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold">添加股票</h3>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">按代码或名称搜索后添加到{meta.label}</p>
+                    </div>
+                  </div>
+                </div>
+                <StockImportSearchForm
+                  codeQuery={codeQuery}
+                  nameQuery={nameQuery}
+                  isLoading={isLoading}
+                  onCodeQueryChange={setCodeQuery}
+                  onNameQueryChange={setNameQuery}
+                  onSearch={handleSearch}
+                />
+                <StockImportSummary
+                  listLabel={meta.label}
+                  filteredCount={filteredStocks.length}
+                  visibleCount={visibleStocks.length}
+                />
+                {importError ? (
+                  <StockImportError message={importError} />
+                ) : null}
+                <StockImportResults
+                  targetList={targetList}
+                  oppositeList={oppositeList}
+                  metaLabel={meta.label}
+                  stockGroups={stockGroups}
+                  stocks={importStocks}
+                  visibleStocks={visibleStocks}
+                  isLoading={isLoading}
+                  error={error}
+                  importPendingCode={importPendingCode}
+                  className="min-h-0 flex-1"
+                  onImportStock={handleImportStock}
+                />
+              </section>
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
     </Modal>
+  );
+}
+
+function FilterListCurrentStocks({
+  listKey,
+  stocks,
+  chartSelection,
+  filterDeletePendingIds,
+  selectionRecordDeletePendingIds,
+  candidateStockCodes,
+  onAddToCandidate,
+  onRemoveFromCandidate,
+  onToggleChart,
+  onDeleteFromFilterList,
+}: {
+  listKey: ReturnableListKey;
+  stocks: StockCandidate[];
+} & StockListSharedProps) {
+  const meta = stockListMeta[listKey];
+
+  return (
+    <section className="shrink-0 px-5 pb-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold">当前{meta.label}</h3>
+          <p className="mt-1 truncate text-xs text-muted-foreground">点击股票查看行情，使用右侧按钮删除</p>
+        </div>
+        <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+          {stocks.length}
+        </Chip>
+      </div>
+
+      {stocks.length > 0 ? (
+        <ScrollShadow orientation="vertical" className="max-h-56 pr-2">
+          <div className="flex w-full flex-col gap-2">
+            {stocks.map((stock) => (
+              <StockListButton
+                key={stock.code}
+                stock={stock}
+                active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
+                onClick={() => onToggleChart(stock.code, listKey)}
+                action={getStockListAction({
+                  stock,
+                  listKey,
+                  candidateStockCodes,
+                  filterDeletePendingIds,
+                  selectionRecordDeletePendingIds,
+                  onAddToCandidate,
+                  onRemoveFromCandidate,
+                  onRemoveFromHistory: () => undefined,
+                  onDeleteFromFilterList,
+                })}
+              />
+            ))}
+          </div>
+        </ScrollShadow>
+      ) : (
+        <div className="flex min-h-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 text-center text-sm">
+          <div className="font-medium">暂无股票</div>
+          <div className="text-xs text-muted-foreground">在下方搜索后添加到{meta.label}</div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -4360,14 +4507,14 @@ function useStockImportDialog(
         description: `${stock.name} ${stock.code}`,
       });
     } catch (importError) {
-      const message = importError instanceof Error ? importError.message : "添加黑白名单失败。";
+      const message = importError instanceof Error ? importError.message : "添加名单失败。";
 
       setDialogState((current) => ({
         ...current,
         importPendingCode: null,
         importError: message,
       }));
-      toast.danger("添加黑白名单失败", {
+      toast.danger("添加名单失败", {
         description: message,
       });
     }
@@ -4479,6 +4626,7 @@ function StockImportResults({
   isLoading,
   error,
   importPendingCode,
+  className,
   onImportStock,
 }: {
   targetList: ReturnableListKey;
@@ -4490,11 +4638,14 @@ function StockImportResults({
   isLoading: boolean;
   error: string | null;
   importPendingCode: string | null;
+  className?: string;
   onImportStock: (stock: StockInfo) => void | Promise<void>;
 }) {
+  const containerClassName = cn("min-h-[320px] overflow-y-auto px-5 pb-5", className);
+
   if (isLoading && stocks.length === 0) {
     return (
-      <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
+      <div className={containerClassName}>
         <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
           <Spinner size="md" />
           加载中...
@@ -4505,7 +4656,7 @@ function StockImportResults({
 
   if (error) {
     return (
-      <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
+      <div className={containerClassName}>
         <Alert status="danger">
           <Alert.Indicator />
           <Alert.Content>
@@ -4518,7 +4669,7 @@ function StockImportResults({
   }
 
   return (
-    <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
+    <div className={containerClassName}>
       {visibleStocks.length > 0 ? (
         <div className="flex w-full flex-col gap-2">
           {visibleStocks.map((stock) => (
