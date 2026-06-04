@@ -1066,8 +1066,6 @@ function StockDashboardLayout({
           error={state.scanError}
           themeMode={themeMode}
           onThemeToggle={onThemeToggle}
-          onLogout={onLogout}
-          onReload={reloadStrategyScan}
         />
         <DesktopStockSidebar
           activeListKey={state.desktopListKey}
@@ -1090,6 +1088,8 @@ function StockDashboardLayout({
             state.candidateResultAvailable
             && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0)
           }
+          onLogout={onLogout}
+          onReload={reloadStrategyScan}
           onActiveListChange={setDesktopListKey}
           onOpenFilterList={openFilterListDialog}
           onOpenCandidateDialog={openCandidateDialog}
@@ -2221,6 +2221,8 @@ function DesktopStockSidebar({
   strategyDeletePendingId,
   scanLoading,
   candidateResultButtonVisible,
+  onLogout,
+  onReload,
   onActiveListChange,
   onOpenFilterList,
   onOpenCandidateDialog,
@@ -2250,6 +2252,8 @@ function DesktopStockSidebar({
   strategyDeletePendingId: number | null;
   scanLoading: boolean;
   candidateResultButtonVisible: boolean;
+  onLogout: () => void;
+  onReload: () => void;
   onActiveListChange: (key: string) => void;
   onOpenFilterList: (listKey: ReturnableListKey) => void;
   onOpenCandidateDialog: () => void;
@@ -2265,6 +2269,30 @@ function DesktopStockSidebar({
     <aside className="flex h-full min-h-0 flex-col gap-4 bg-transparent p-4">
       <Card className="shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
         <CardContent className="flex flex-col gap-3 p-0">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 min-w-0 flex-1 justify-start bg-background/45 px-3 shadow-sm"
+              aria-label={scanLoading ? "加载中" : "重载"}
+              isDisabled={scanLoading}
+              onClick={onReload}
+            >
+              <RefreshCcw data-icon="inline-start" className={cn(scanLoading && "animate-spin")} />
+              <span className="min-w-0 truncate">{scanLoading ? "加载中" : "重载"}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              isIconOnly
+              className="size-10 shrink-0 bg-background/45 px-0 shadow-sm"
+              aria-label="退出登录"
+              onClick={onLogout}
+            >
+              <LogOut />
+            </Button>
+          </div>
+          <div className="h-px bg-border/70" />
           <StrategyActionBar
             strategyConfig={strategyConfig}
             strategyConfigs={strategyConfigs}
@@ -2699,9 +2727,7 @@ function DesktopStockBoard({
   error,
   themeMode,
   onThemeToggle,
-  onLogout,
-  onReload,
-}: StockBoardProps) {
+}: Omit<StockBoardProps, "onLogout" | "onReload">) {
   if (!stock) {
     return (
       <DesktopStockBoardLoading
@@ -2709,8 +2735,6 @@ function DesktopStockBoard({
         error={error}
         themeMode={themeMode}
         onThemeToggle={onThemeToggle}
-        onLogout={onLogout}
-        onReload={onReload}
       />
     );
   }
@@ -2723,26 +2747,14 @@ function DesktopStockBoard({
       error={error}
       themeMode={themeMode}
       onThemeToggle={onThemeToggle}
-      onLogout={onLogout}
-      onReload={onReload}
     />
   );
 }
 
-function DesktopPageHeader({ onLogout }: { onLogout: () => void }) {
+function DesktopPageHeader() {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-3 pt-4">
       <BrandLockup />
-      <Button
-        type="button"
-        variant="outline"
-        className="bg-background/55"
-        aria-label="退出登录"
-        onClick={onLogout}
-      >
-        <LogOut data-icon="inline-start" />
-        退出登录
-      </Button>
     </div>
   );
 }
@@ -2753,9 +2765,7 @@ function DesktopActiveStockBoard({
   error,
   themeMode,
   onThemeToggle,
-  onLogout,
-  onReload,
-}: Omit<StockBoardProps, "stock"> & {
+}: Omit<StockBoardProps, "stock" | "onLogout" | "onReload"> & {
   stock: StockCandidate;
 }) {
   const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
@@ -2782,7 +2792,7 @@ function DesktopActiveStockBoard({
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
       <div className="relative z-10 flex w-full flex-col">
-        <DesktopPageHeader onLogout={onLogout} />
+        <DesktopPageHeader />
         <DesktopStockChartPanel
           stock={chartStock}
           latest={latest}
@@ -2798,7 +2808,6 @@ function DesktopActiveStockBoard({
           error={error}
           themeMode={themeMode}
           onThemeToggle={onThemeToggle}
-          onReload={onReload}
           onChartModeChange={(nextChartMode) => dispatchBoard({ type: "set-chart-mode", chartMode: nextChartMode })}
         />
         <DesktopStockInfoPanel
@@ -2824,7 +2833,6 @@ function DesktopStockChartPanel({
   error,
   themeMode,
   onThemeToggle,
-  onReload,
   onChartModeChange,
 }: {
   stock: StockCandidate;
@@ -2841,7 +2849,6 @@ function DesktopStockChartPanel({
   error: string | null;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
-  onReload: () => void;
   onChartModeChange: (chartMode: ChartMode) => void;
 }) {
   return (
@@ -2935,17 +2942,6 @@ function DesktopStockChartPanel({
                   </button>
                 ))}
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="bg-background/55"
-                aria-label={isLoading ? "加载中" : "重载"}
-                isDisabled={isLoading}
-                onClick={onReload}
-              >
-                <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-                {isLoading ? "加载中" : "重载"}
-              </Button>
             </div>
           </div>
 
@@ -3041,15 +3037,11 @@ function DesktopStockBoardLoading({
   error,
   themeMode,
   onThemeToggle,
-  onLogout,
-  onReload,
 }: {
   isLoading: boolean;
   error: string | null;
   themeMode: ThemeMode;
   onThemeToggle: () => void;
-  onLogout: () => void;
-  onReload: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
 
@@ -3060,24 +3052,11 @@ function DesktopStockBoardLoading({
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
       <div className="relative z-10 flex w-full flex-col">
-        <DesktopPageHeader onLogout={onLogout} />
+        <DesktopPageHeader />
         <section
           className="relative pt-4"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
-          <div className="mb-3 flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="bg-background/55"
-              aria-label={isLoading ? "加载中" : "重载"}
-              isDisabled={isLoading}
-              onClick={onReload}
-            >
-              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-              {isLoading ? "加载中" : "重载"}
-            </Button>
-          </div>
           <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
             <Liveline
               data={[]}
