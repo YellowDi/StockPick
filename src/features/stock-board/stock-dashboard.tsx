@@ -52,7 +52,7 @@ import {
   toast,
   useOverlayState,
 } from "@heroui/react";
-import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
+import { Liveline, type CandlePoint, type LivelinePoint, type LivelineSeries } from "liveline";
 
 import { BrandLockup } from "@/components/brand-lockup";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
@@ -94,7 +94,7 @@ const axisLabelMatchThresholdSecs = daySecs / 2;
 const chartLineWidth = 2.5;
 const heroChartPadding = { top: 260, right: 88, bottom: 72, left: 24 };
 const compactHeroChartPadding = { top: 292, right: 60, bottom: 54, left: 12 };
-const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: -16 };
+const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: 0 };
 const compactViewportQuery = "(max-width: 639px)";
 const mobileViewportQuery = "(max-width: 767px)";
 const emptyStockGroups: StockGroups = {
@@ -1869,42 +1869,69 @@ function ActiveStockBoard({
 
         <div className="absolute inset-0 z-0">
           {latest || isLoading ? (
-            <Liveline
-              data={latest ? chartView.lineData : []}
-              value={latest?.close ?? 0}
-              mode="candle"
-              candles={chartView.candles}
-              candleWidth={chartView.candleWidth}
-              lineMode={chartMode === "line"}
-              lineData={chartView.lineData}
-              lineValue={latest?.close}
-              theme={themeMode}
-              color={chartColor}
-              lineWidth={chartLineWidth}
-              window={selectedRangeSecs}
-              grid
-              scrub
-              badge={true}
-              badgeVariant="minimal"
-              badgeTail
-              momentum={momentum}
-              pulse
-              loading={isLoading}
-              showValue
-              valueMomentumColor
-              referenceLine={
-                latest?.last
-                  ? {
-                      value: latest.last,
-                      label: "昨收",
-                    }
-                  : undefined
-              }
-              formatValue={(value) => value.toFixed(2)}
-              formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
-              padding={chartPadding}
-              className="size-full"
-            />
+            chartMode === "line" ? (
+              <Liveline
+                key="line"
+                data={[]}
+                value={0}
+                series={createPriceMA5Series(chartView, latest, chartColor, themeMode)}
+                theme={themeMode}
+                color={chartColor}
+                lineWidth={chartLineWidth}
+                window={selectedRangeSecs}
+                grid
+                scrub
+                pulse
+                loading={isLoading}
+                referenceLine={
+                  latest?.last
+                    ? {
+                        value: latest.last,
+                        label: "昨收",
+                      }
+                    : undefined
+                }
+                formatValue={(value) => value.toFixed(2)}
+                formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
+                padding={chartPadding}
+                className="size-full"
+              />
+            ) : (
+              <Liveline
+                key="candle"
+                data={latest ? chartView.lineData : []}
+                value={latest?.close ?? 0}
+                mode="candle"
+                candles={chartView.candles}
+                candleWidth={chartView.candleWidth}
+                theme={themeMode}
+                color={chartColor}
+                lineWidth={chartLineWidth}
+                window={selectedRangeSecs}
+                grid
+                scrub
+                badge={true}
+                badgeVariant="minimal"
+                badgeTail
+                momentum={momentum}
+                pulse
+                loading={isLoading}
+                showValue
+                valueMomentumColor
+                referenceLine={
+                  latest?.last
+                    ? {
+                        value: latest.last,
+                        label: "昨收",
+                      }
+                    : undefined
+                }
+                formatValue={(value) => value.toFixed(2)}
+                formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
+                padding={chartPadding}
+                className="size-full"
+              />
+            )
           ) : (
             <EmptyChart error={error ?? chartStock.records[0]?.error} />
           )}
@@ -2919,42 +2946,69 @@ function DesktopStockChartPanel({
 
           <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
             {latest || isLoading ? (
-              <Liveline
-                data={latest ? chartView.lineData : []}
-                value={latest?.close ?? 0}
-                mode="candle"
-                candles={chartView.candles}
-                candleWidth={chartView.candleWidth}
-                lineMode={chartMode === "line"}
-                lineData={chartView.lineData}
-                lineValue={latest?.close}
-                theme={themeMode}
-                color={chartColor}
-                lineWidth={chartLineWidth}
-                window={selectedRangeSecs}
-                grid
-                scrub
-                badge={true}
-                badgeVariant="minimal"
-                badgeTail
-                momentum={momentum}
-                pulse
-                loading={isLoading}
-                showValue
-                valueMomentumColor
-                referenceLine={
-                  latest?.last
-                    ? {
-                        value: latest.last,
-                        label: "昨收",
-                      }
-                    : undefined
-                }
-                formatValue={(value) => value.toFixed(2)}
-                formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
-                padding={desktopChartPadding}
-                className="size-full"
-              />
+              chartMode === "line" ? (
+                <Liveline
+                  key="line"
+                  data={[]}
+                  value={0}
+                  series={createPriceMA5Series(chartView, latest, chartColor, themeMode)}
+                  theme={themeMode}
+                  color={chartColor}
+                  lineWidth={chartLineWidth}
+                  window={selectedRangeSecs}
+                  grid
+                  scrub
+                  pulse
+                  loading={isLoading}
+                  referenceLine={
+                    latest?.last
+                      ? {
+                          value: latest.last,
+                          label: "昨收",
+                        }
+                      : undefined
+                  }
+                  formatValue={(value) => value.toFixed(2)}
+                  formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
+                  padding={desktopChartPadding}
+                  className="size-full"
+                />
+              ) : (
+                <Liveline
+                  key="candle"
+                  data={latest ? chartView.lineData : []}
+                  value={latest?.close ?? 0}
+                  mode="candle"
+                  candles={chartView.candles}
+                  candleWidth={chartView.candleWidth}
+                  theme={themeMode}
+                  color={chartColor}
+                  lineWidth={chartLineWidth}
+                  window={selectedRangeSecs}
+                  grid
+                  scrub
+                  badge={true}
+                  badgeVariant="minimal"
+                  badgeTail
+                  momentum={momentum}
+                  pulse
+                  loading={isLoading}
+                  showValue
+                  valueMomentumColor
+                  referenceLine={
+                    latest?.last
+                      ? {
+                          value: latest.last,
+                          label: "昨收",
+                        }
+                      : undefined
+                  }
+                  formatValue={(value) => value.toFixed(2)}
+                  formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
+                  padding={desktopChartPadding}
+                  className="size-full"
+                />
+              )
             ) : (
               <EmptyChart error={error ?? stock.records[0]?.error} className="min-h-0" />
             )}
@@ -4581,8 +4635,56 @@ function createChartView(history: StockDailyRecord[]) {
     candles,
     axisDateLabels,
     lineData: createLineDataFromCandles(candles, daySecs),
+    ma5: createMASeries(history, candles, 5),
     candleWidth: daySecs,
   };
+}
+
+function createPriceMA5Series(
+  chartView: ReturnType<typeof createChartView>,
+  latest: StockDailyRecord | undefined,
+  priceColor: string,
+  themeMode: ThemeMode,
+): LivelineSeries[] {
+  return [
+    {
+      id: "price",
+      data: latest ? chartView.lineData : [],
+      value: latest?.close ?? 0,
+      color: priceColor,
+      label: "价格",
+    },
+    {
+      id: "ma5",
+      data: chartView.ma5,
+      value: chartView.ma5.at(-1)?.value ?? 0,
+      color: themeMode === "light" ? "#d08700" : "#f5b942",
+      label: "MA5",
+    },
+  ];
+}
+
+function createMASeries(
+  history: StockDailyRecord[],
+  visibleCandles: CandlePoint[],
+  period: number,
+): LivelinePoint[] {
+  const offset = history.length - visibleCandles.length;
+  const points: LivelinePoint[] = [];
+
+  visibleCandles.forEach((candle, index) => {
+    const end = offset + index;
+    if (end < period - 1) return;
+
+    let sum = 0;
+    for (let i = end - period + 1; i <= end; i++) {
+      sum += history[i].close;
+    }
+
+    points.push({ time: candle.time + daySecs, value: sum / period });
+  });
+
+  return points;
 }
 
 function createDisplayDailyCandles(records: StockDailyRecord[]) {
