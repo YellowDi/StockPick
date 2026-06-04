@@ -286,7 +286,7 @@ const initialStockDashboardState: StockDashboardState = {
   stockGroups: emptyStockGroups,
   selectionBatches: [],
   chartSelection: null,
-  mobileListKey: "selected",
+  mobileListKey: "initial",
   desktopListKey: "initial",
   importTargetList: null,
   scanError: null,
@@ -1403,6 +1403,10 @@ function createAggregatedSelectedStocks(selectionBatches: SelectionBatchState[])
   return selectionBatches.flatMap((batch) => batch.stocks);
 }
 
+function getVisibleStockListOrder(order: StockListKey[], stockGroups: Pick<StockGroups, "candidate">) {
+  return order.filter((key) => key !== "candidate" || stockGroups.candidate.length > 0);
+}
+
 function syncFilterListsState(
   state: StockDashboardState,
   whitelist: StockCandidate[],
@@ -2317,6 +2321,7 @@ function DesktopStockAccordion({
   onSelectionHistoryPageChange: (pageNum: number) => void;
 } & StockListSharedProps) {
   const pageCount = getPageCount(selectionBatchesTotal, selectionHistoryPageSize);
+  const visibleListOrder = getVisibleStockListOrder(desktopStaticListOrder, stockGroups);
 
   return (
     <Accordion
@@ -2356,7 +2361,7 @@ function DesktopStockAccordion({
       ) : selectionBatches.length === 0 ? (
         <DesktopSelectionHistoryEmptyState />
       ) : null}
-      {desktopStaticListOrder.map((key) => (
+      {visibleListOrder.map((key) => (
         <DesktopStockAccordionItem
           key={key}
           listKey={key}
@@ -3331,26 +3336,31 @@ function MobileStockTabs({
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }) {
-  const stocks = stockGroups[activeListKey];
-  const meta = stockListMeta[activeListKey];
-  const returnableListKey = getReturnableListKey(activeListKey);
-  const showCandidateSave = activeListKey === "candidate";
+  const visibleListOrder = getVisibleStockListOrder(mobileListOrder, stockGroups);
+  const currentListKey = visibleListOrder.includes(activeListKey) ? activeListKey : "initial";
+  const stocks = stockGroups[currentListKey];
+  const meta = stockListMeta[currentListKey];
+  const returnableListKey = getReturnableListKey(currentListKey);
+  const showCandidateSave = currentListKey === "candidate";
 
   return (
     <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
       <CardHeader className="gap-3">
-        <div className="grid grid-cols-4 gap-1 rounded-lg bg-background/45 p-1">
-          {mobileListOrder.map((key) => (
+        <div
+          className="grid gap-1 rounded-lg bg-background/45 p-1"
+          style={{ gridTemplateColumns: `repeat(${visibleListOrder.length}, minmax(0, 1fr))` }}
+        >
+          {visibleListOrder.map((key) => (
             <button
               key={key}
               type="button"
               className={cn(
                 "h-9 min-w-0 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
-                key === activeListKey
+                key === currentListKey
                   ? "bg-secondary text-secondary-foreground"
                   : "hover:bg-accent hover:text-accent-foreground",
               )}
-              aria-pressed={key === activeListKey}
+              aria-pressed={key === currentListKey}
               onClick={() => onActiveListChange(key)}
             >
               <span className="block truncate">{stockListMeta[key].label}</span>
@@ -3399,11 +3409,11 @@ function MobileStockTabs({
               <StockListButton
                 key={stock.code}
                 stock={stock}
-                active={chartSelection?.listKey === activeListKey && chartSelection.code === stock.code}
-                onClick={() => onToggleChart(stock.code, activeListKey)}
+                active={chartSelection?.listKey === currentListKey && chartSelection.code === stock.code}
+                onClick={() => onToggleChart(stock.code, currentListKey)}
                 action={getStockListAction({
                   stock,
-                  listKey: activeListKey,
+                  listKey: currentListKey,
                   candidateStockCodes,
                   filterDeletePendingIds,
                   selectionRecordDeletePendingIds,
