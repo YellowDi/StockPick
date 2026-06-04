@@ -996,7 +996,7 @@ function StockDashboardLayout({
           />
         </div>
       </div>
-      <div className="hidden h-dvh overflow-hidden md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mx-auto hidden h-dvh w-full max-w-[1680px] overflow-hidden md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
         <DesktopStockBoard
           stock={selectedStock}
           isLoading={state.scanLoading}
@@ -2176,7 +2176,7 @@ function DesktopStockSidebar({
   onStrategyScan: () => void | Promise<void>;
 } & StockListSharedProps) {
   return (
-    <aside className="flex min-h-0 flex-col gap-4 border-l border-border/45 bg-transparent p-4">
+    <aside className="flex min-h-0 flex-col gap-4 bg-transparent p-4">
       <div className="shrink-0">
         <StrategyActionBar
           strategyConfig={strategyConfig}
@@ -2804,12 +2804,12 @@ function DesktopActiveStockBoard({
   } = useStockBoardModel(stock, themeMode);
 
   return (
-    <section className="relative min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
+    <section className="relative min-h-0 min-w-0 overflow-y-auto px-5 pb-4 lg:px-8">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[1120px]"
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
-      <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col">
+      <div className="relative z-10 flex w-full flex-col">
         <DesktopPageHeader onLogout={onLogout} />
         <DesktopStockChartPanel
           stock={chartStock}
@@ -2882,7 +2882,7 @@ function DesktopStockChartPanel({
     <section
       className="relative pt-4"
     >
-      <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
 
       <div className="relative z-20 grid gap-0 py-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[300px_minmax(0,1fr)]">
         <div className="flex min-h-[clamp(320px,44vh,440px)] min-w-0 flex-col justify-between py-1">
@@ -3153,17 +3153,17 @@ function DesktopStockBoardLoading({
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
 
   return (
-    <section className="relative min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
+    <section className="relative min-h-0 min-w-0 overflow-y-auto px-5 pb-4 lg:px-8">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[1120px]"
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
-      <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col">
+      <div className="relative z-10 flex w-full flex-col">
         <DesktopPageHeader onLogout={onLogout} />
         <section
           className="relative pt-4"
         >
-          <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-40 w-[calc(100vw-320px)] -translate-x-1/2 bg-gradient-to-b from-background/75 to-transparent lg:w-[calc(100vw-360px)]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
           <div className="mb-3 flex justify-end">
             <Button
               type="button"
