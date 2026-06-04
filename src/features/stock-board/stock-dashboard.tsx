@@ -93,10 +93,6 @@ const compactHeroChartPadding = { top: 292, right: 60, bottom: 54, left: 12 };
 const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: -16 };
 const compactViewportQuery = "(max-width: 639px)";
 const mobileViewportQuery = "(max-width: 767px)";
-const chartRangeOptionsBase = [
-  { id: "daily", label: "日K" },
-  { id: "today", label: "当日" },
-] as const;
 const emptyStockGroups: StockGroups = {
   initial: [],
   candidate: [],
@@ -104,7 +100,6 @@ const emptyStockGroups: StockGroups = {
   whitelist: [],
   blacklist: [],
 };
-type ChartRangeId = (typeof chartRangeOptionsBase)[number]["id"];
 type ChartMode = "line" | "candle";
 type ChartAxisDateLabel = {
   time: number;
@@ -114,11 +109,6 @@ const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
 ];
-const stockDataViewOptions = [
-  { id: "daily-detail" as const, label: "日 K 明细" },
-  { id: "five-day-trend" as const, label: "近 5 日走势" },
-];
-type StockDataViewId = (typeof stockDataViewOptions)[number]["id"];
 const stockImportResultLimit = 80;
 const exactCodePrefixPattern = /^(SH|SZ)/i;
 const stockItemActionClassName = cn(
@@ -1643,18 +1633,15 @@ type StockBoardProps = {
 };
 
 type ActiveStockBoardState = {
-  chartRangeId: ChartRangeId;
   chartMode: ChartMode;
   detailsOpen: boolean;
 };
 
 type ActiveStockBoardAction =
-  | { type: "select-range"; rangeId: ChartRangeId }
   | { type: "set-chart-mode"; chartMode: ChartMode }
   | { type: "toggle-details" };
 
 const initialActiveStockBoardState: ActiveStockBoardState = {
-  chartRangeId: "daily",
   chartMode: "candle",
   detailsOpen: false,
 };
@@ -1712,7 +1699,6 @@ function useIsCompactViewport() {
 
 function useStockBoardModel(
   stock: StockCandidate,
-  chartRangeId: ChartRangeId,
   themeMode: ThemeMode,
 ) {
   const chartStock = useMemo(
@@ -1727,8 +1713,8 @@ function useStockBoardModel(
     [chartStock.records],
   );
   const chartView = useMemo(
-    () => createChartView(sourceRecords, chartRangeId),
-    [chartRangeId, sourceRecords],
+    () => createChartView(sourceRecords),
+    [sourceRecords],
   );
   const records = chartView.records;
   const latest = records.at(-1);
@@ -1739,12 +1725,7 @@ function useStockBoardModel(
     ? themeMode === "light" ? "#b94545" : "#ef4444"
     : themeMode === "light" ? "#2f7f59" : "#22c55e";
   const momentum: "up" | "down" | "flat" = change > 0 ? "up" : change < 0 ? "down" : "flat";
-  const chartRangeOptions = useMemo(() => chartRangeOptionsBase.map((option) => ({
-    id: option.id,
-    label: option.label,
-    secs: getDailyKWindowSecs(sourceRecords),
-  })), [sourceRecords]);
-  const selectedRange = chartRangeOptions.find((option) => option.id === chartRangeId) ?? chartRangeOptions[0];
+  const selectedRangeSecs = getDailyKWindowSecs(sourceRecords);
   const positive = change >= 0;
   const trend = !latest
     ? "暂无行情"
@@ -1772,8 +1753,7 @@ function useStockBoardModel(
     changePct,
     chartColor,
     momentum,
-    chartRangeOptions,
-    selectedRange,
+    selectedRangeSecs,
     positive,
     trend,
     strength,
@@ -1793,7 +1773,6 @@ function ActiveStockBoard({
 }) {
   const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
   const {
-    chartRangeId,
     chartMode,
     detailsOpen,
   } = boardState;
@@ -1806,18 +1785,13 @@ function ActiveStockBoard({
     changePct,
     chartColor,
     momentum,
-    chartRangeOptions,
-    selectedRange,
+    selectedRangeSecs,
     positive,
     trend,
     strength,
-  } = useStockBoardModel(stock, chartRangeId, themeMode);
+  } = useStockBoardModel(stock, themeMode);
   const isCompactViewport = useIsCompactViewport();
   const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
-
-  function selectChartRange(rangeId: ChartRangeId) {
-    dispatchBoard({ type: "select-range", rangeId });
-  }
 
   return (
     <>
@@ -1892,13 +1866,6 @@ function ActiveStockBoard({
               <HeroMetric label="成交额" value={latest ? formatAmount(latest.amount) : "--"} />
             </div>
           </div>
-
-          <ChartRangeControls
-            className="hidden md:block"
-            options={chartRangeOptions}
-            activeId={chartRangeId}
-            onSelect={selectChartRange}
-          />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
@@ -1975,7 +1942,7 @@ function ActiveStockBoard({
               theme={themeMode}
               color={chartColor}
               lineWidth={chartLineWidth}
-              window={selectedRange.secs}
+              window={selectedRangeSecs}
               grid
               scrub
               badge={true}
@@ -2006,13 +1973,6 @@ function ActiveStockBoard({
 
       </div>
       </section>
-
-      <ChartRangeControls
-        className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-[1680px] md:hidden"
-        options={chartRangeOptions}
-        activeId={chartRangeId}
-        onSelect={selectChartRange}
-      />
     </>
   );
 }
@@ -2022,12 +1982,6 @@ function activeStockBoardReducer(
   action: ActiveStockBoardAction,
 ): ActiveStockBoardState {
   switch (action.type) {
-    case "select-range":
-      return {
-        ...state,
-        chartRangeId: action.rangeId,
-        chartMode: "candle",
-      };
     case "set-chart-mode":
       return { ...state, chartMode: action.chartMode };
     case "toggle-details":
@@ -2209,46 +2163,6 @@ function JudgementMetricCard({
       </div>
       <div className="min-w-0 truncate text-xs text-muted-foreground">{detail}</div>
     </Card>
-  );
-}
-
-function ChartRangeControls({
-  options,
-  activeId,
-  onSelect,
-  className,
-}: {
-  options: Array<{ id: ChartRangeId; label: string }>;
-  activeId: ChartRangeId;
-  onSelect: (id: ChartRangeId) => void;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "min-w-0 max-w-full overflow-x-auto rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl [-webkit-overflow-scrolling:touch]",
-        className,
-      )}
-    >
-      <div className="flex min-w-max items-center gap-1">
-        {options.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className={cn(
-              "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-              option.id === activeId
-                ? "bg-secondary text-secondary-foreground"
-                : "hover:bg-accent hover:text-accent-foreground",
-            )}
-            aria-pressed={option.id === activeId}
-            onClick={() => onSelect(option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -2901,7 +2815,6 @@ function DesktopActiveStockBoard({
 }) {
   const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
   const {
-    chartRangeId,
     chartMode,
   } = boardState;
   const {
@@ -2913,12 +2826,11 @@ function DesktopActiveStockBoard({
     changePct,
     chartColor,
     momentum,
-    chartRangeOptions,
-    selectedRange,
+    selectedRangeSecs,
     positive,
     trend,
     strength,
-  } = useStockBoardModel(stock, chartRangeId, themeMode);
+  } = useStockBoardModel(stock, themeMode);
 
   return (
     <section className="relative min-h-0 overflow-y-auto px-5 pb-4 lg:px-8">
@@ -2938,18 +2850,15 @@ function DesktopActiveStockBoard({
           trend={trend}
           strength={strength}
           chartView={chartView}
-          activeRangeId={chartRangeId}
           chartMode={chartMode}
           chartColor={chartColor}
-          chartRangeOptions={chartRangeOptions}
-          selectedRangeSecs={selectedRange.secs}
+          selectedRangeSecs={selectedRangeSecs}
           momentum={momentum}
           isLoading={isLoading}
           error={error}
           themeMode={themeMode}
           onThemeToggle={onThemeToggle}
           onReload={onReload}
-          onRangeSelect={(rangeId) => dispatchBoard({ type: "select-range", rangeId })}
           onChartModeChange={(nextChartMode) => dispatchBoard({ type: "set-chart-mode", chartMode: nextChartMode })}
         />
         <DesktopStockInfoPanel
@@ -2976,10 +2885,8 @@ function DesktopStockChartPanel({
   trend,
   strength,
   chartView,
-  activeRangeId,
   chartMode,
   chartColor,
-  chartRangeOptions,
   selectedRangeSecs,
   momentum,
   isLoading,
@@ -2987,7 +2894,6 @@ function DesktopStockChartPanel({
   themeMode,
   onThemeToggle,
   onReload,
-  onRangeSelect,
   onChartModeChange,
 }: {
   stock: StockCandidate;
@@ -2999,10 +2905,8 @@ function DesktopStockChartPanel({
   trend: string;
   strength: string;
   chartView: ReturnType<typeof createChartView>;
-  activeRangeId: ChartRangeId;
   chartMode: ChartMode;
   chartColor: string;
-  chartRangeOptions: Array<{ id: ChartRangeId; label: string; secs: number }>;
   selectedRangeSecs: number;
   momentum: "up" | "down" | "flat";
   isLoading: boolean;
@@ -3010,7 +2914,6 @@ function DesktopStockChartPanel({
   themeMode: ThemeMode;
   onThemeToggle: () => void;
   onReload: () => void;
-  onRangeSelect: (rangeId: ChartRangeId) => void;
   onChartModeChange: (chartMode: ChartMode) => void;
 }) {
   return (
@@ -3089,13 +2992,7 @@ function DesktopStockChartPanel({
         </div>
 
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <ChartRangeControls
-              className="shadow-none"
-              options={chartRangeOptions}
-              activeId={activeRangeId}
-              onSelect={onRangeSelect}
-            />
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <div className="flex rounded-lg bg-background/45 p-1">
                 {chartModeOptions.map((option) => (
@@ -3194,7 +3091,6 @@ function DesktopStockInfoPanel({
   trend: string;
   strength: string;
 }) {
-  const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
   const visibleRecords = sourceRecords.slice(-dailyKVisibleDays);
   const firstVisibleRecord = visibleRecords[0];
   const latestVisibleRecord = visibleRecords.at(-1);
@@ -3249,31 +3145,7 @@ function DesktopStockInfoPanel({
       </div>
 
       <div className="mt-5 border-t border-border/60 pt-4">
-        <div className="flex w-max max-w-full gap-1 overflow-x-auto rounded-lg bg-background/45 p-1 [-webkit-overflow-scrolling:touch]">
-          {stockDataViewOptions.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={cn(
-                "h-8 whitespace-nowrap rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-                option.id === activeViewId
-                  ? "bg-secondary text-secondary-foreground"
-                  : "hover:bg-accent hover:text-accent-foreground",
-              )}
-              aria-pressed={option.id === activeViewId}
-              onClick={() => setActiveViewId(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4">
-          {activeViewId === "daily-detail" ? (
-            <DailyKlineDetailSection records={sourceRecords} />
-          ) : (
-            <FiveDayTrendSection records={sourceRecords} />
-          )}
-        </div>
+        <DailyKlineDetailSection records={sourceRecords} />
       </div>
     </section>
   );
@@ -3646,8 +3518,6 @@ function StockDetailsPanel({
   open: boolean;
   records: StockDailyRecord[];
 }) {
-  const [activeViewId, setActiveViewId] = useState<StockDataViewId>("daily-detail");
-
   return (
     <div
       id={id}
@@ -3663,32 +3533,8 @@ function StockDetailsPanel({
           open ? "max-h-[360px] sm:max-h-[430px]" : "max-h-0",
         )}
       >
-        <div className="border-b p-3">
-          <div className="flex w-max max-w-full gap-1 overflow-x-auto rounded-lg bg-background/45 p-1 [-webkit-overflow-scrolling:touch]">
-            {stockDataViewOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={cn(
-                  "h-8 whitespace-nowrap rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-                  option.id === activeViewId
-                    ? "bg-secondary text-secondary-foreground"
-                    : "hover:bg-accent hover:text-accent-foreground",
-                )}
-                aria-pressed={option.id === activeViewId}
-                onClick={() => setActiveViewId(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
         <div className="max-h-[300px] overflow-y-auto p-4 sm:max-h-[360px]">
-          {activeViewId === "daily-detail" ? (
-            <DailyKlineDetailSection records={records} />
-          ) : (
-            <FiveDayTrendSection records={records} />
-          )}
+          <DailyKlineDetailSection records={records} />
         </div>
       </div>
     </div>
@@ -3750,107 +3596,6 @@ function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
         <StockDataEmptyState label="暂无日 K 明细数据" />
       )}
     </section>
-  );
-}
-
-function FiveDayTrendSection({ records }: { records: StockDailyRecord[] }) {
-  const visibleRecords = records.slice(-dailyKVisibleDays);
-  const firstRecord = visibleRecords[0];
-  const latestRecord = visibleRecords.at(-1);
-  const rangeChangePct = firstRecord && latestRecord && firstRecord.close !== 0
-    ? ((latestRecord.close - firstRecord.close) / firstRecord.close) * 100
-    : null;
-  const limitHitCount = visibleRecords.filter(hasTouchedLimitUp).length;
-  const startIndex = records.length - visibleRecords.length;
-
-  return (
-    <section>
-      <div className="mb-3 gap-1 lg:flex lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold">近 5 日走势</h2>
-          <p className="mt-1 text-sm text-muted-foreground">基于当前股票日 K 明细</p>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2 lg:mt-0">
-          <TrendSummaryMetric
-            label="收盘变化"
-            value={rangeChangePct === null ? "--" : `${formatSigned(rangeChangePct)}%`}
-            tone={rangeChangePct === null ? undefined : rangeChangePct >= 0 ? "up" : "down"}
-          />
-          <TrendSummaryMetric label="触及涨停" value={`${limitHitCount} 次`} />
-        </div>
-      </div>
-      {visibleRecords.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-[720px] w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium">日期</th>
-                <th className="px-3 py-2 text-right font-medium">收盘价</th>
-                <th className="px-3 py-2 text-right font-medium">涨跌幅</th>
-                <th className="px-3 py-2 text-right font-medium">涨停价</th>
-                <th className="px-3 py-2 text-right font-medium">是否触及</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRecords.map((record, index) => {
-                const previous = records[startIndex + index - 1];
-                const dailyChangePct = getDailyChangePct(record, previous);
-                const dailyPositive = dailyChangePct === null || dailyChangePct >= 0;
-                const touchedLimitUp = hasTouchedLimitUp(record);
-
-                return (
-                  <tr key={`${record.code}:${record.date}`} className="border-b border-border/60 last:border-b-0">
-                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground tabular-nums">{record.date}</td>
-                    <td className={cn("whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
-                      {formatPrice(record.close)}
-                    </td>
-                    <td className={cn("whitespace-nowrap px-3 py-2 text-right tabular-nums", dailyPositive ? "text-stock-up" : "text-stock-down")}>
-                      {dailyChangePct === null ? "--" : `${formatSigned(dailyChangePct)}%`}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_up)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
-                      <Chip
-                        variant="soft"
-                        className={cn("bg-background/45", touchedLimitUp && "text-stock-up")}
-                      >
-                        {touchedLimitUp ? "触及" : "未触及"}
-                      </Chip>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <StockDataEmptyState label="暂无近 5 日走势数据" />
-      )}
-    </section>
-  );
-}
-
-function TrendSummaryMetric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "up" | "down";
-}) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-background/45 px-2.5 py-1 text-xs text-muted-foreground">
-      <span>{label}</span>
-      <span
-        className={cn(
-          "font-medium text-foreground tabular-nums",
-          tone === "up" && "text-stock-up",
-          tone === "down" && "text-stock-down",
-        )}
-      >
-        {value}
-      </span>
-    </span>
   );
 }
 
@@ -4895,24 +4640,8 @@ function EmptyChart({ error, className }: { error?: string; className?: string }
   );
 }
 
-function createChartView(
-  history: StockDailyRecord[],
-  rangeId: ChartRangeId,
-) {
-  if (rangeId === "daily") {
-    const records = history.slice(-dailyKVisibleDays);
-    const { candles, axisDateLabels } = createDisplayDailyCandles(records);
-
-    return {
-      records,
-      candles,
-      axisDateLabels,
-      lineData: createLineDataFromCandles(candles, daySecs),
-      candleWidth: daySecs,
-    };
-  }
-
-  const records = history.slice(-1);
+function createChartView(history: StockDailyRecord[]) {
+  const records = history.slice(-dailyKVisibleDays);
   const { candles, axisDateLabels } = createDisplayDailyCandles(records);
 
   return {
@@ -5022,15 +4751,6 @@ function getDailyKWindowSecs(records: StockDailyRecord[]) {
   }
 
   return daySecs * dailyKVisibleDays;
-}
-
-function getDailyChangePct(
-  record: StockDailyRecord,
-  previous: StockDailyRecord | undefined,
-) {
-  const base = previous?.close ?? record.last;
-
-  return typeof base === "number" && base !== 0 ? ((record.close - base) / base) * 100 : null;
 }
 
 function hasTouchedLimitUp(record: StockDailyRecord) {
