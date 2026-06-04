@@ -44,6 +44,7 @@ import {
   Modal,
   Pagination,
   ScrollShadow,
+  Skeleton,
   Spinner,
   Surface,
   Tabs,
@@ -186,6 +187,8 @@ const listIcons = {
   blacklist: ShieldX,
 } satisfies Record<StockListKey, typeof ListFilter>;
 
+const chartSkeletonBarHeights = ["34%", "48%", "42%", "64%", "58%", "76%", "54%", "68%", "46%", "60%", "72%", "50%"];
+
 type StockSectionIcon = typeof ListFilter;
 
 function StockSectionIconBox({
@@ -225,6 +228,106 @@ function StockCountBadge({
     >
       {count}
     </Badge>
+  );
+}
+
+function StockBoardHeaderSkeleton({ desktop = false }: { desktop?: boolean }) {
+  return (
+    <div className="min-w-0 space-y-3" aria-hidden="true">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Skeleton className={cn("h-8 rounded-md", desktop ? "w-40" : "w-32")} />
+        <Skeleton className="h-4 w-20 rounded" />
+        <Skeleton className="h-7 w-16 rounded-full" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className={cn("rounded-md", desktop ? "h-12 w-52" : "h-10 w-44")} />
+        <Skeleton className="h-4 w-64 max-w-full rounded" />
+      </div>
+    </div>
+  );
+}
+
+function StockChartSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "grid size-full min-h-[240px] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 rounded-lg border border-border/60 bg-background/25 p-4",
+        className,
+      )}
+      aria-hidden="true"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-3 w-24 rounded" />
+        <Skeleton className="h-3 w-16 rounded" />
+      </div>
+      <div className="flex min-h-0 items-end gap-1">
+        {chartSkeletonBarHeights.map((height, index) => (
+          <Skeleton
+            key={`${height}-${index}`}
+            className="w-full rounded-sm"
+            style={{ height }}
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        <Skeleton className="h-3 rounded" />
+        <Skeleton className="h-3 rounded" />
+        <Skeleton className="h-3 rounded" />
+        <Skeleton className="h-3 rounded" />
+      </div>
+    </div>
+  );
+}
+
+function StockListSkeleton({ count = 4, action = true }: { count?: number; action?: boolean }) {
+  return (
+    <div className="flex w-full flex-col gap-2" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <Surface
+          key={index}
+          variant="transparent"
+          className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-background/40 p-3"
+        >
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Skeleton className="h-4 w-24 rounded" />
+              <Skeleton className="h-3 w-16 rounded" />
+            </div>
+            <Skeleton className="h-3 w-32 max-w-full rounded" />
+          </div>
+          {action ? <Skeleton className="size-8 shrink-0 rounded-md" /> : null}
+        </Surface>
+      ))}
+    </div>
+  );
+}
+
+function SelectionBatchSkeletonList({ count = 3 }: { count?: number }) {
+  return (
+    <div className="flex w-full flex-col gap-2" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 rounded-lg border border-border/60 bg-surface/70 p-3"
+        >
+          <Skeleton className="size-7 shrink-0 rounded-md" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-32 max-w-full rounded" />
+            <Skeleton className="h-3 w-44 max-w-full rounded" />
+          </div>
+          <Skeleton className="size-8 shrink-0 rounded-md" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StockImportResultsSkeleton() {
+  return (
+    <div className="flex w-full flex-col gap-2" role="status">
+      <span className="sr-only">加载搜索结果...</span>
+      <StockListSkeleton count={5} />
+    </div>
   );
 }
 
@@ -2134,6 +2237,7 @@ function StockBoardLoading({
   const chartPadding = mobileChartPadding;
   const title = error ? "策略扫描失败" : isLoading ? "正在扫描" : "等待策略筛选";
   const description = error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "选择策略并开始筛选后显示候选行情");
+  const showSkeleton = isLoading && !error;
 
   return (
     <section className="mobile-stock-panel">
@@ -2177,31 +2281,44 @@ function StockBoardLoading({
       </div>
 
       <div className="mt-4 min-w-0">
-        <h1 className="text-2xl font-semibold leading-tight tracking-normal text-foreground text-balance">
-          {title}
-        </h1>
-        <p className="mt-2 max-w-lg text-sm text-muted-foreground text-pretty">
-          {description}
-        </p>
+        {showSkeleton ? (
+          <>
+            <StockBoardHeaderSkeleton />
+            <span className="sr-only">{description}</span>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl font-semibold leading-tight tracking-normal text-foreground text-balance">
+              {title}
+            </h1>
+            <p className="mt-2 max-w-lg text-sm text-muted-foreground text-pretty">
+              {description}
+            </p>
+          </>
+        )}
       </div>
 
       <div className="mobile-stock-chart">
-        <Liveline
-          data={[]}
-          value={0}
-          mode="candle"
-          candles={[]}
-          candleWidth={daySecs}
-          theme={themeMode}
-          color={chartColor}
-          lineWidth={chartLineWidth}
-          window={daySecs * dailyKVisibleDays}
-          grid
-          loading={isLoading}
-          momentum="flat"
-          padding={chartPadding}
-          className="size-full"
-        />
+        {showSkeleton ? (
+          <StockChartSkeleton />
+        ) : (
+          <Liveline
+            data={[]}
+            value={0}
+            mode="candle"
+            candles={[]}
+            candleWidth={daySecs}
+            theme={themeMode}
+            color={chartColor}
+            lineWidth={chartLineWidth}
+            window={daySecs * dailyKVisibleDays}
+            grid
+            loading={isLoading}
+            momentum="flat"
+            padding={chartPadding}
+            className="size-full"
+          />
+        )}
       </div>
     </section>
   );
@@ -2631,10 +2748,7 @@ function SelectionBatchDisclosureItem({
               <div className="text-xs text-muted-foreground text-pretty">{batch.error}</div>
             </div>
           ) : batch.isLoading ? (
-            <div className="flex min-h-20 items-center gap-2 px-1 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" />
-              加载记录...
-            </div>
+            <StockListSkeleton count={3} action={false} />
           ) : batch.stocks.length > 0 ? (
             <ScrollShadow orientation="vertical" className="max-h-64 pr-2">
               <div className="flex w-full flex-col gap-2">
@@ -2674,9 +2788,9 @@ function SelectionBatchDisclosureItem({
 
 function DesktopSelectionBatchesLoadingState() {
   return (
-    <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border/60 bg-surface/70 p-3 text-sm text-muted-foreground">
-      <LoaderCircle className="size-4 animate-spin" />
-      加载历史选股...
+    <div className="shrink-0" role="status">
+      <span className="sr-only">加载历史选股...</span>
+      <SelectionBatchSkeletonList />
     </div>
   );
 }
@@ -3158,6 +3272,7 @@ function DesktopStockBoardLoading({
   onThemeToggle: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
+  const showSkeleton = isLoading && !error;
 
   return (
     <section className="relative min-h-0 min-w-0 px-5 pb-4 lg:px-8">
@@ -3167,28 +3282,37 @@ function DesktopStockBoardLoading({
           className="relative pt-4"
         >
           <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
-            <Liveline
-              data={[]}
-              value={0}
-              mode="candle"
-              candles={[]}
-              candleWidth={daySecs}
-              theme={themeMode}
-              color={chartColor}
-              lineWidth={chartLineWidth}
-              window={daySecs * dailyKVisibleDays}
-              grid
-              loading={isLoading}
-              momentum="flat"
-              padding={desktopChartPadding}
-              className="size-full"
-            />
+            {showSkeleton ? (
+              <StockChartSkeleton className="min-h-0" />
+            ) : (
+              <Liveline
+                data={[]}
+                value={0}
+                mode="candle"
+                candles={[]}
+                candleWidth={daySecs}
+                theme={themeMode}
+                color={chartColor}
+                lineWidth={chartLineWidth}
+                window={daySecs * dailyKVisibleDays}
+                grid
+                loading={isLoading}
+                momentum="flat"
+                padding={desktopChartPadding}
+                className="size-full"
+              />
+            )}
           </div>
         </section>
 
         <section className="flex flex-row items-start justify-between gap-3 pb-6 pt-4">
           <div className="min-w-0">
-            {error || isLoading ? (
+            {showSkeleton ? (
+              <>
+                <StockBoardHeaderSkeleton desktop />
+                <span className="sr-only">正在从策略扫描接口加载候选股票</span>
+              </>
+            ) : error || isLoading ? (
               <>
                 <CardTitle className="text-2xl text-balance">
                   {error ? "策略扫描失败" : "正在扫描"}
@@ -3554,9 +3678,9 @@ function MobileSelectionHistoryDrawer({
                   })}
                 </DisclosureGroup>
               ) : selectionBatchesLoading ? (
-                <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <LoaderCircle className="size-4 animate-spin" />
-                  加载历史选股...
+                <div className="py-1" role="status">
+                  <span className="sr-only">加载历史选股...</span>
+                  <SelectionBatchSkeletonList count={4} />
                 </div>
               ) : (
                 <div className="flex min-h-48 flex-col items-center justify-center gap-1 text-sm">
@@ -5385,10 +5509,7 @@ function StockImportResults({
   if (isLoading && stocks.length === 0) {
     return (
       <div className={containerClassName}>
-        <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-          <Spinner size="md" />
-          加载中...
-        </div>
+        <StockImportResultsSkeleton />
       </div>
     );
   }

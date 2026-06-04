@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { toast } from "@heroui/react";
+import { Skeleton, toast } from "@heroui/react";
 
 import { LoginPage } from "@/components/login-page";
 import {
@@ -97,8 +97,32 @@ function App() {
 
 function DashboardFallback() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-      加载看板...
+    <main className="min-h-screen bg-background p-4 text-muted-foreground">
+      <div className="mx-auto grid min-h-[calc(100vh-2rem)] w-full max-w-[1680px] gap-4 md:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="flex min-h-[520px] flex-col gap-5 rounded-lg border border-border/60 bg-surface/70 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <Skeleton className="h-7 w-36 rounded-md" />
+            <Skeleton className="size-10 rounded-md" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-48 rounded-md" />
+            <Skeleton className="h-4 w-64 max-w-full rounded" />
+          </div>
+          <Skeleton className="min-h-0 flex-1 rounded-lg" />
+          <div className="grid gap-3 md:grid-cols-3">
+            <Skeleton className="h-20 rounded-lg" />
+            <Skeleton className="h-20 rounded-lg" />
+            <Skeleton className="h-20 rounded-lg" />
+          </div>
+        </section>
+        <aside className="hidden flex-col gap-3 md:flex">
+          <Skeleton className="h-24 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+        </aside>
+      </div>
+      <span className="sr-only">加载看板...</span>
     </main>
   );
 }
