@@ -2296,11 +2296,8 @@ function DesktopStockSidebar({
 } & StockListSharedProps) {
   return (
     <aside className="flex h-full min-h-0 flex-col gap-4 bg-transparent p-4">
-      <Card className="shrink-0 bg-card/72 shadow-sm backdrop-blur-xl">
-        <CardHeader className="gap-1 p-4 pb-2">
-          <CardTitle className="text-sm">策略筛选</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 px-4 pb-4">
+      <Card className="shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
+        <CardContent className="flex flex-col gap-3 p-0">
           <StrategyActionBar
             strategyConfig={strategyConfig}
             strategyConfigs={strategyConfigs}
@@ -2372,11 +2369,8 @@ function DesktopStockSidebar({
         {...stockListProps}
       />
 
-      <Card className="mt-auto shrink-0 bg-card/72 shadow-sm backdrop-blur-xl">
-        <CardHeader className="gap-1 p-4 pb-2">
-          <CardTitle className="text-sm">名单管理</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
+      <Card className="mt-auto shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
+        <CardContent className="p-0">
           <FilterListButtonGroup
             stockGroups={stockGroups}
             className="grid-cols-1"
