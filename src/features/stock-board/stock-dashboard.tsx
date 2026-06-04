@@ -1665,6 +1665,7 @@ function createCandidateStock(stock: StockCandidate): StockCandidate {
     name: stock.name,
     records: stock.records,
     list: "candidate",
+    ...(isStockRedListHighlighted(stock) ? { highlight: true } : {}),
     strategyResult: stock.strategyResult,
   };
 }
@@ -3590,6 +3591,7 @@ function createScanStockCandidates(results: StrategyScanResult[]): StockCandidat
       name,
       list: "initial",
       records: [],
+      ...(result.highlight === true ? { highlight: true } : {}),
       strategyResult: result,
     };
     const records = createDailyRecordsFromKlines(result.klines ?? [], stock);
@@ -3646,6 +3648,7 @@ function createSelectionRecordCandidates(
       records: [],
       selectionBatchId: batchId,
       selectionRecordId: record.id,
+      ...(record.highlight === true ? { highlight: true } : {}),
       strategyResult: record,
     };
     const dailyRecords = createDailyRecordsFromKlines(record.klines ?? [], stock);
@@ -3667,6 +3670,7 @@ function createSelectionResultFromStock(stock: StockCandidate): StrategyScanResu
   return {
     code: stock.code,
     name: stock.name,
+    ...(isStockRedListHighlighted(stock) ? { highlight: true } : {}),
     klines: stock.records.map(createDailyKlineFromRecord),
   };
 }
@@ -3876,6 +3880,10 @@ function isStockInList(stock: StockInfo, stocks: StockCandidate[]) {
   return stocks.some((item) => getComparableStockCode(item.code) === codeKey);
 }
 
+function isStockRedListHighlighted(stock: StockCandidate) {
+  return stock.highlight === true || stock.strategyResult?.highlight === true;
+}
+
 function getComparableStockCode(code: string) {
   return code.trim().replace(exactCodePrefixPattern, "").toUpperCase();
 }
@@ -4015,6 +4023,8 @@ function StockListButton({
   onClick: () => void;
   action?: StockListAction;
 }) {
+  const highlighted = isStockRedListHighlighted(stock);
+
   return (
     <Surface
       variant="transparent"
@@ -4023,18 +4033,25 @@ function StockListButton({
         active
           ? "border-ring/70 bg-secondary/80"
           : "border-transparent hover:border-border/80 hover:bg-default/50 focus-within:bg-default/50 [&:has(button:hover)]:bg-default/50",
+        highlighted && "border-stock-up/60 bg-stock-up/10 ring-1 ring-inset ring-stock-up/50",
+        active && highlighted && "border-stock-up/70 ring-stock-up/60",
       )}
     >
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center rounded-md p-2 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50"
-        aria-label={`${stock.name} ${stock.code}`}
+        aria-label={`${stock.name} ${stock.code}${highlighted ? "，红名单内股票" : ""}`}
         aria-pressed={active}
         onClick={onClick}
       >
         <span className="flex min-w-0 flex-1 items-baseline gap-2">
           <span className="truncate font-medium">{stock.name}</span>
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</span>
+          {highlighted ? (
+            <span className="shrink-0 rounded border border-stock-up/35 bg-stock-up/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-stock-up">
+              红名单
+            </span>
+          ) : null}
         </span>
       </button>
       {action ? (
