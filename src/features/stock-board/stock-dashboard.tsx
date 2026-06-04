@@ -94,10 +94,8 @@ const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
 const axisLabelMatchThresholdSecs = daySecs / 2;
 const chartLineWidth = 2.5;
-const heroChartPadding = { top: 260, right: 88, bottom: 72, left: 24 };
-const compactHeroChartPadding = { top: 292, right: 60, bottom: 54, left: 12 };
+const mobileChartPadding = { top: 18, right: 56, bottom: 34, left: 0 };
 const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: 0 };
-const compactViewportQuery = "(max-width: 639px)";
 const mobileViewportQuery = "(max-width: 767px)";
 const emptyStockGroups: StockGroups = {
   initial: [],
@@ -118,7 +116,7 @@ const chartModeOptions = [
 const stockImportResultLimit = 80;
 const exactCodePrefixPattern = /^(SH|SZ)/i;
 const stockItemActionClassName = cn(
-  "w-8 translate-x-0 shrink-0 overflow-hidden opacity-100 transition-[width,opacity,transform] duration-150",
+  "w-10 translate-x-0 shrink-0 overflow-hidden opacity-100 transition-[width,opacity,transform] duration-150",
   "md:w-0 md:translate-x-1 md:opacity-0",
   "md:group-focus-within/stock-item:w-8 md:group-focus-within/stock-item:translate-x-0 md:group-focus-within/stock-item:opacity-100",
   "md:group-hover/stock-item:w-8 md:group-hover/stock-item:translate-x-0 md:group-hover/stock-item:opacity-100",
@@ -984,86 +982,84 @@ function StockDashboardLayout({
         className="pointer-events-none fixed inset-0 -z-10 hidden md:block"
         style={{ background: "var(--desktop-board-glow-background)" }}
       />
-      <div className="flex flex-col md:hidden">
-        <div ref={stockBoardRef}>
-          <StockBoard
-            stock={selectedStock}
-            isLoading={state.scanLoading}
-            error={state.scanError}
-            themeMode={themeMode}
-            onThemeToggle={onThemeToggle}
-            onLogout={onLogout}
-            onReload={reloadStrategyScan}
-          />
+      <div className="mobile-dashboard-shell md:hidden">
+        <div className="mobile-dashboard-main">
+          <div ref={stockBoardRef} className="mobile-stock-board-region">
+            <StockBoard
+              stock={selectedStock}
+              isLoading={state.scanLoading}
+              error={state.scanError}
+              themeMode={themeMode}
+              onThemeToggle={onThemeToggle}
+              onLogout={onLogout}
+              onReload={reloadStrategyScan}
+            />
+          </div>
+
+          <div className="mobile-list-region">
+            {state.strategyConfigError ? (
+              <p
+                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                策略配置失败：{state.strategyConfigError}
+              </p>
+            ) : null}
+            {state.filterListsError ? (
+              <p
+                className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                名单操作失败：{state.filterListsError}
+              </p>
+            ) : null}
+            {state.selectionBatchesError ? (
+              <p
+                className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                历史选股失败：{state.selectionBatchesError}
+              </p>
+            ) : null}
+
+            <MobileStockTabs
+              activeListKey={state.mobileListKey}
+              stockGroups={visibleStockGroups}
+              candidateSavePending={state.candidateSavePending}
+              onActiveListChange={setMobileListKey}
+              onSaveCandidateSelection={saveCandidateSelection}
+              {...sharedStockListProps}
+            />
+            <MobileSelectionHistory
+              selectionBatches={state.selectionBatches}
+              selectionBatchesLoading={state.selectionBatchesLoading}
+              selectionBatchesPageNum={state.selectionBatchesPageNum}
+              selectionBatchesTotal={state.selectionBatchesTotal}
+              selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
+              chartSelection={state.chartSelection}
+              selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
+              onRemoveFromHistory={removeStockFromHistory}
+              onDeleteSelectionBatch={removeSelectionBatch}
+              onToggleChart={toggleSelectedStock}
+              onPageChange={changeSelectionHistoryPage}
+            />
+          </div>
         </div>
 
-        <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
-          <StrategyActionBar
-            strategyConfig={state.strategyConfig}
-            strategyConfigs={state.strategyConfigs}
-            strategyConfigLoading={state.strategyConfigLoading}
-            strategySavePending={state.strategySavePending}
-            strategyDeletePendingId={state.strategyDeletePendingId}
-            scanLoading={state.scanLoading}
-            onStrategySelect={setStrategyConfig}
-            onStrategySave={saveStrategyConfig}
-            onStrategyDelete={removeStrategyConfig}
-            onStrategyScan={startStrategyScan}
-          />
-          {state.strategyConfigError ? (
-            <p
-              className="mx-auto mt-3 max-w-[720px] rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
-              role="alert"
-            >
-              策略配置失败：{state.strategyConfigError}
-            </p>
-          ) : null}
-          {state.filterListsError ? (
-            <p
-              className="mx-auto mt-3 max-w-[720px] rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
-              role="alert"
-            >
-              名单操作失败：{state.filterListsError}
-            </p>
-          ) : null}
-          {state.selectionBatchesError ? (
-            <p
-              className="mx-auto mt-3 max-w-[720px] rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
-              role="alert"
-            >
-              历史选股失败：{state.selectionBatchesError}
-            </p>
-          ) : null}
-
-          <MobileStockTabs
-            activeListKey={state.mobileListKey}
-            stockGroups={visibleStockGroups}
-            candidateSavePending={state.candidateSavePending}
-            onOpenFilterList={openFilterListDialog}
-            onActiveListChange={setMobileListKey}
-            onSaveCandidateSelection={saveCandidateSelection}
-            {...sharedStockListProps}
-          />
-          <MobileSelectionHistory
-            selectionBatches={state.selectionBatches}
-            selectionBatchesLoading={state.selectionBatchesLoading}
-            selectionBatchesPageNum={state.selectionBatchesPageNum}
-            selectionBatchesTotal={state.selectionBatchesTotal}
-            selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
-            chartSelection={state.chartSelection}
-            selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
-            onRemoveFromHistory={removeStockFromHistory}
-            onDeleteSelectionBatch={removeSelectionBatch}
-            onToggleChart={toggleSelectedStock}
-            onPageChange={changeSelectionHistoryPage}
-          />
-
-          <MobileAccountActions
-            themeMode={themeMode}
-            onThemeToggle={onThemeToggle}
-            onLogout={onLogout}
-          />
-        </div>
+        <MobileBottomActions
+          stockGroups={visibleStockGroups}
+          strategyConfig={state.strategyConfig}
+          strategyConfigs={state.strategyConfigs}
+          strategyConfigLoading={state.strategyConfigLoading}
+          strategySavePending={state.strategySavePending}
+          strategyDeletePendingId={state.strategyDeletePendingId}
+          scanLoading={state.scanLoading}
+          onOpenFilterList={openFilterListDialog}
+          onStrategySelect={setStrategyConfig}
+          onStrategySave={saveStrategyConfig}
+          onStrategyDelete={removeStrategyConfig}
+          onStrategyScan={startStrategyScan}
+        />
       </div>
       <div className="mx-auto hidden min-h-dvh w-full max-w-[1680px] md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
         <DesktopStockBoard
@@ -1767,21 +1763,6 @@ function StockBoard({
   );
 }
 
-function useIsCompactViewport() {
-  const [isCompact, setIsCompact] = useState(() => window.matchMedia(compactViewportQuery).matches);
-
-  useEffect(() => {
-    const media = window.matchMedia(compactViewportQuery);
-    const handleChange = () => setIsCompact(media.matches);
-
-    media.addEventListener("change", handleChange);
-
-    return () => media.removeEventListener("change", handleChange);
-  }, []);
-
-  return isCompact;
-}
-
 function useIsDesktopViewport() {
   const [isDesktop, setIsDesktop] = useState(() => !window.matchMedia(mobileViewportQuery).matches);
 
@@ -1872,209 +1853,206 @@ function ActiveStockBoard({
     selectedRangeSecs,
     positive,
   } = useStockBoardModel(stock, themeMode);
-  const isCompactViewport = useIsCompactViewport();
-  const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
+  const chartPadding = mobileChartPadding;
 
   return (
-    <>
-      <section className="relative">
-      <div
-        className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
-        style={{ background: "var(--chart-hero-background)" }}
-      >
-        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
-          <div className="min-w-0">
-            <BrandLockup />
-            <button
-              type="button"
-              className="group mt-3 flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left transition-[color,transform] active:scale-[0.96]"
-              aria-expanded={detailsOpen}
-              aria-controls="stock-details-panel"
-              onClick={() => dispatchBoard({ type: "toggle-details" })}
-            >
-              <h1 className="text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
-                {stock.name}
-              </h1>
-              <span className="text-sm text-muted-foreground">{stock.code}</span>
-              <Chip variant="soft" className="bg-background/35 backdrop-blur">
-                {stockListMeta[stock.list].label}
-              </Chip>
-              <Chip
-                variant="soft"
-                className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}
-              >
-                {latest ? "行情正常" : "无数据"}
-              </Chip>
-              <ChevronDown
-                className={cn(
-                  "size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
-                  detailsOpen && "rotate-180",
-                )}
-              />
-            </button>
-            <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
-              <span
-                className={cn(
-                  "text-4xl font-semibold leading-none tabular-nums sm:text-5xl",
-                  latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
-                )}
-              >
-                <AnimatedDigits
-                  key={`price-${stock.code}:${latest?.date ?? ""}:${latest?.close ?? ""}`}
-                  value={latest ? latest.close.toFixed(2) : "--"}
-                />
-              </span>
-              <span
-                className={cn(
-                  "pb-1 text-base font-semibold tabular-nums sm:text-lg",
-                  latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
-                )}
-              >
-                <AnimatedDigits
-                  key={`change-${stock.code}:${latest?.date ?? ""}:${change}:${changePct}`}
-                  value={latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
-                />
-              </span>
-            </div>
-            <div className="mt-3 max-w-md">
-              <StrategyBasicInfo strategyResult={stock.strategyResult} />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-              {chartModeOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={cn(
-                    "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-                    option.id === chartMode
-                      ? "bg-secondary text-secondary-foreground"
-                      : "hover:bg-default hover:text-foreground",
-                  )}
-                  aria-pressed={option.id === chartMode}
-                  onClick={() => dispatchBoard({ type: "set-chart-mode", chartMode: option.id })}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            {isThemeToggleVisible(themeMode) ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-                aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                onClick={onThemeToggle}
-              >
-                {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-                {themeMode === "dark" ? "亮色" : "暗色"}
-              </Button>
-            ) : null}
+    <section className="mobile-stock-panel">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <BrandLockup className="min-w-0" />
+        <div className="flex shrink-0 items-center gap-2">
+          {isThemeToggleVisible(themeMode) ? (
             <Button
               type="button"
               variant="outline"
-              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-              aria-label="退出登录"
-              onClick={onLogout}
+              isIconOnly
+              className="size-10 bg-background/55 backdrop-blur-xl"
+              aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+              onClick={onThemeToggle}
             >
-              <LogOut data-icon="inline-start" />
-              退出登录
+              {themeMode === "dark" ? <Sun /> : <Moon />}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="bg-background/45 backdrop-blur-xl max-[420px]:w-8 max-[420px]:px-0"
-              aria-label={isLoading ? "加载中" : "重载"}
-              isDisabled={isLoading}
-              onClick={onReload}
-            >
-              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-              <span className="max-[420px]:hidden">{isLoading ? "加载中" : "重载"}</span>
-            </Button>
-          </div>
-
-          <StockDetailsPanel
-            id="stock-details-panel"
-            open={detailsOpen}
-            records={sourceRecords}
-          />
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            isIconOnly
+            className="size-10 bg-background/55 backdrop-blur-xl"
+            aria-label={isLoading ? "加载中" : "重载"}
+            isDisabled={isLoading}
+            onClick={onReload}
+          >
+            <RefreshCcw className={cn(isLoading && "animate-spin")} />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            isIconOnly
+            className="size-10 bg-background/55 backdrop-blur-xl"
+            aria-label="退出登录"
+            onClick={onLogout}
+          >
+            <LogOut />
+          </Button>
         </div>
-
-        <div className="absolute inset-0 z-0">
-          {latest || isLoading ? (
-            chartMode === "line" ? (
-              <Liveline
-                key="line"
-                data={[]}
-                value={0}
-                series={createPriceMA5Series(chartView, latest, chartColor, themeMode)}
-                theme={themeMode}
-                color={chartColor}
-                lineWidth={chartLineWidth}
-                window={selectedRangeSecs}
-                grid
-                scrub
-                pulse
-                loading={isLoading}
-                referenceLine={
-                  latest?.last
-                    ? {
-                        value: latest.last,
-                        label: "昨收",
-                      }
-                    : undefined
-                }
-                formatValue={(value) => value.toFixed(2)}
-                formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
-                padding={chartPadding}
-                className="size-full"
-              />
-            ) : (
-              <Liveline
-                key="candle"
-                data={latest ? chartView.lineData : []}
-                value={latest?.close ?? 0}
-                mode="candle"
-                candles={chartView.candles}
-                candleWidth={chartView.candleWidth}
-                theme={themeMode}
-                color={chartColor}
-                lineWidth={chartLineWidth}
-                window={selectedRangeSecs}
-                grid
-                scrub
-                badge={true}
-                badgeVariant="minimal"
-                badgeTail
-                momentum={momentum}
-                pulse
-                loading={isLoading}
-                showValue
-                valueMomentumColor
-                referenceLine={
-                  latest?.last
-                    ? {
-                        value: latest.last,
-                        label: "昨收",
-                      }
-                    : undefined
-                }
-                formatValue={(value) => value.toFixed(2)}
-                formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
-                padding={chartPadding}
-                className="size-full"
-              />
-            )
-          ) : (
-            <EmptyChart error={error ?? chartStock.records[0]?.error} />
-          )}
-        </div>
-
       </div>
-      </section>
-    </>
+
+      <div className="mt-4 min-w-0">
+        <button
+          type="button"
+          className="group flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left transition-[color,transform] active:scale-[0.96]"
+          aria-expanded={detailsOpen}
+          aria-controls="stock-details-panel"
+          onClick={() => dispatchBoard({ type: "toggle-details" })}
+        >
+          <h1 className="max-w-full truncate text-2xl font-semibold leading-tight tracking-normal text-foreground sm:text-[1.65rem]">
+            {stock.name}
+          </h1>
+          <span className="text-sm text-muted-foreground tabular-nums">{stock.code}</span>
+          <Chip variant="soft" className="bg-background/35 backdrop-blur">
+            {stockListMeta[stock.list].label}
+          </Chip>
+          <Chip
+            variant="soft"
+            className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}
+          >
+            {latest ? "行情正常" : "无数据"}
+          </Chip>
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
+              detailsOpen && "rotate-180",
+            )}
+          />
+        </button>
+        <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
+          <span
+            className={cn(
+              "text-[2.65rem] font-semibold leading-none tabular-nums",
+              latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
+            )}
+          >
+            <AnimatedDigits
+              key={`price-${stock.code}:${latest?.date ?? ""}:${latest?.close ?? ""}`}
+              value={latest ? latest.close.toFixed(2) : "--"}
+            />
+          </span>
+          <span
+            className={cn(
+              "pb-1 text-base font-semibold tabular-nums",
+              latest ? positive ? "text-stock-up" : "text-stock-down" : "text-muted-foreground",
+            )}
+          >
+            <AnimatedDigits
+              key={`change-${stock.code}:${latest?.date ?? ""}:${change}:${changePct}`}
+              value={latest ? `${formatSigned(change)}  ${formatSigned(changePct)}%` : "--"}
+            />
+          </span>
+          {latest ? (
+            <span className="pb-1 text-xs text-muted-foreground tabular-nums">{latest.date}</span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_10px_34px_rgba(0,0,0,0.14)] backdrop-blur-xl">
+          {chartModeOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={cn(
+                "h-10 min-w-14 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
+                option.id === chartMode
+                  ? "bg-secondary text-secondary-foreground"
+                  : "hover:bg-default hover:text-foreground",
+              )}
+              aria-pressed={option.id === chartMode}
+              onClick={() => dispatchBoard({ type: "set-chart-mode", chartMode: option.id })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <span className="truncate text-xs text-muted-foreground">最近 {dailyKVisibleDays} 日</span>
+      </div>
+
+      <div className="mobile-stock-chart">
+        {latest || isLoading ? (
+          chartMode === "line" ? (
+            <Liveline
+              key="line"
+              data={[]}
+              value={0}
+              series={createPriceMA5Series(chartView, latest, chartColor, themeMode)}
+              theme={themeMode}
+              color={chartColor}
+              lineWidth={chartLineWidth}
+              window={selectedRangeSecs}
+              grid
+              scrub
+              pulse
+              loading={isLoading}
+              referenceLine={
+                latest?.last
+                  ? {
+                      value: latest.last,
+                      label: "昨收",
+                    }
+                  : undefined
+              }
+              formatValue={(value) => value.toFixed(2)}
+              formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
+              padding={chartPadding}
+              className="size-full"
+            />
+          ) : (
+            <Liveline
+              key="candle"
+              data={latest ? chartView.lineData : []}
+              value={latest?.close ?? 0}
+              mode="candle"
+              candles={chartView.candles}
+              candleWidth={chartView.candleWidth}
+              theme={themeMode}
+              color={chartColor}
+              lineWidth={chartLineWidth}
+              window={selectedRangeSecs}
+              grid
+              scrub
+              badge={true}
+              badgeVariant="minimal"
+              badgeTail
+              momentum={momentum}
+              pulse
+              loading={isLoading}
+              showValue
+              valueMomentumColor
+              referenceLine={
+                latest?.last
+                  ? {
+                      value: latest.last,
+                      label: "昨收",
+                    }
+                  : undefined
+              }
+              formatValue={(value) => value.toFixed(2)}
+              formatTime={(time) => formatChartAxisDate(time, chartView.axisDateLabels)}
+              padding={chartPadding}
+              className="size-full"
+            />
+          )
+        ) : (
+          <EmptyChart error={error ?? chartStock.records[0]?.error} className="min-h-0" />
+        )}
+      </div>
+
+      {detailsOpen ? (
+        <StockDetailsPanel
+          id="stock-details-panel"
+          records={sourceRecords}
+          strategyResult={stock.strategyResult}
+        />
+      ) : null}
+    </section>
   );
 }
 
@@ -2108,85 +2086,77 @@ function StockBoardLoading({
   onReload: () => void;
 }) {
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
-  const isCompactViewport = useIsCompactViewport();
-  const chartPadding = isCompactViewport ? compactHeroChartPadding : heroChartPadding;
+  const chartPadding = mobileChartPadding;
+  const title = error ? "策略扫描失败" : isLoading ? "正在扫描" : "等待策略筛选";
+  const description = error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "选择策略并开始筛选后显示候选行情");
 
   return (
-    <section className="relative">
-      <div
-        className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
-        style={{ background: "var(--chart-hero-background)" }}
-      >
-        <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
-          <div className="min-w-0">
-            <BrandLockup />
-            {error || isLoading ? (
-              <>
-                <h1 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
-                  {error ? "策略扫描失败" : "正在扫描"}
-                </h1>
-                <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-                  {error ?? "正在从策略扫描接口加载候选股票"}
-                </p>
-              </>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 lg:col-start-3 lg:justify-end lg:justify-self-end">
-            {isThemeToggleVisible(themeMode) ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-                aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                onClick={onThemeToggle}
-              >
-                {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-                {themeMode === "dark" ? "亮色" : "暗色"}
-              </Button>
-            ) : null}
+    <section className="mobile-stock-panel">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <BrandLockup className="min-w-0" />
+        <div className="flex shrink-0 items-center gap-2">
+          {isThemeToggleVisible(themeMode) ? (
             <Button
               type="button"
               variant="outline"
-              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-              aria-label="退出登录"
-              onClick={onLogout}
+              isIconOnly
+              className="size-10 bg-background/55 backdrop-blur-xl"
+              aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+              onClick={onThemeToggle}
             >
-              <LogOut data-icon="inline-start" />
-              退出登录
+              {themeMode === "dark" ? <Sun /> : <Moon />}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
-              aria-label="重载"
-              isDisabled={isLoading}
-              onClick={onReload}
-            >
-              <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
-              {isLoading ? "加载中" : "重载"}
-            </Button>
-          </div>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            isIconOnly
+            className="size-10 bg-background/55 backdrop-blur-xl"
+            aria-label={isLoading ? "加载中" : "重载"}
+            isDisabled={isLoading}
+            onClick={onReload}
+          >
+            <RefreshCcw className={cn(isLoading && "animate-spin")} />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            isIconOnly
+            className="size-10 bg-background/55 backdrop-blur-xl"
+            aria-label="退出登录"
+            onClick={onLogout}
+          >
+            <LogOut />
+          </Button>
         </div>
+      </div>
 
-        <div className="absolute inset-0 z-0">
-          <Liveline
-            data={[]}
-            value={0}
-            mode="candle"
-            candles={[]}
-            candleWidth={daySecs}
-            theme={themeMode}
-            color={chartColor}
-            lineWidth={chartLineWidth}
-            window={daySecs * dailyKVisibleDays}
-            grid
-            loading={isLoading}
-            momentum="flat"
-            padding={chartPadding}
-            className="size-full"
-          />
-        </div>
+      <div className="mt-4 min-w-0">
+        <h1 className="text-2xl font-semibold leading-tight tracking-normal text-foreground text-balance">
+          {title}
+        </h1>
+        <p className="mt-2 max-w-lg text-sm text-muted-foreground text-pretty">
+          {description}
+        </p>
+      </div>
+
+      <div className="mobile-stock-chart">
+        <Liveline
+          data={[]}
+          value={0}
+          mode="candle"
+          candles={[]}
+          candleWidth={daySecs}
+          theme={themeMode}
+          color={chartColor}
+          lineWidth={chartLineWidth}
+          window={daySecs * dailyKVisibleDays}
+          grid
+          loading={isLoading}
+          momentum="flat"
+          padding={chartPadding}
+          className="size-full"
+        />
       </div>
     </section>
   );
@@ -2501,7 +2471,7 @@ function SelectionBatchDisclosureItem({
           type="button"
           variant="ghost"
           size="sm" isIconOnly
-          className="size-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive"
+          className="size-10 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive md:size-8"
           aria-label={`删除历史选股：${batch.name}`}
           isDisabled={deletePending}
           onClick={() => void onDeleteSelectionBatch(batch.id)}
@@ -3114,7 +3084,6 @@ function MobileStockTabs({
   selectionRecordDeletePendingIds,
   candidateStockCodes,
   candidateSavePending,
-  onOpenFilterList,
   onActiveListChange,
   onSaveCandidateSelection,
   onAddToCandidate,
@@ -3129,7 +3098,6 @@ function MobileStockTabs({
   selectionRecordDeletePendingIds: number[];
   candidateStockCodes: Set<string>;
   candidateSavePending: boolean;
-  onOpenFilterList: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
   onSaveCandidateSelection: () => void | Promise<void>;
   onAddToCandidate: (stock: StockCandidate) => void;
@@ -3144,13 +3112,8 @@ function MobileStockTabs({
   const showCandidateSave = currentListKey === "candidate";
 
   return (
-    <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
+    <Card className="mobile-list-card bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
       <CardHeader className="gap-3">
-        <FilterListButtonGroup
-          stockGroups={stockGroups}
-          buttonClassName="h-9 bg-background/45 px-3"
-          onOpenFilterList={onOpenFilterList}
-        />
         <div
           className="grid gap-1 rounded-lg bg-background/45 p-1"
           style={{ gridTemplateColumns: `repeat(${visibleListOrder.length}, minmax(0, 1fr))` }}
@@ -3160,7 +3123,7 @@ function MobileStockTabs({
               key={key}
               type="button"
               className={cn(
-                "h-9 min-w-0 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
+                "h-10 min-w-0 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
                 key === currentListKey
                   ? "bg-secondary text-secondary-foreground"
                   : "hover:bg-default hover:text-foreground",
@@ -3181,7 +3144,7 @@ function MobileStockTabs({
             <Button
               type="button"
               variant="outline"
-              className="h-8 shrink-0 bg-background/45"
+              className="h-10 shrink-0 bg-background/45"
               isDisabled={candidateSavePending || stocks.length === 0}
               onClick={() => void onSaveCandidateSelection()}
             >
@@ -3261,7 +3224,7 @@ function MobileSelectionHistory({
   }, [selectionBatchesPageNum]);
 
   return (
-    <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
+    <Card className="mobile-list-card bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
       <CardHeader className="gap-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -3324,76 +3287,83 @@ function MobileSelectionHistory({
   );
 }
 
-function MobileAccountActions({
-  themeMode,
-  onThemeToggle,
-  onLogout,
+function MobileBottomActions({
+  stockGroups,
+  strategyConfig,
+  strategyConfigs,
+  strategyConfigLoading,
+  strategySavePending,
+  strategyDeletePendingId,
+  scanLoading,
+  onOpenFilterList,
+  onStrategySelect,
+  onStrategySave,
+  onStrategyDelete,
+  onStrategyScan,
 }: {
-  themeMode: ThemeMode;
-  onThemeToggle: () => void;
-  onLogout: () => void;
+  stockGroups: Pick<StockGroups, ReturnableListKey>;
+  strategyConfig: StrategyConfig;
+  strategyConfigs: StrategyConfig[];
+  strategyConfigLoading: boolean;
+  strategySavePending: boolean;
+  strategyDeletePendingId: number | null;
+  scanLoading: boolean;
+  onOpenFilterList: (listKey: ReturnableListKey) => void;
+  onStrategySelect: (config: StrategyConfig) => void;
+  onStrategySave: (config: StrategyConfig) => void | Promise<void>;
+  onStrategyDelete: (id: number) => void | Promise<void>;
+  onStrategyScan: () => void | Promise<void>;
 }) {
-  const showThemeToggle = isThemeToggleVisible(themeMode);
-
   return (
-    <div
-      className={cn(
-        "mt-4 grid gap-2 pb-4 md:hidden",
-        showThemeToggle ? "grid-cols-2" : "grid-cols-1",
-      )}
-    >
-      {showThemeToggle ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 bg-card/88 backdrop-blur-xl"
-          aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-          onClick={onThemeToggle}
-        >
-          {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-          {themeMode === "dark" ? "亮色模式" : "暗色模式"}
-        </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="outline"
-        className="h-10 bg-card/88 backdrop-blur-xl"
-        onClick={onLogout}
-      >
-        <LogOut data-icon="inline-start" />
-        退出登录
-      </Button>
+    <div className="mobile-bottom-actions">
+      <div className="mobile-bottom-actions__inner">
+        <StrategyActionBar
+          strategyConfig={strategyConfig}
+          strategyConfigs={strategyConfigs}
+          strategyConfigLoading={strategyConfigLoading}
+          strategySavePending={strategySavePending}
+          strategyDeletePendingId={strategyDeletePendingId}
+          scanLoading={scanLoading}
+          className="mobile-bottom-strategy mt-0 grid grid-cols-[minmax(0,1fr)_auto] items-stretch justify-stretch"
+          strategyClassName="min-w-0 justify-stretch"
+          strategyButtonClassName="h-10 w-full min-w-0 justify-start bg-background/55 px-3 shadow-none"
+          scanButtonClassName="h-10 shrink-0 px-3"
+          onStrategySelect={onStrategySelect}
+          onStrategySave={onStrategySave}
+          onStrategyDelete={onStrategyDelete}
+          onStrategyScan={onStrategyScan}
+        />
+        <FilterListButtonGroup
+          stockGroups={stockGroups}
+          className="mobile-bottom-filter-grid"
+          buttonClassName="h-10 bg-background/55 px-3 shadow-sm"
+          onOpenFilterList={onOpenFilterList}
+        />
+      </div>
     </div>
   );
 }
 
 function StockDetailsPanel({
   id,
-  open,
   records,
+  strategyResult,
 }: {
   id: string;
-  open: boolean;
   records: StockDailyRecord[];
+  strategyResult?: StrategyScanResult;
 }) {
   return (
     <div
       id={id}
-      className={cn(
-        "pointer-events-none absolute left-4 top-[calc(100%+8px)] z-30 w-[calc(100%-2rem)] max-w-[820px] transition-[opacity,transform] duration-200 ease-out sm:left-6 sm:w-[calc(100%-3rem)] lg:left-8 lg:w-[820px]",
-        open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
-      )}
-      aria-hidden={!open}
+      className="mt-4 rounded-lg border border-border/60 bg-background/35 p-3 backdrop-blur-xl"
     >
-      <div
-        className={cn(
-          "pointer-events-auto overflow-hidden rounded-lg border bg-card/90 shadow-[0_18px_64px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-[max-height] duration-200 ease-out",
-          open ? "max-h-[360px] sm:max-h-[430px]" : "max-h-0",
-        )}
-      >
-        <div className="max-h-[300px] overflow-y-auto p-4 sm:max-h-[360px]">
-          <DailyKlineDetailSection records={records} />
-        </div>
+      <div className="grid gap-4">
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">策略命中</h2>
+          <StrategyBasicInfo strategyResult={strategyResult} />
+        </section>
+        <MobileDailyKlineSummary records={records} />
       </div>
     </div>
   );
@@ -3449,6 +3419,62 @@ function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
             </Table.Content>
           </Table.ScrollContainer>
         </Table>
+      ) : (
+        <StockDataEmptyState label="暂无日 K 明细数据" />
+      )}
+    </section>
+  );
+}
+
+function MobileDailyKlineSummary({ records }: { records: StockDailyRecord[] }) {
+  const visibleRecords = records.slice(-dailyKVisibleDays).reverse();
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">最近日 K</h2>
+        <span className="text-xs text-muted-foreground tabular-nums">{visibleRecords.length}</span>
+      </div>
+      {visibleRecords.length > 0 ? (
+        <div className="grid gap-2">
+          {visibleRecords.map((record) => {
+            const change = record.close - record.open;
+            const changePct = record.open > 0 ? (change / record.open) * 100 : 0;
+            const positive = change >= 0;
+
+            return (
+              <div
+                key={`${record.code}:${record.date}`}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md bg-background/35 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium tabular-nums">{record.date}</div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                    高 {formatPrice(record.high)} / 低 {formatPrice(record.low)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div
+                    className={cn(
+                      "text-sm font-semibold tabular-nums",
+                      positive ? "text-stock-up" : "text-stock-down",
+                    )}
+                  >
+                    {formatPrice(record.close)}
+                  </div>
+                  <div
+                    className={cn(
+                      "mt-0.5 text-xs tabular-nums",
+                      positive ? "text-stock-up" : "text-stock-down",
+                    )}
+                  >
+                    {formatSigned(changePct)}%
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <StockDataEmptyState label="暂无日 K 明细数据" />
       )}
@@ -4065,7 +4091,7 @@ function StockListButton({
             type="button"
             variant="ghost"
             isIconOnly
-            className="size-8 rounded-md border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
+            className="size-10 rounded-md border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground md:size-8"
             aria-label={`${action.title}：${stock.name} ${stock.code}`}
             isDisabled={action.disabled || action.pending}
             onClick={action.onClick}
@@ -4971,7 +4997,7 @@ function StockImportResultItem({
             type="button"
             isIconOnly
             variant="outline"
-            className="size-8 rounded-md bg-background/55"
+            className="size-10 rounded-md bg-background/55 md:size-8"
             aria-label={`${importTitle}：${stock.name} ${stock.code}`}
             isDisabled={Boolean(importPendingCode)}
             onClick={() => void onImportStock(stock)}

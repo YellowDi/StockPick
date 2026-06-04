@@ -1,76 +1,66 @@
 # StockPick 项目说明
 
-始终优先使用中文回复用户；git commit message 始终使用英文。
+本文件为 Codex 在本仓库工作时提供项目级指导。
 
-## 项目定位
+## 语言
 
-StockPick 是一个前端股票筛选看板原型，用于展示 A 股候选标的、分组状态、行情趋势和关键交易指标。
+- 始终使用简体中文回复用户。
+- Git commit message 始终使用英文。
 
-当前项目是纯前端 React/Vite 应用，暂无真实后端接口。行情与股票池数据来自 `src/data/mock-stocks.ts`，数据类型定义在 `src/types/stock.ts`。
+## 项目概览
 
-## 技术栈
+StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeScript 单页应用，连接后端 API `http://192.168.2.16:1889/api/v1`，用于登录认证、策略扫描、股票筛选列表和入选历史。Mock 股票数据仍在 `src/data/mock-stocks.ts` 中按过程生成。界面文案全部为中文。
 
-- React 19 + TypeScript
-- Vite
-- Tailwind CSS v4
-- HeroUI 全局组件库
-- Remix Icon（remixicon）图标
-- liveline 行情图表
+## 命令
 
-## 本地运行
+- `npm run dev`：启动 Vite dev server，通常在 5173 端口。除非用户明确要求，不要主动启动。
+- `npm run build`：执行 TypeScript 构建检查（`tsc -b`）并打包。代码改动后必须运行。
+- `npm run preview`：预览生产构建。
+- `npm run postinstall`：为 A 股涨跌颜色约定 patch `liveline`。依赖安装后自动运行。
 
-用户已经手动将项目运行在 5174 端口：
+## 架构
 
-- 本地地址：`http://localhost:5174/`
-- 开发命令：`npm run dev`
-- 构建验证：`npm run build`
-- 预览命令：`npm run preview`
-- 开发阶段账号：admin
-- 开发者阶段密码：123456
+**应用壳层：** `src/App.tsx` 管理登录状态，并渲染 `LoginPage` 或 lazy-loaded `StockDashboard`。没有路由库，页面切换是布尔状态。
 
-除非用户明确要求，不要重复启动 dev server。
+**看板主体：** 完整股票看板位于 `src/features/stock-board/stock-dashboard.tsx`（5000+ 行）。该文件包含主要 UI 组件、约 30 个 action variant 的 `useReducer`、辅助函数，以及移动端和桌面端响应式布局逻辑。
 
-本项目不需要 Codex 额外跑服务；用户会手动审查页面效果。除非用户单独命令，不要启动 dev server，也不要做浏览器验证。
+**API 层：**
+- `src/lib/auth-api.ts`：JWT 登录和 token 管理，token 存在 `localStorage`，通过自定义事件通知过期。
+- `src/lib/stock-api.ts`：后端接口的 typed async functions，包括股票列表、筛选列表、策略扫描/配置 CRUD、入选批次/记录 CRUD。
 
-## 当前核心功能
+**关键源码文件：**
+- `src/features/stock-board/stock-dashboard.tsx`：主看板，包括图表、股票列表、弹窗和状态管理。
+- `src/features/strategy-switch/strategy-config.ts`：`StrategyConfig` 类型和默认值。
+- `src/features/strategy-switch/strategy-switch-button.tsx`：策略配置弹窗。
+- `src/components/login-page.tsx`：登录表单和 WebGL thread 动效。
+- `src/components/threads.tsx`：基于 OGL/WebGL shader 的动态背景。
+- `src/types/stock.ts`：`StockCandidate`、`StockDailyRecord`、`StockListKey`。
+- `src/data/mock-stocks.ts`：10 个 seed stocks 和 28 日过程生成 OHLC 历史。
+- `src/lib/utils.ts`：`cn()` 工具函数（clsx + tailwind-merge）。
+- `src/styles/globals.css`：Tailwind CSS v4 和主题 CSS custom properties。
 
-- 单页股票筛选看板。
-- 顶部主看板展示当前选中股票的名称、代码、分组、行情状态和趋势。
-- 支持暗色/亮色主题切换，主题偏好保存到 `localStorage`。
-- 支持手动重载当前股票行情模拟数据。
-- 使用 `Liveline` 展示行情图，支持 K 线和折线模式。
-- 支持实时、当日、前 1 至前 7 日、本周等图表窗口。
-- 实时窗口使用 mock 数据模拟盘中跳动与成交量变化。
-- 展示最新价、涨跌幅、最高、最低、成交量、成交额等指标。
-- 展示最近 7 日 OHLC 表格。
-- 股票列表分为初筛、已选、白名单、黑名单四列。
-- 点击股票列表项可切换当前展示标的。
-- 支持无数据样例，页面需要明确展示无数据/错误状态。
+**样式：** 使用 `@tailwindcss/vite` 的 Tailwind CSS v4。暗色模式通过 `<html>` 上的 `.dark` class 控制，目前硬编码为 dark。`@` 路径别名指向 `./src`。
 
-## 产品要求
+**图表：** 使用 `liveline`（v0.0.7）展示 K 线和折线图。`scripts/patch-liveline-a-share-colors.mjs` 会替换 liveline 源码中的红绿颜色，以符合 A 股约定，不要删除该脚本。
 
-- 优先保持看板作为第一屏，不要改成营销页或介绍页。
-- 界面应偏交易工具和运营看板风格：信息密度合理、易扫读、状态明确。
-- A 股行情颜色约定：上涨用红色，下跌用绿色。
-- 图表、指标、列表状态必须保持一致，切换股票时应重置到实时 K 线视图。
-- 待选列表是固定来源列表；从白名单/黑名单删除股票时，只从对应名单移除，不回填到待选。
-- mock 数据应能覆盖正常行情和无数据边界。
-- 不要引入真实交易、下单或投资建议能力。
+**UI 组件：** 使用 HeroUI v3（`@heroui/react`、`@heroui/styles`）。图标使用 Remix Icon（`@remixicon/react`），不要新增或继续使用 `lucide-react`。
 
-## 实现约束
+**包管理器：** pnpm。
 
-- 保持现有单页结构，除非用户明确要求拆分路由或模块。
-- 优先使用 `@heroui/react`、`src/lib/utils.ts` 和现有 Tailwind token。
-- 图标优先使用 Remix Icon，不要新增或继续使用 `lucide-react`，除非用户明确要求保留。
-- 不要新增运行时依赖，除非必要并获得用户确认。
+## 产品约束
+
+- A 股颜色约定：上涨为红色，下跌为绿色（`--stock-up` / `--stock-down` CSS variables）。
+- 保持看板作为第一屏，不要改成营销页或落地页。
+- 界面应偏交易工具风格：信息密度高、易扫读、状态明确。
+- 四列股票列表（初筛/已选/白名单/黑名单）支持 HTML5 drag-and-drop 跨列拖拽。
+- 不要新增运行时依赖，除非用户确认。
 - 不要把 mock 数据替换成真实接口，除非用户明确要求。
-- 修改图表行为前，先确认 `liveline` 的实际 API 和当前传参方式。
-- `postinstall` 会运行 `scripts/patch-liveline-a-share-colors.mjs`，不要随意删除。
+- 修改图表行为前，先确认 `liveline` 的实际 API 和当前用法。
+- 除非用户要求路由或模块拆分，否则保持现有单页结构。
 
-## 验证要求
+## 验证
 
-- 代码改动后至少运行 `npm run build`。
-- React/UI 改动后允许运行 `npx react-doctor@latest --verbose --diff` 做回归扫描；如需联网获取 `react-doctor`，可申请升级权限执行。
-- UI 或交互改动后不做浏览器验证，用户会手动审查。
-- 纯文档改动可用 `git diff --check` 验证格式和空白问题。
-- 如果验证命令无法运行，最终回复必须说明具体原因。
+- 代码改动后运行 `npm run build`。
+- UI/交互改动由用户手动在浏览器检查；除非用户明确要求，不要启动 dev server，也不要主动做浏览器验证。
+- 纯文档改动使用 `git diff --check` 验证。
+- 如果验证命令失败，最终回复必须说明具体原因。

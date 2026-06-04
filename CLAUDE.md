@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-StockPick is a Chinese A-share stock screening dashboard prototype. It is a pure front-end React/Vite SPA with no backend — all market data is procedurally generated from mock logic in `src/data/mock-stocks.ts`. The UI is entirely in Chinese.
+StockPick is a Chinese A-share stock screening dashboard prototype. It is a React/TypeScript SPA that connects to a backend API at `http://192.168.2.16:1889/api/v1` for authentication, strategy scanning, stock filter lists, and selection history. Mock stock data is also procedurally generated in `src/data/mock-stocks.ts`. The UI is entirely in Chinese.
 
 ## Commands
 
@@ -20,21 +20,32 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a pure
 
 ## Architecture
 
-**Single-file monolith:** The entire application lives in `src/App.tsx` (~1400 lines). All components, hooks, and utility functions are co-located there. No routing, no state management library — just `useState`/`useMemo`.
+**App shell:** `src/App.tsx` manages auth state and renders either `LoginPage` or lazy-loaded `StockDashboard`. No routing library — screen switching is a boolean toggle.
+
+**Dashboard monolith:** The entire stock dashboard lives in `src/features/stock-board/stock-dashboard.tsx` (~5000+ lines). It contains all UI components, a `useReducer` with ~30 action variants, helper functions, and responsive layout logic for both mobile and desktop.
+
+**API layer:**
+- `src/lib/auth-api.ts` — JWT login/token management, stored in `localStorage` with custom event-based expiry notification.
+- `src/lib/stock-api.ts` — Typed async functions for all backend endpoints (stock list, filter lists, strategy scan/config CRUD, selection batch/record CRUD).
 
 **Key source files:**
-- `src/App.tsx` — All UI components and the `useLiveMockStock` hook (real-time price simulation at 850ms ticks)
-- `src/types/stock.ts` — TypeScript interfaces (`StockCandidate`, `StockDailyRecord`, etc.)
+- `src/features/stock-board/stock-dashboard.tsx` — Main dashboard (charts, stock lists, modals, state management)
+- `src/features/strategy-switch/strategy-config.ts` — StrategyConfig type and defaults
+- `src/features/strategy-switch/strategy-switch-button.tsx` — Strategy config modal
+- `src/components/login-page.tsx` — Login form with WebGL thread animation
+- `src/components/threads.tsx` — OGL/WebGL shader-based animated background
+- `src/types/stock.ts` — `StockCandidate`, `StockDailyRecord`, `StockListKey`
 - `src/data/mock-stocks.ts` — 10 seed stocks with 28-day procedural OHLC history
-- `@heroui/react` — Global component library for buttons, cards, modals, inputs, tags, pagination, and related UI primitives
 - `src/lib/utils.ts` — `cn()` utility (clsx + tailwind-merge)
 - `src/styles/globals.css` — Tailwind CSS v4 with CSS custom properties for theming
 
-**Styling:** Tailwind CSS v4 via `@tailwindcss/vite` plugin. Light theme uses `:root`; dark mode toggles via `.dark` class on `<html>`. The `@` path alias maps to `./src`.
+**Styling:** Tailwind CSS v4 via `@tailwindcss/vite` plugin. Dark mode via `.dark` class on `<html>` (currently hardcoded to dark). The `@` path alias maps to `./src`.
 
 **Charting:** Uses the `liveline` library (v0.0.7) for candlestick and line charts. The postinstall script `scripts/patch-liveline-a-share-colors.mjs` swaps green/red colors in liveline's source to match A-share convention — do not remove this script.
 
-**UI components:** HeroUI v3 via `@heroui/react` and `@heroui/styles`; custom layout still uses Tailwind tokens and `cn()`.
+**UI components:** HeroUI v3 via `@heroui/react` and `@heroui/styles`. Icons use Remix Icon (`@remixicon/react`), not lucide-react.
+
+**Package manager:** pnpm.
 
 ## Product Constraints
 
