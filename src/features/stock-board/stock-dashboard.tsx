@@ -46,6 +46,7 @@ import {
   ScrollShadow,
   Spinner,
   Surface,
+  Table,
   TextField,
   Chip,
   toast,
@@ -3442,46 +3443,52 @@ function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
         <span className="text-xs text-muted-foreground">记录 {records.length}</span>
       </div>
       {records.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-[1100px] w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium">code</th>
-                <th className="px-3 py-2 text-left font-medium">trade_date/date</th>
-                <th className="px-3 py-2 text-right font-medium">open</th>
-                <th className="px-3 py-2 text-right font-medium">close</th>
-                <th className="px-3 py-2 text-right font-medium">high</th>
-                <th className="px-3 py-2 text-right font-medium">low</th>
-                <th className="px-3 py-2 text-right font-medium">last</th>
-                <th className="px-3 py-2 text-right font-medium">limit_up</th>
-                <th className="px-3 py-2 text-right font-medium">limit_down</th>
-                <th className="px-3 py-2 text-right font-medium">limit_pct</th>
-                <th className="px-3 py-2 text-right font-medium">volume</th>
-                <th className="px-3 py-2 text-right font-medium">amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr key={`${record.code}:${record.date}`} className="border-b border-border/60 last:border-b-0">
-                  <td className="whitespace-nowrap px-3 py-2 font-medium tabular-nums">{record.code}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground tabular-nums">{record.date}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.open)}</td>
-                  <td className={cn("whitespace-nowrap px-3 py-2 text-right tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
-                    {formatPrice(record.close)}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.high)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.low)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.last)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_up)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_down)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPercent(record.limit_pct)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatRawNumber(record.volume)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatRawNumber(record.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table aria-label="日 K 明细" variant="secondary">
+          <Table.ScrollContainer>
+            <Table.Content aria-label="日 K 明细" className="min-w-[1180px]">
+              <Table.Header>
+                <Table.Column isRowHeader>代码</Table.Column>
+                <Table.Column>名称</Table.Column>
+                <Table.Column>交易日期</Table.Column>
+                <Table.Column className="text-end">开盘价</Table.Column>
+                <Table.Column className="text-end">收盘价</Table.Column>
+                <Table.Column className="text-end">最高价</Table.Column>
+                <Table.Column className="text-end">最低价</Table.Column>
+                <Table.Column className="text-end">最新价</Table.Column>
+                <Table.Column className="text-end">涨停价</Table.Column>
+                <Table.Column className="text-end">跌停价</Table.Column>
+                <Table.Column className="text-end">涨跌幅</Table.Column>
+                <Table.Column className="text-end">成交量</Table.Column>
+                <Table.Column className="text-end">成交额</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {records.map((record) => {
+                  const rowKey = `${record.code}:${record.date}`;
+
+                  return (
+                    <Table.Row key={rowKey} id={rowKey}>
+                      <Table.Cell className="font-medium tabular-nums">{record.code}</Table.Cell>
+                      <Table.Cell className="text-muted-foreground">{record.name}</Table.Cell>
+                      <Table.Cell className="text-muted-foreground tabular-nums">{record.date}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPrice(record.open)}</Table.Cell>
+                      <Table.Cell className={cn("text-end tabular-nums", record.close >= record.open ? "text-stock-up" : "text-stock-down")}>
+                        {formatPrice(record.close)}
+                      </Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPrice(record.high)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPrice(record.low)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPrice(record.last)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPrice(record.limit_up)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPrice(record.limit_down)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatPercent(record.limit_pct)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatRawNumber(record.volume)}</Table.Cell>
+                      <Table.Cell className="text-end tabular-nums">{formatRawNumber(record.amount)}</Table.Cell>
+                    </Table.Row>
+                  );
+                })}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       ) : (
         <StockDataEmptyState label="暂无日 K 明细数据" />
       )}
