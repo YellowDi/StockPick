@@ -1999,9 +1999,8 @@ function ActiveStockBoard({
         </div>
       </div>
 
-      <StockDetailsPanel
+      <StockStrategyPanel
         id="stock-details-panel"
-        records={sourceRecords}
         strategyResult={stock.strategyResult}
       />
 
@@ -2095,6 +2094,10 @@ function ActiveStockBoard({
         ) : (
           <EmptyChart error={error ?? chartStock.records[0]?.error} className="min-h-0" />
         )}
+      </div>
+
+      <div className="mt-4">
+        <DailyKlineDetailSection records={sourceRecords} />
       </div>
     </section>
   );
@@ -3664,13 +3667,11 @@ function MobileBottomActions({
   );
 }
 
-function StockDetailsPanel({
+function StockStrategyPanel({
   id,
-  records,
   strategyResult,
 }: {
   id: string;
-  records: StockDailyRecord[];
   strategyResult?: StrategyScanResult;
 }) {
   return (
@@ -3678,13 +3679,10 @@ function StockDetailsPanel({
       id={id}
       className="mt-4"
     >
-      <div className="grid gap-4">
-        <section>
-          <h2 className="mb-2 text-sm font-semibold">策略命中</h2>
-          <StrategyBasicInfo strategyResult={strategyResult} />
-        </section>
-        <DailyKlineDetailSection records={records} />
-      </div>
+      <section>
+        <h2 className="mb-2 text-sm font-semibold">策略命中</h2>
+        <StrategyBasicInfo strategyResult={strategyResult} />
+      </section>
     </div>
   );
 }
