@@ -145,6 +145,7 @@ type StockImportDialogState = {
   codeQuery: string;
   nameQuery: string;
   stocks: StockInfo[];
+  hasSearched: boolean;
   isLoading: boolean;
   error: string | null;
   importPendingCode: string | null;
@@ -174,7 +175,8 @@ const initialStockImportDialogState: StockImportDialogState = {
   codeQuery: "",
   nameQuery: "",
   stocks: [],
-  isLoading: true,
+  hasSearched: false,
+  isLoading: false,
   error: null,
   importPendingCode: null,
   importError: null,
@@ -4311,6 +4313,113 @@ function FilterListDialog({
   StockListSharedProps,
   "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
 >) {
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const modalState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+  const meta = stockListMeta[targetList];
+  const Icon = listIcons[targetList];
+
+  return (
+    <>
+      <Modal state={modalState}>
+        <Modal.Trigger className="hidden" />
+        <Modal.Backdrop variant="blur">
+          <Modal.Container size="lg" scroll="inside">
+            <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-4xl">
+              <Modal.CloseTrigger className="z-20" />
+              <Modal.Header className="p-5 pr-12">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Badge.Anchor>
+                    <StockSectionIconBox icon={Icon} active />
+                    <StockCountBadge count={currentStocks.length} active />
+                  </Badge.Anchor>
+                  <div className="min-w-0">
+                    <Modal.Heading className="truncate text-xl text-balance">{meta.label}</Modal.Heading>
+                    <p className="mt-1 text-sm text-muted-foreground">管理名单股票，支持添加和删除</p>
+                  </div>
+                </div>
+              </Modal.Header>
+
+              <Modal.Body className="flex max-h-[min(82vh,780px)] min-h-0 flex-col overflow-hidden p-0">
+                <FilterListCurrentStocks
+                  listKey={targetList}
+                  stocks={currentStocks}
+                  chartSelection={chartSelection}
+                  filterDeletePendingIds={filterDeletePendingIds}
+                  selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                  candidateStockCodes={candidateStockCodes}
+                  onAddToCandidate={onAddToCandidate}
+                  onRemoveFromCandidate={onRemoveFromCandidate}
+                  onToggleChart={onToggleChart}
+                  onDeleteFromFilterList={onDeleteFromFilterList}
+                />
+
+                <FilterListAddStockLauncher
+                  metaLabel={meta.label}
+                  onOpen={() => setIsImportDialogOpen(true)}
+                />
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      {isImportDialogOpen ? (
+        <FilterStockImportDialog
+          targetList={targetList}
+          stockGroups={stockGroups}
+          onClose={() => setIsImportDialogOpen(false)}
+          onImportStock={onImportStock}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function FilterListAddStockLauncher({
+  metaLabel,
+  onOpen,
+}: {
+  metaLabel: string;
+  onOpen: () => void;
+}) {
+  return (
+    <section className="shrink-0 border-t border-border/60 px-5 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+            <ImportIcon className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold">添加股票</h3>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">打开搜索浮窗后添加到{metaLabel}</p>
+          </div>
+        </div>
+        <Button type="button" className="w-full sm:w-auto" onClick={onOpen}>
+          <Plus data-icon="inline-start" />
+          添加股票
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function FilterStockImportDialog({
+  targetList,
+  stockGroups,
+  onClose,
+  onImportStock,
+}: {
+  targetList: ReturnableListKey;
+  stockGroups: StockGroups;
+  onClose: () => void;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+}) {
   const importDialog = useStockImportDialog(targetList, onImportStock);
   const modalState = useOverlayState({
     isOpen: true,
@@ -4326,6 +4435,7 @@ function FilterListDialog({
     codeQuery,
     nameQuery,
     stocks: importStocks,
+    hasSearched,
     isLoading,
     error,
     importPendingCode,
@@ -4337,84 +4447,59 @@ function FilterListDialog({
     handleSearch,
     handleImportStock,
   } = importDialog;
-  const Icon = listIcons[targetList];
 
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="hidden" />
       <Modal.Backdrop variant="blur">
         <Modal.Container size="lg" scroll="inside">
-          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-4xl">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
             <Modal.CloseTrigger className="z-20" />
             <Modal.Header className="p-5 pr-12">
               <div className="flex min-w-0 items-center gap-3">
-                <Badge.Anchor>
-                  <StockSectionIconBox icon={Icon} active />
-                  <StockCountBadge count={currentStocks.length} active />
-                </Badge.Anchor>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+                  <ImportIcon className="size-4" />
+                </span>
                 <div className="min-w-0">
-                  <Modal.Heading className="truncate text-xl text-balance">{meta.label}</Modal.Heading>
-                  <p className="mt-1 text-sm text-muted-foreground">管理名单股票，支持添加和删除</p>
+                  <Modal.Heading className="truncate text-xl text-balance">添加到{meta.label}</Modal.Heading>
+                  <p className="mt-1 text-sm text-muted-foreground">搜索股票后选择是否添加</p>
                 </div>
               </div>
             </Modal.Header>
 
-            <Modal.Body className="flex max-h-[min(82vh,780px)] min-h-0 flex-col overflow-hidden p-0">
-              <FilterListCurrentStocks
-                listKey={targetList}
-                stocks={currentStocks}
-                chartSelection={chartSelection}
-                filterDeletePendingIds={filterDeletePendingIds}
-                selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-                candidateStockCodes={candidateStockCodes}
-                onAddToCandidate={onAddToCandidate}
-                onRemoveFromCandidate={onRemoveFromCandidate}
-                onToggleChart={onToggleChart}
-                onDeleteFromFilterList={onDeleteFromFilterList}
+            <Modal.Body className="flex max-h-[min(78vh,680px)] min-h-0 flex-col overflow-hidden p-0">
+              <StockImportSearchForm
+                codeQuery={codeQuery}
+                nameQuery={nameQuery}
+                isLoading={isLoading}
+                onCodeQueryChange={setCodeQuery}
+                onNameQueryChange={setNameQuery}
+                onSearch={handleSearch}
               />
-
-              <section className="flex min-h-0 flex-1 flex-col border-t border-border/60">
-                <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
-                      <ImportIcon className="size-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold">添加股票</h3>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">按代码或名称搜索后添加到{meta.label}</p>
-                    </div>
-                  </div>
-                </div>
-                <StockImportSearchForm
-                  codeQuery={codeQuery}
-                  nameQuery={nameQuery}
-                  isLoading={isLoading}
-                  onCodeQueryChange={setCodeQuery}
-                  onNameQueryChange={setNameQuery}
-                  onSearch={handleSearch}
-                />
+              {hasSearched && !isLoading && !error ? (
                 <StockImportSummary
                   listLabel={meta.label}
                   filteredCount={filteredStocks.length}
                   visibleCount={visibleStocks.length}
                 />
-                {importError ? (
-                  <StockImportError message={importError} />
-                ) : null}
-                <StockImportResults
-                  targetList={targetList}
-                  oppositeList={oppositeList}
-                  metaLabel={meta.label}
-                  stockGroups={stockGroups}
-                  stocks={importStocks}
-                  visibleStocks={visibleStocks}
-                  isLoading={isLoading}
-                  error={error}
-                  importPendingCode={importPendingCode}
-                  className="min-h-0 flex-1"
-                  onImportStock={handleImportStock}
-                />
-              </section>
+              ) : null}
+              {importError ? (
+                <StockImportError message={importError} />
+              ) : null}
+              <StockImportResults
+                targetList={targetList}
+                oppositeList={oppositeList}
+                metaLabel={meta.label}
+                stockGroups={stockGroups}
+                stocks={importStocks}
+                visibleStocks={visibleStocks}
+                hasSearched={hasSearched}
+                isLoading={isLoading}
+                error={error}
+                importPendingCode={importPendingCode}
+                className="min-h-0 flex-1"
+                onImportStock={handleImportStock}
+              />
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>
@@ -4479,7 +4564,7 @@ function FilterListCurrentStocks({
       ) : (
         <div className="flex min-h-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 text-center text-sm">
           <div className="font-medium">暂无股票</div>
-          <div className="text-xs text-muted-foreground">在下方搜索后添加到{meta.label}</div>
+          <div className="text-xs text-muted-foreground">点击添加股票后搜索添加到{meta.label}</div>
         </div>
       )}
     </section>
@@ -4496,6 +4581,7 @@ function useStockImportDialog(
     codeQuery,
     nameQuery,
     stocks,
+    hasSearched,
     isLoading,
     error,
     importPendingCode,
@@ -4506,17 +4592,33 @@ function useStockImportDialog(
   const filteredStocks = stocks;
   const visibleStocks = filteredStocks.slice(0, stockImportResultLimit);
 
-  const setCodeQuery = useCallback((value: string) => {
-    setDialogState((current) => ({ ...current, codeQuery: value }));
-  }, []);
-
-  const setNameQuery = useCallback((value: string) => {
-    setDialogState((current) => ({ ...current, nameQuery: value }));
-  }, []);
-
   const cancelActiveStockLoad = useCallback(() => {
     requestIdRef.current += 1;
   }, [requestIdRef]);
+
+  const setCodeQuery = useCallback((value: string) => {
+    cancelActiveStockLoad();
+    setDialogState((current) => ({
+      ...current,
+      codeQuery: value,
+      stocks: [],
+      hasSearched: false,
+      error: null,
+      importError: null,
+    }));
+  }, [cancelActiveStockLoad]);
+
+  const setNameQuery = useCallback((value: string) => {
+    cancelActiveStockLoad();
+    setDialogState((current) => ({
+      ...current,
+      nameQuery: value,
+      stocks: [],
+      hasSearched: false,
+      error: null,
+      importError: null,
+    }));
+  }, [cancelActiveStockLoad]);
 
   const loadStocks = useCallback(async (query: { code?: string; name?: string }, signal?: AbortSignal) => {
     const requestId = requestIdRef.current + 1;
@@ -4524,6 +4626,7 @@ function useStockImportDialog(
     requestIdRef.current = requestId;
     setDialogState((current) => ({
       ...current,
+      hasSearched: true,
       isLoading: true,
       error: null,
     }));
@@ -4560,21 +4663,30 @@ function useStockImportDialog(
   }, [requestIdRef]);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    void loadStocks({}, controller.signal);
-
-    return () => {
-      cancelActiveStockLoad();
-      controller.abort();
-    };
-  }, [cancelActiveStockLoad, loadStocks]);
+    return cancelActiveStockLoad;
+  }, [cancelActiveStockLoad]);
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const trimmedCodeQuery = codeQuery.trim();
+    const trimmedNameQuery = nameQuery.trim();
+
+    if (!trimmedCodeQuery && !trimmedNameQuery) {
+      cancelActiveStockLoad();
+      setDialogState((current) => ({
+        ...current,
+        stocks: [],
+        hasSearched: true,
+        isLoading: false,
+        error: "请输入代码或名称后搜索。",
+      }));
+      return;
+    }
+
     void loadStocks({
-      code: codeQuery,
-      name: nameQuery,
+      code: trimmedCodeQuery,
+      name: trimmedNameQuery,
     });
   }
 
@@ -4617,6 +4729,7 @@ function useStockImportDialog(
     codeQuery,
     nameQuery,
     stocks,
+    hasSearched,
     isLoading,
     error,
     importPendingCode,
@@ -4714,6 +4827,7 @@ function StockImportResults({
   stockGroups,
   stocks,
   visibleStocks,
+  hasSearched,
   isLoading,
   error,
   importPendingCode,
@@ -4726,6 +4840,7 @@ function StockImportResults({
   stockGroups: StockGroups;
   stocks: StockInfo[];
   visibleStocks: StockInfo[];
+  hasSearched: boolean;
   isLoading: boolean;
   error: string | null;
   importPendingCode: string | null;
@@ -4751,10 +4866,20 @@ function StockImportResults({
         <Alert status="danger">
           <Alert.Indicator />
           <Alert.Content>
-            <Alert.Title>加载失败</Alert.Title>
+            <Alert.Title>搜索失败</Alert.Title>
             <Alert.Description>{error}</Alert.Description>
           </Alert.Content>
         </Alert>
+      </div>
+    );
+  }
+
+  if (!hasSearched) {
+    return (
+      <div className={containerClassName}>
+        <EmptyState className="flex min-h-48 items-center justify-center text-center text-muted-foreground">
+          输入代码或名称后搜索
+        </EmptyState>
       </div>
     );
   }
