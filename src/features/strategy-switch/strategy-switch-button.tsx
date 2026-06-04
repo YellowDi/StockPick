@@ -9,7 +9,7 @@ import {
   Select,
   Separator,
   Switch,
-  Tag,
+  Chip,
   useOverlayState,
   type Key,
 } from "@heroui/react";
@@ -103,9 +103,9 @@ export function StrategySwitchButton({
         >
           <SlidersHorizontal data-icon="inline-start" />
           策略切换
-          <Tag variant="surface" className="hidden sm:inline-flex">
+          <Chip variant="soft" className="hidden sm:inline-flex">
             {config.enabled ? "启用" : "停用"} · {getStrategyRulesLabel(config)}
-          </Tag>
+          </Chip>
         </Button>
 
         <Modal.Backdrop variant="blur">

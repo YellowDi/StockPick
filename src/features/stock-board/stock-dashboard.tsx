@@ -1,6 +1,11 @@
 import {
+  createContext,
+  type ComponentPropsWithoutRef,
   type FormEvent,
+  type Key,
+  type MouseEvent,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useReducer,
@@ -8,7 +13,6 @@ import {
   useState,
 } from "react";
 import {
-  Accordion,
   Button,
   Card,
   CardContent,
@@ -21,7 +25,7 @@ import {
   Pagination,
   ScrollShadow,
   Surface,
-  Tag,
+  Chip,
   toast,
   useOverlayState,
 } from "@heroui/react";
@@ -123,6 +127,132 @@ const stockItemActionClassName = cn(
   "md:group-focus-within/stock-item:w-8 md:group-focus-within/stock-item:translate-x-0 md:group-focus-within/stock-item:opacity-100",
   "md:group-hover/stock-item:w-8 md:group-hover/stock-item:translate-x-0 md:group-hover/stock-item:opacity-100",
 );
+
+type DashboardAccordionContextValue = {
+  allowsMultipleExpanded: boolean;
+  expandedKeys: Set<Key>;
+  onExpandedChange?: (keys: Set<Key>) => void;
+};
+
+const DashboardAccordionContext = createContext<DashboardAccordionContextValue>({
+  allowsMultipleExpanded: false,
+  expandedKeys: new Set(),
+});
+const DashboardAccordionItemContext = createContext<{ id: Key } | null>(null);
+
+function DashboardAccordionRoot({
+  allowsMultipleExpanded = false,
+  children,
+  expandedKeys = new Set(),
+  onExpandedChange,
+  ...props
+}: ComponentPropsWithoutRef<"div"> & {
+  allowsMultipleExpanded?: boolean;
+  expandedKeys?: Set<Key>;
+  onExpandedChange?: (keys: Set<Key>) => void;
+}) {
+  const contextValue = useMemo(
+    () => ({ allowsMultipleExpanded, expandedKeys, onExpandedChange }),
+    [allowsMultipleExpanded, expandedKeys, onExpandedChange],
+  );
+
+  return (
+    <DashboardAccordionContext.Provider value={contextValue}>
+      <div {...props}>{children}</div>
+    </DashboardAccordionContext.Provider>
+  );
+}
+
+function DashboardAccordionItem({
+  children,
+  id,
+  ...props
+}: Omit<ComponentPropsWithoutRef<"div">, "id"> & { id: Key }) {
+  return (
+    <DashboardAccordionItemContext.Provider value={{ id }}>
+      <div data-accordion-id={String(id)} {...props}>
+        {children}
+      </div>
+    </DashboardAccordionItemContext.Provider>
+  );
+}
+
+function DashboardAccordionHeading(props: ComponentPropsWithoutRef<"div">) {
+  return <div {...props} />;
+}
+
+function DashboardAccordionTrigger({
+  children,
+  className,
+  onClick,
+  type = "button",
+  ...props
+}: ComponentPropsWithoutRef<"button">) {
+  const accordion = useContext(DashboardAccordionContext);
+  const item = useContext(DashboardAccordionItemContext);
+  const isExpanded = item ? accordion.expandedKeys.has(item.id) : false;
+
+  function handleClick(event: MouseEvent<HTMLButtonElement>) {
+    onClick?.(event);
+
+    if (!item || event.defaultPrevented) {
+      return;
+    }
+
+    const nextExpandedKeys = accordion.allowsMultipleExpanded
+      ? new Set(accordion.expandedKeys)
+      : new Set<Key>();
+
+    if (accordion.allowsMultipleExpanded && nextExpandedKeys.has(item.id)) {
+      nextExpandedKeys.delete(item.id);
+    } else {
+      nextExpandedKeys.add(item.id);
+    }
+
+    accordion.onExpandedChange?.(nextExpandedKeys);
+  }
+
+  return (
+    <button
+      type={type}
+      aria-expanded={isExpanded}
+      className={cn("flex items-center text-left", className)}
+      onClick={handleClick}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DashboardAccordionPanel({
+  children,
+  hidden,
+  ...props
+}: ComponentPropsWithoutRef<"div">) {
+  const accordion = useContext(DashboardAccordionContext);
+  const item = useContext(DashboardAccordionItemContext);
+  const isExpanded = item ? accordion.expandedKeys.has(item.id) : true;
+  const isHidden = hidden ?? !isExpanded;
+
+  return (
+    <div hidden={isHidden} {...props}>
+      {children}
+    </div>
+  );
+}
+
+function DashboardAccordionBody(props: ComponentPropsWithoutRef<"div">) {
+  return <div {...props} />;
+}
+
+const Accordion = Object.assign(DashboardAccordionRoot, {
+  Body: DashboardAccordionBody,
+  Heading: DashboardAccordionHeading,
+  Item: DashboardAccordionItem,
+  Panel: DashboardAccordionPanel,
+  Trigger: DashboardAccordionTrigger,
+});
 
 type ChartSelection = {
   code: string;
@@ -1712,15 +1842,15 @@ function ActiveStockBoard({
                 {stock.name}
               </h1>
               <span className="text-sm text-muted-foreground">{stock.code}</span>
-              <Tag variant="surface" className="bg-background/35 backdrop-blur">
+              <Chip variant="soft" className="bg-background/35 backdrop-blur">
                 {stockListMeta[stock.list].label}
-              </Tag>
-              <Tag
-                variant="surface"
+              </Chip>
+              <Chip
+                variant="soft"
                 className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}
               >
                 {latest ? "行情正常" : "无数据"}
-              </Tag>
+              </Chip>
               <ChevronDown
                 className={cn(
                   "size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
@@ -2487,9 +2617,9 @@ function DesktopSelectionHistoryHeader({
           历史选股
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Tag variant="surface" className="shrink-0 tabular-nums">
+          <Chip variant="soft" className="shrink-0 tabular-nums">
             {loading ? "..." : total}
-          </Tag>
+          </Chip>
           <SelectionHistoryPagination
             loading={loading}
             pageNum={pageNum}
@@ -2899,12 +3029,12 @@ function DesktopStockChartPanel({
               <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{stock.code}</span>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Tag variant="surface" className="bg-background/45 backdrop-blur">
+              <Chip variant="soft" className="bg-background/45 backdrop-blur">
                 {stockListMeta[stock.list].label}
-              </Tag>
-              <Tag variant="surface" className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}>
+              </Chip>
+              <Chip variant="soft" className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}>
                 {latest ? "行情正常" : "无数据"}
-              </Tag>
+              </Chip>
               {latest ? (
                 <span className="text-xs text-muted-foreground tabular-nums">{latest.date}</span>
               ) : null}
@@ -3305,7 +3435,7 @@ function MobileStockTabs({
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <CardDescription className="truncate">{meta.description}</CardDescription>
-            <Tag variant="surface">{stocks.length}</Tag>
+            <Chip variant="soft">{stocks.length}</Chip>
           </div>
           {showCandidateSave ? (
             <Button
@@ -3408,9 +3538,9 @@ function MobileSelectionHistory({
             <CardTitle className="truncate text-base">历史选股</CardTitle>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Tag variant="surface" className="shrink-0 tabular-nums">
+            <Chip variant="soft" className="shrink-0 tabular-nums">
               {selectionBatchesLoading ? "..." : selectionBatchesTotal}
-            </Tag>
+            </Chip>
             <SelectionHistoryPagination
               loading={selectionBatchesLoading}
               pageNum={selectionBatchesPageNum}
@@ -3679,12 +3809,12 @@ function FiveDayTrendSection({ records }: { records: StockDailyRecord[] }) {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_up)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
-                      <Tag
-                        variant="surface"
+                      <Chip
+                        variant="soft"
                         className={cn("bg-background/45", touchedLimitUp && "text-stock-up")}
                       >
                         {touchedLimitUp ? "触及" : "未触及"}
-                      </Tag>
+                      </Chip>
                     </td>
                   </tr>
                 );

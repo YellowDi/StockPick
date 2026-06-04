@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { ToastProvider, toast } from "@heroui/react";
+import { toast } from "@heroui/react";
 
 import { LoginPage } from "@/components/login-page";
 import {
@@ -19,25 +19,17 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(getStoredAuthToken()));
   const [isLoginPending, setIsLoginPending] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    try {
-      const storedTheme = window.localStorage.getItem(themeStorageKey);
-
-      return storedTheme === "light" ? "light" : "dark";
-    } catch {
-      return "dark";
-    }
-  });
+  const themeMode: ThemeMode = "dark";
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", themeMode === "dark");
+    document.documentElement.classList.add("dark");
 
     try {
-      window.localStorage.setItem(themeStorageKey, themeMode);
+      window.localStorage.setItem(themeStorageKey, "dark");
     } catch {
-      // Keep theme switching usable if browser storage is unavailable.
+      // Keep the app usable if browser storage is unavailable.
     }
-  }, [themeMode]);
+  }, []);
 
   useEffect(() => subscribeAuthExpired(() => {
     toast.warning("登录状态已失效", {
@@ -47,9 +39,7 @@ function App() {
     setLoginError("登录状态已失效，请重新登录。");
   }), []);
 
-  const toggleThemeMode = useCallback(() => {
-    setThemeMode((mode) => (mode === "dark" ? "light" : "dark"));
-  }, []);
+  const toggleThemeMode = useCallback(() => {}, []);
 
   const handleLogin = useCallback(async (credentials: LoginCredentials) => {
     setIsLoginPending(true);
@@ -102,12 +92,7 @@ function App() {
     </Suspense>
   );
 
-  return (
-    <>
-      {content}
-      <ToastProvider placement="top end" />
-    </>
-  );
+  return content;
 }
 
 function DashboardFallback() {

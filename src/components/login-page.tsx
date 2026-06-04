@@ -57,8 +57,8 @@ export function LoginPage({
           />
         </Suspense>
         <form className="relative z-10 w-full max-w-[420px]" onSubmit={handleSubmit}>
-          <Card className="border-white/10 bg-card/82 shadow-[0_28px_110px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
-            <CardHeader className="gap-4">
+          <Card className="border-white/10 bg-card/82 text-card-foreground shadow-[0_28px_110px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
+            <CardHeader className="gap-4 text-card-foreground">
               <div className="flex items-start justify-between gap-4">
                 <BrandLockup />
                 {isThemeToggleVisible(themeMode) ? (
@@ -74,18 +74,21 @@ export function LoginPage({
                 ) : null}
               </div>
               <div>
-                <CardTitle className="text-2xl">登录</CardTitle>
-                <CardDescription>使用账号密码进入股票筛选工作台</CardDescription>
+                <CardTitle className="text-2xl text-card-foreground">登录</CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  使用账号密码进入股票筛选工作台
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <Label htmlFor="login-username" className="flex flex-col gap-2 text-sm font-medium">
+              <Label htmlFor="login-username" className="flex w-full flex-col gap-2 text-sm font-medium text-card-foreground">
                 账号
-                <span className="relative">
+                <span className="relative block w-full">
                   <UserRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="login-username"
-                    className="bg-background/45 pl-9"
+                    fullWidth
+                    className="bg-background/45 pl-9 text-foreground placeholder:text-muted-foreground"
                     name="username"
                     placeholder="stockpick"
                     autoComplete="username"
@@ -95,13 +98,14 @@ export function LoginPage({
                   />
                 </span>
               </Label>
-              <Label htmlFor="login-password" className="flex flex-col gap-2 text-sm font-medium">
+              <Label htmlFor="login-password" className="flex w-full flex-col gap-2 text-sm font-medium text-card-foreground">
                 密码
-                <span className="relative">
+                <span className="relative block w-full">
                   <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="login-password"
-                    className="bg-background/45 pl-9"
+                    fullWidth
+                    className="bg-background/45 pl-9 text-foreground placeholder:text-muted-foreground"
                     name="password"
                     type="password"
                     placeholder="password"
