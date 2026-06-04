@@ -10,7 +10,6 @@ import {
 } from "react";
 import {
   RiAddLine as Plus,
-  RiArrowDownSLine as ChevronDown,
   RiArrowLeftSLine as ChevronLeft,
   RiArrowRightSLine as ChevronRight,
   RiCheckboxCircleLine as CheckCircle2,
@@ -48,6 +47,7 @@ import {
   ScrollShadow,
   Spinner,
   Surface,
+  Tabs,
   Table,
   TextField,
   Chip,
@@ -1717,16 +1717,13 @@ type StockBoardProps = {
 
 type ActiveStockBoardState = {
   chartMode: ChartMode;
-  detailsOpen: boolean;
 };
 
 type ActiveStockBoardAction =
-  | { type: "set-chart-mode"; chartMode: ChartMode }
-  | { type: "toggle-details" };
+  | { type: "set-chart-mode"; chartMode: ChartMode };
 
 const initialActiveStockBoardState: ActiveStockBoardState = {
   chartMode: "candle",
-  detailsOpen: false,
 };
 
 function StockBoard({
@@ -1841,7 +1838,6 @@ function ActiveStockBoard({
   const [boardState, dispatchBoard] = useReducer(activeStockBoardReducer, initialActiveStockBoardState);
   const {
     chartMode,
-    detailsOpen,
   } = boardState;
   const {
     chartStock,
@@ -1899,13 +1895,7 @@ function ActiveStockBoard({
       </div>
 
       <div className="mt-4 min-w-0">
-        <button
-          type="button"
-          className="group flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left transition-[color,transform] active:scale-[0.96]"
-          aria-expanded={detailsOpen}
-          aria-controls="stock-details-panel"
-          onClick={() => dispatchBoard({ type: "toggle-details" })}
-        >
+        <div className="flex min-h-10 min-w-0 flex-wrap items-center gap-2 text-left">
           <h1 className="max-w-full truncate text-2xl font-semibold leading-tight tracking-normal text-foreground sm:text-[1.65rem]">
             {stock.name}
           </h1>
@@ -1919,13 +1909,7 @@ function ActiveStockBoard({
           >
             {latest ? "行情正常" : "无数据"}
           </Chip>
-          <ChevronDown
-            className={cn(
-              "size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
-              detailsOpen && "rotate-180",
-            )}
-          />
-        </button>
+        </div>
         <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
           <span
             className={cn(
@@ -1954,6 +1938,12 @@ function ActiveStockBoard({
           ) : null}
         </div>
       </div>
+
+      <StockDetailsPanel
+        id="stock-details-panel"
+        records={sourceRecords}
+        strategyResult={stock.strategyResult}
+      />
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="flex rounded-lg bg-background/45 p-1 shadow-[0_10px_34px_rgba(0,0,0,0.14)] backdrop-blur-xl">
@@ -2046,14 +2036,6 @@ function ActiveStockBoard({
           <EmptyChart error={error ?? chartStock.records[0]?.error} className="min-h-0" />
         )}
       </div>
-
-      {detailsOpen ? (
-        <StockDetailsPanel
-          id="stock-details-panel"
-          records={sourceRecords}
-          strategyResult={stock.strategyResult}
-        />
-      ) : null}
     </section>
   );
 }
@@ -2065,8 +2047,6 @@ function activeStockBoardReducer(
   switch (action.type) {
     case "set-chart-mode":
       return { ...state, chartMode: action.chartMode };
-    case "toggle-details":
-      return { ...state, detailsOpen: !state.detailsOpen };
   }
 
   return state;
@@ -3136,7 +3116,6 @@ function MobileCandidateDrawer({
       stocks: candidateStocks,
     },
   ];
-  const currentTab = tabs.find((tab) => tab.key === currentListKey) ?? tabs[0];
 
   return (
     <Drawer state={drawerState}>
@@ -3161,113 +3140,131 @@ function MobileCandidateDrawer({
               </div>
             </Drawer.Header>
 
-            <Drawer.Body className="flex min-h-0 flex-col overflow-hidden p-0">
-              <div className="shrink-0 border-b border-border/60 px-4 pb-3">
-                <div className="grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      className={cn(
-                        "flex h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
-                        tab.key === currentListKey
-                          ? "bg-secondary text-secondary-foreground"
-                          : "hover:bg-default hover:text-foreground",
-                      )}
-                      aria-pressed={tab.key === currentListKey}
-                      onClick={() => onActiveListChange(tab.key)}
-                    >
-                      <span className="min-w-0 truncate">{tab.label}</span>
-                      <span className="shrink-0 tabular-nums">{tab.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <Drawer.Body className="min-h-0 overflow-hidden p-0">
+              <Tabs
+                selectedKey={currentListKey}
+                onSelectionChange={(key) => {
+                  const nextKey = String(key);
 
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <h3 className="truncate text-sm font-semibold">{currentTab.label}</h3>
-                    <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
-                      {currentTab.count}
-                    </Chip>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">{currentTab.description}</p>
-                </div>
-                {currentListKey === "initial" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 shrink-0 bg-background/45"
-                    isDisabled={availableStocks.length === 0}
-                    onClick={() => onAddStocksToCandidate(availableStocks)}
+                  if (nextKey === "initial" || nextKey === "candidate") {
+                    onActiveListChange(nextKey);
+                  }
+                }}
+                className="flex h-full min-h-0 flex-col"
+              >
+                <Tabs.ListContainer className="shrink-0 border-b border-border/60 px-4 pb-3">
+                  <Tabs.List
+                    aria-label="筛选结果列表"
+                    className="grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1"
                   >
-                    <Plus data-icon="inline-start" />
-                    全部添加
-                  </Button>
-                ) : (
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-10 bg-background/45 px-3"
-                      isDisabled={candidateStocks.length === 0}
-                      onClick={onClearCandidateStocks}
-                    >
-                      <Trash2 data-icon="inline-start" />
-                      清空
-                    </Button>
-                    <Button
-                      type="button"
-                      className="h-10 px-3"
-                      isDisabled={candidateSavePending || candidateStocks.length === 0}
-                      onClick={() => void onSaveCandidateSelection()}
-                    >
-                      {candidateSavePending ? (
-                        <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                      ) : (
-                        <CheckCircle2 data-icon="inline-start" />
-                      )}
-                      保存
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <ScrollShadow orientation="vertical" className="min-h-0 flex-1 p-4">
-                {currentTab.stocks.length > 0 ? (
-                  <div className="flex w-full flex-col gap-2">
-                    {currentTab.stocks.map((stock) => (
-                      <StockListButton
-                        key={stock.code}
-                        stock={stock}
-                        active={chartSelection?.listKey === currentListKey && chartSelection.code === stock.code}
-                        onClick={() => onToggleChart(stock.code, currentListKey)}
-                        action={getStockListAction({
-                          stock,
-                          listKey: currentListKey,
-                          candidateStockCodes,
-                          filterDeletePendingIds: [],
-                          selectionRecordDeletePendingIds: [],
-                          onAddToCandidate,
-                          onRemoveFromCandidate,
-                          onRemoveFromHistory: () => undefined,
-                          onDeleteFromFilterList: () => undefined,
-                        })}
-                      />
+                    {tabs.map((tab) => (
+                      <Tabs.Tab
+                        key={tab.key}
+                        id={tab.key}
+                        className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs"
+                      >
+                        <span className="min-w-0 truncate">{tab.label}</span>
+                        <span className="shrink-0 tabular-nums">{tab.count}</span>
+                      </Tabs.Tab>
                     ))}
-                  </div>
-                ) : (
-                  <div className="flex min-h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 px-4 text-center text-sm">
-                    <div className="font-medium">
-                      {currentListKey === "initial" ? "暂无筛选结果" : "暂无待保存股票"}
+                  </Tabs.List>
+                </Tabs.ListContainer>
+
+                {tabs.map((tab) => (
+                  <Tabs.Panel
+                    key={tab.key}
+                    id={tab.key}
+                    className="min-h-0 flex-1 overflow-hidden"
+                  >
+                    <div className="flex h-full min-h-0 flex-col">
+                      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <h3 className="truncate text-sm font-semibold">{tab.label}</h3>
+                            <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+                              {tab.count}
+                            </Chip>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">{tab.description}</p>
+                        </div>
+                        {tab.key === "initial" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-10 shrink-0 bg-background/45"
+                            isDisabled={availableStocks.length === 0}
+                            onClick={() => onAddStocksToCandidate(availableStocks)}
+                          >
+                            <Plus data-icon="inline-start" />
+                            全部添加
+                          </Button>
+                        ) : (
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 bg-background/45 px-3"
+                              isDisabled={candidateStocks.length === 0}
+                              onClick={onClearCandidateStocks}
+                            >
+                              <Trash2 data-icon="inline-start" />
+                              清空
+                            </Button>
+                            <Button
+                              type="button"
+                              className="h-10 px-3"
+                              isDisabled={candidateSavePending || candidateStocks.length === 0}
+                              onClick={() => void onSaveCandidateSelection()}
+                            >
+                              {candidateSavePending ? (
+                                <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                              ) : (
+                                <CheckCircle2 data-icon="inline-start" />
+                              )}
+                              保存
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      <ScrollShadow orientation="vertical" className="min-h-0 flex-1 p-4">
+                        {tab.stocks.length > 0 ? (
+                          <div className="flex w-full flex-col gap-2">
+                            {tab.stocks.map((stock) => (
+                              <StockListButton
+                                key={stock.code}
+                                stock={stock}
+                                active={chartSelection?.listKey === tab.key && chartSelection.code === stock.code}
+                                onClick={() => onToggleChart(stock.code, tab.key)}
+                                action={getStockListAction({
+                                  stock,
+                                  listKey: tab.key,
+                                  candidateStockCodes,
+                                  filterDeletePendingIds: [],
+                                  selectionRecordDeletePendingIds: [],
+                                  onAddToCandidate,
+                                  onRemoveFromCandidate,
+                                  onRemoveFromHistory: () => undefined,
+                                  onDeleteFromFilterList: () => undefined,
+                                })}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex min-h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 px-4 text-center text-sm">
+                            <div className="font-medium">
+                              {tab.key === "initial" ? "暂无筛选结果" : "暂无待保存股票"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {tab.key === "initial" ? "开始筛选后会在这里展示结果" : "从筛选结果添加股票"}
+                            </div>
+                          </div>
+                        )}
+                      </ScrollShadow>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {currentListKey === "initial" ? "开始筛选后会在这里展示结果" : "从筛选结果添加股票"}
-                    </div>
-                  </div>
-                )}
-              </ScrollShadow>
+                  </Tabs.Panel>
+                ))}
+              </Tabs>
             </Drawer.Body>
           </Drawer.Dialog>
         </Drawer.Content>
