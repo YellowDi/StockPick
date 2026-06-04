@@ -174,7 +174,7 @@ export function StrategySwitchButton({
                 </div>
               </section>
 
-              <section className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <section>
                 <div className="flex min-w-0 flex-col gap-2">
                   <Label htmlFor="strategy-name">配置名称</Label>
                   <Input
@@ -183,19 +183,6 @@ export function StrategySwitchButton({
                     value={draft.name}
                     onChange={(event) => dispatchDraft({ type: "name", value: event.target.value })}
                   />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="strategy-enabled">是否启用</Label>
-                  <div className="flex h-8 min-w-[132px] items-center justify-between gap-3 rounded-md border bg-background/55 px-3">
-                    <span className="text-sm">{draft.enabled ? "已启用" : "已停用"}</span>
-                    <Switch
-                      id="strategy-enabled"
-                      aria-label="是否启用"
-                      isSelected={draft.enabled}
-                      onChange={(value) => dispatchDraft({ type: "enabled", value })}
-                    />
-                  </div>
                 </div>
               </section>
 
@@ -366,7 +353,11 @@ function StrategyRuleSwitch({
       <Label htmlFor={id} className="min-w-0 flex-1 text-sm font-medium">
         {label}
       </Label>
-      <Switch id={id} aria-label={label} isSelected={checked} onChange={onCheckedChange} />
+      <Switch id={id} size="lg" aria-label={label} isSelected={checked} onChange={onCheckedChange}>
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+      </Switch>
     </div>
   );
 }
