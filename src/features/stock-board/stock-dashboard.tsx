@@ -3496,6 +3496,11 @@ function StrategyBasicInfo({ strategyResult }: { strategyResult?: StrategyScanRe
         <StrategyInfoItem label="第X-1天最高价" value={formatPrice(strategyResult.x1_high)} />
         <StrategyInfoItem label="第X-2天收盘价" value={formatPrice(strategyResult.x2_close)} />
         <StrategyInfoItem label="第X-2天的MA5均线值" value={formatPrice(strategyResult.x2_ma5)} />
+        <StrategyInfoItem
+          label="第X-2天收盘价偏离MA5的百分比"
+          value={formatPercent(strategyResult.x2_ma5_pct)}
+          className="col-span-2"
+        />
       </div>
     </div>
   );
@@ -4113,7 +4118,7 @@ function DesktopCandidateDialog({
                   <StockCountBadge count={availableStocks.length + candidateStocks.length} active />
                 </Badge.Anchor>
                 <div className="min-w-0">
-                  <Drawer.Heading className="truncate text-xl text-balance">上一次筛选结果</Drawer.Heading>
+                  <Drawer.Heading className="truncate text-xl text-balance">筛选结果</Drawer.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">
                     将筛选结果加入待保存列表后，可保存为历史选股
                   </p>

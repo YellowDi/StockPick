@@ -65,6 +65,7 @@ export type StrategyScanResult = {
   x1_high?: number;
   x2_close?: number;
   x2_ma5?: number;
+  x2_ma5_pct?: number;
   x_close?: number;
   x_date?: string;
   x_high?: number;
@@ -779,6 +780,7 @@ function getStrategyScanResults(payload: unknown) {
     assignScanNumberField(result, item, "x1_high");
     assignScanNumberField(result, item, "x2_close");
     assignScanNumberField(result, item, "x2_ma5");
+    assignScanNumberField(result, item, "x2_ma5_pct");
     assignScanNumberField(result, item, "x_close");
     assignScanNumberField(result, item, "x_high");
     assignScanNumberField(result, item, "x_low");
@@ -1096,6 +1098,7 @@ function assignScanNumberField(
     | "x1_high"
     | "x2_close"
     | "x2_ma5"
+    | "x2_ma5_pct"
     | "x_close"
     | "x_high"
     | "x_low",
