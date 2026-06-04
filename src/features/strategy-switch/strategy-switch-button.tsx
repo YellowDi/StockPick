@@ -1,35 +1,20 @@
 import { type FormEvent, useReducer, useState } from "react";
+import {
+  Button,
+  Input,
+  InputGroup,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Separator,
+  Switch,
+  Tag,
+  useOverlayState,
+  type Key,
+} from "@heroui/react";
 import { CheckCircle2, LoaderCircle, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +57,7 @@ export function StrategySwitchButton({
   const [open, setOpen] = useState(false);
   const [localSavePending, setLocalSavePending] = useState(false);
   const [draft, dispatchDraft] = useReducer(strategyDraftReducer, config);
+  const modalState = useOverlayState({ isOpen: open, onOpenChange: handleOpenChange });
   const isSaving = savePending || localSavePending;
   const visibleConfigs = configs.length > 0 ? configs : [config];
 
@@ -89,7 +75,7 @@ export function StrategySwitchButton({
 
     try {
       await onSave(normalizeStrategyConfig(draft));
-      setOpen(false);
+      modalState.close();
     } finally {
       setLocalSavePending(false);
     }
@@ -101,39 +87,40 @@ export function StrategySwitchButton({
     }
 
     await onDelete(draft.id);
-    setOpen(false);
+    modalState.close();
   }
 
   return (
     <section className={cn("mt-4 flex justify-center", className)}>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogTrigger
-          render={
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(
-                "h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]",
-                buttonClassName,
-              )}
-            />
-          }
+      <Modal state={modalState}>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-10 bg-card/88 px-4 shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-transform active:scale-[0.96]",
+            buttonClassName,
+          )}
         >
           <SlidersHorizontal data-icon="inline-start" />
           策略切换
-          <Badge variant="secondary" className="hidden sm:inline-flex">
+          <Tag variant="surface" className="hidden sm:inline-flex">
             {config.enabled ? "启用" : "停用"} · {getStrategyRulesLabel(config)}
-          </Badge>
-        </DialogTrigger>
+          </Tag>
+        </Button>
 
-        <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
-          <form onSubmit={saveStrategy}>
-            <DialogHeader className="p-5 pr-12">
-              <DialogTitle className="text-xl text-balance">策略配置</DialogTitle>
-              <DialogDescription>管理后端策略配置，并选择当前扫描使用的配置</DialogDescription>
-            </DialogHeader>
+        <Modal.Backdrop variant="blur">
+          <Modal.Container size="lg" scroll="inside">
+            <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
+              <Modal.CloseTrigger />
+              <form onSubmit={saveStrategy}>
+                <Modal.Header className="p-5 pr-12">
+                  <div className="flex flex-col gap-2">
+                    <Modal.Heading className="text-xl text-balance">策略配置</Modal.Heading>
+                    <p className="text-sm text-muted-foreground">管理后端策略配置，并选择当前扫描使用的配置</p>
+                  </div>
+                </Modal.Header>
 
-            <div className="flex max-h-[min(72vh,720px)] flex-col gap-5 overflow-y-auto px-5 pb-5">
+                <div className="flex max-h-[min(72vh,720px)] flex-col gap-5 overflow-y-auto px-5 pb-5">
               <section>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">配置列表</h3>
@@ -188,7 +175,7 @@ export function StrategySwitchButton({
                     id="strategy-name"
                     className="bg-background/55"
                     value={draft.name}
-                    onValueChange={(value) => dispatchDraft({ type: "name", value })}
+                    onChange={(event) => dispatchDraft({ type: "name", value: event.target.value })}
                   />
                 </div>
 
@@ -198,8 +185,9 @@ export function StrategySwitchButton({
                     <span className="text-sm">{draft.enabled ? "已启用" : "已停用"}</span>
                     <Switch
                       id="strategy-enabled"
-                      checked={draft.enabled}
-                      onCheckedChange={(value) => dispatchDraft({ type: "enabled", value })}
+                      aria-label="是否启用"
+                      isSelected={draft.enabled}
+                      onChange={(value) => dispatchDraft({ type: "enabled", value })}
                     />
                   </div>
                 </div>
@@ -219,7 +207,7 @@ export function StrategySwitchButton({
                   <div className="flex min-w-0 flex-col gap-2">
                     <Label htmlFor="strategy-y">MA5 百分比偏移</Label>
                     <InputGroup className="bg-background/55">
-                      <InputGroupInput
+                      <InputGroup.Input
                         id="strategy-y"
                         type="number"
                         min={0}
@@ -227,7 +215,7 @@ export function StrategySwitchButton({
                         value={String(draft.y)}
                         onChange={(event) => dispatchDraft({ type: "y", value: event.target.value })}
                       />
-                      <InputGroupAddon align="inline-end">%</InputGroupAddon>
+                      <InputGroup.Suffix>%</InputGroup.Suffix>
                     </InputGroup>
                   </div>
                 </div>
@@ -259,58 +247,57 @@ export function StrategySwitchButton({
                   {draft.rule3Enabled ? `启用规则 3：基准日-2天收盘价在五日线之上 ${draft.y}%，且在基准日最高点和最低点之间` : "停用规则 3"}。
                 </p>
               </section>
-            </div>
+                </div>
 
-            <Separator />
-            <DialogFooter className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="bg-background/55 transition-transform active:scale-[0.96]"
-                  onClick={() => dispatchDraft({ type: "restore-default" })}
-                >
-                  <Plus data-icon="inline-start" />
-                  新建配置
-                </Button>
-                {draft.id && onDelete ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="bg-background/55 text-destructive transition-transform hover:text-destructive active:scale-[0.96]"
-                    disabled={deletePendingId === draft.id}
-                    onClick={() => void deleteStrategy()}
-                  >
-                    {deletePendingId === draft.id ? (
-                      <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                    ) : (
-                      <Trash2 data-icon="inline-start" />
-                    )}
-                    删除
-                  </Button>
-                ) : null}
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <DialogClose
-                  render={
+                <Separator />
+                <Modal.Footer className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       type="button"
                       variant="outline"
                       className="bg-background/55 transition-transform active:scale-[0.96]"
-                    />
-                  }
-                >
-                  取消
-                </DialogClose>
-                <Button type="submit" className="transition-transform active:scale-[0.96]" disabled={isSaving}>
-                  {isSaving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
-                  保存配置
-                </Button>
-              </div>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                      onClick={() => dispatchDraft({ type: "restore-default" })}
+                    >
+                      <Plus data-icon="inline-start" />
+                      新建配置
+                    </Button>
+                    {draft.id && onDelete ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="bg-background/55 text-destructive transition-transform hover:text-destructive active:scale-[0.96]"
+                        isDisabled={deletePendingId === draft.id}
+                        onClick={() => void deleteStrategy()}
+                      >
+                        {deletePendingId === draft.id ? (
+                          <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                        ) : (
+                          <Trash2 data-icon="inline-start" />
+                        )}
+                        删除
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-background/55 transition-transform active:scale-[0.96]"
+                      slot="close"
+                    >
+                      取消
+                    </Button>
+                    <Button type="submit" className="transition-transform active:scale-[0.96]" isDisabled={isSaving}>
+                      {isSaving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
+                      保存配置
+                    </Button>
+                  </div>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </section>
   );
 }
@@ -327,27 +314,32 @@ function StrategyXSelect({
   return (
     <Select
       value={String(value)}
-      onValueChange={(nextValue) => {
+      onChange={(nextValue: Key | null) => {
         if (nextValue !== null) {
-          onValueChange(nextValue);
+          onValueChange(String(nextValue));
         }
       }}
     >
-      <SelectTrigger
+      <Select.Trigger
         id={id}
         className="w-full bg-background/55"
       >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {strategyXOptions.map((option) => (
-            <SelectItem key={option} value={String(option)}>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          {strategyXOptions.map((option) => {
+            const optionValue = String(option);
+
+            return (
+            <ListBox.Item key={optionValue} id={optionValue} textValue={option === 0 ? "0 天（今日实时）" : `${option} 天`}>
               {option === 0 ? "0 天（今日实时）" : `${option} 天`}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
+            </ListBox.Item>
+            );
+          })}
+        </ListBox>
+      </Select.Popover>
     </Select>
   );
 }
@@ -368,7 +360,7 @@ function StrategyRuleSwitch({
       <Label htmlFor={id} className="min-w-0 flex-1 text-sm font-medium">
         {label}
       </Label>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch id={id} aria-label={label} isSelected={checked} onChange={onCheckedChange} />
     </div>
   );
 }

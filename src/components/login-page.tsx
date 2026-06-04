@@ -1,18 +1,18 @@
 import { lazy, Suspense, type FormEvent } from "react";
-import { LockKeyhole, LogIn, Moon, Sun, UserRound } from "lucide-react";
-
-import { BrandLockup } from "@/components/brand-lockup";
-import { Button } from "@/components/ui/button";
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  Input,
+  Label,
+} from "@heroui/react";
+import { LockKeyhole, LogIn, Moon, Sun, UserRound } from "lucide-react";
+
+import { BrandLockup } from "@/components/brand-lockup";
 import type { LoginCredentials } from "@/lib/auth-api";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 
@@ -65,7 +65,7 @@ export function LoginPage({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
+                    isIconOnly
                     aria-label={themeMode === "dark" ? "切换亮色模式" : "切换暗色模式"}
                     onClick={onThemeToggle}
                   >
@@ -122,7 +122,7 @@ export function LoginPage({
               ) : null}
             </CardContent>
             <CardFooter>
-              <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={isLoginPending}>
+              <Button type="submit" size="lg" className="h-11 w-full text-base" isDisabled={isLoginPending}>
                 <LogIn data-icon="inline-start" />
                 {isLoginPending ? "登录中..." : "进入看板"}
               </Button>

@@ -1,8 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { ToastProvider, toast } from "@heroui/react";
 
 import { LoginPage } from "@/components/login-page";
-import { Toaster } from "@/components/ui/sonner";
 import {
   clearStoredAuthToken,
   getStoredAuthToken,
@@ -71,7 +70,7 @@ function App() {
       clearStoredAuthToken();
       setIsLoggedIn(false);
       setLoginError(message);
-      toast.error("登录失败", {
+      toast.danger("登录失败", {
         description: message,
       });
     } finally {
@@ -106,7 +105,7 @@ function App() {
   return (
     <>
       {content}
-      <Toaster theme={themeMode} position="top-right" />
+      <ToastProvider placement="top end" />
     </>
   );
 }

@@ -16,7 +16,7 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a pure
 - `npm run dev` — Start Vite dev server (typically on port 5173). Do not start this unless the user explicitly asks.
 - `npm run build` — Type-check (`tsc -b`) then bundle. Run this after code changes to verify.
 - `npm run preview` — Preview the production build.
-- `npm run postinstall` — Patches `liveline` library for A-share color convention. Runs automatically on `npm install`.
+- `npm run postinstall` — Patches `liveline` library for A-share color convention. Runs automatically after dependency installs.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a pure
 - `src/App.tsx` — All UI components and the `useLiveMockStock` hook (real-time price simulation at 850ms ticks)
 - `src/types/stock.ts` — TypeScript interfaces (`StockCandidate`, `StockDailyRecord`, etc.)
 - `src/data/mock-stocks.ts` — 10 seed stocks with 28-day procedural OHLC history
-- `src/components/ui/` — shadcn/ui-style local primitives (Badge, Button, Card, Separator)
+- `@heroui/react` — Global component library for buttons, cards, modals, inputs, tags, pagination, and related UI primitives
 - `src/lib/utils.ts` — `cn()` utility (clsx + tailwind-merge)
 - `src/styles/globals.css` — Tailwind CSS v4 with CSS custom properties for theming
 
@@ -34,7 +34,7 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a pure
 
 **Charting:** Uses the `liveline` library (v0.0.7) for candlestick and line charts. The postinstall script `scripts/patch-liveline-a-share-colors.mjs` swaps green/red colors in liveline's source to match A-share convention — do not remove this script.
 
-**UI components:** Local shadcn/ui primitives using Base UI, `class-variance-authority`, and `cn()`.
+**UI components:** HeroUI v3 via `@heroui/react` and `@heroui/styles`; custom layout still uses Tailwind tokens and `cn()`.
 
 ## Product Constraints
 

@@ -8,6 +8,24 @@ import {
   useState,
 } from "react";
 import {
+  Accordion,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Modal,
+  Pagination,
+  ScrollShadow,
+  Surface,
+  Tag,
+  toast,
+  useOverlayState,
+} from "@heroui/react";
+import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -27,48 +45,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
-import { toast } from "sonner";
 
 import { BrandLockup } from "@/components/brand-lockup";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@/components/ui/item";
-import { Label } from "@/components/ui/label";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-} from "@/components/ui/pagination";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
 import { stockListMeta } from "@/data/mock-stocks";
@@ -364,7 +342,7 @@ function useStockDashboard() {
         const message = error instanceof Error ? error.message : "策略配置加载失败。";
 
         dispatch({ type: "strategy-config-load-error", error: message });
-        toast.error("策略配置加载失败", {
+        toast.danger("策略配置加载失败", {
           description: message,
         });
       });
@@ -440,7 +418,7 @@ function useStockDashboard() {
         const message = error instanceof Error ? error.message : "黑白名单加载失败。";
 
         dispatch({ type: "set-filter-error", error: message });
-        toast.error("黑白名单加载失败", {
+        toast.danger("黑白名单加载失败", {
           description: message,
         });
       });
@@ -460,7 +438,7 @@ function useStockDashboard() {
         const message = error instanceof Error ? error.message : "历史选股加载失败。";
 
         dispatch({ type: "selection-batches-load-error", error: message });
-        toast.error("历史选股加载失败", {
+        toast.danger("历史选股加载失败", {
           description: message,
         });
       });
@@ -525,7 +503,7 @@ function useStockDashboard() {
         const message = syncError instanceof Error ? syncError.message : "黑白名单同步失败。";
 
         dispatch({ type: "set-filter-error", error: message });
-        toast.error("黑白名单同步失败", {
+        toast.danger("黑白名单同步失败", {
           description: message,
         });
       }
@@ -533,7 +511,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "删除黑白名单失败。";
 
       dispatch({ type: "set-filter-error", error: message });
-      toast.error("删除黑白名单失败", {
+      toast.danger("删除黑白名单失败", {
         description: message,
       });
     } finally {
@@ -561,7 +539,7 @@ function useStockDashboard() {
       const message = syncError instanceof Error ? syncError.message : "黑白名单同步失败。";
 
       dispatch({ type: "set-filter-error", error: message });
-      toast.error("黑白名单同步失败", {
+      toast.danger("黑白名单同步失败", {
         description: message,
       });
     }
@@ -571,7 +549,7 @@ function useStockDashboard() {
     const codeKey = getComparableStockCode(stock.code);
 
     if (candidateStockCodes.has(codeKey)) {
-      toast.message("已在候选", {
+      toast.info("已在候选", {
         description: `${stock.name} ${stock.code}`,
       });
       return;
@@ -598,7 +576,7 @@ function useStockDashboard() {
     const candidates = state.stockGroups.candidate;
 
     if (candidates.length === 0) {
-      toast.message("候选为空", {
+      toast.info("候选为空", {
         description: "请先从待选列表添加股票。",
       });
       return;
@@ -619,7 +597,7 @@ function useStockDashboard() {
         const message = syncError instanceof Error ? syncError.message : "历史选股同步失败。";
 
         dispatch({ type: "selection-batches-load-error", error: message });
-        toast.error("历史选股同步失败", {
+        toast.danger("历史选股同步失败", {
           description: message,
         });
       }
@@ -627,7 +605,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "保存候选失败。";
 
       dispatch({ type: "selection-batches-load-error", error: message });
-      toast.error("保存候选失败", {
+      toast.danger("保存候选失败", {
         description: message,
       });
     } finally {
@@ -662,7 +640,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "删除选股记录失败。";
 
       dispatch({ type: "selection-batches-load-error", error: message });
-      toast.error("删除选股记录失败", {
+      toast.danger("删除选股记录失败", {
         description: message,
       });
     } finally {
@@ -685,7 +663,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "删除历史选股失败。";
 
       dispatch({ type: "selection-batches-load-error", error: message });
-      toast.error("删除历史选股失败", {
+      toast.danger("删除历史选股失败", {
         description: message,
       });
     } finally {
@@ -714,7 +692,7 @@ function useStockDashboard() {
         const message = syncError instanceof Error ? syncError.message : "策略配置同步失败。";
 
         dispatch({ type: "strategy-config-load-error", error: message });
-        toast.error("策略配置同步失败", {
+        toast.danger("策略配置同步失败", {
           description: message,
         });
       }
@@ -726,7 +704,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "策略配置保存失败。";
 
       dispatch({ type: "strategy-config-load-error", error: message });
-      toast.error("策略配置保存失败", {
+      toast.danger("策略配置保存失败", {
         description: message,
       });
       throw error;
@@ -747,7 +725,7 @@ function useStockDashboard() {
         const message = syncError instanceof Error ? syncError.message : "策略配置同步失败。";
 
         dispatch({ type: "strategy-config-load-error", error: message });
-        toast.error("策略配置同步失败", {
+        toast.danger("策略配置同步失败", {
           description: message,
         });
       }
@@ -757,7 +735,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "策略配置删除失败。";
 
       dispatch({ type: "strategy-config-load-error", error: message });
-      toast.error("策略配置删除失败", {
+      toast.danger("策略配置删除失败", {
         description: message,
       });
       throw error;
@@ -773,7 +751,7 @@ function useStockDashboard() {
       const message = "请先保存策略配置后再开始筛选。";
 
       dispatch({ type: "scan-error", error: message });
-      toast.error("策略扫描失败", {
+      toast.danger("策略扫描失败", {
         description: message,
       });
       return;
@@ -793,7 +771,7 @@ function useStockDashboard() {
       const message = error instanceof Error ? error.message : "策略扫描失败。";
 
       dispatch({ type: "scan-error", error: message });
-      toast.error("策略扫描失败", {
+      toast.danger("策略扫描失败", {
         description: message,
       });
     }
@@ -1333,8 +1311,7 @@ function StrategyActionBar({
       <Button
         type="button"
         className={cn("h-10 transition-transform active:scale-[0.96]", scanButtonClassName)}
-        disabled={scanLoading || !canScan}
-        title={canScan ? "按当前策略配置筛选待选股票" : "请先保存策略配置"}
+        isDisabled={scanLoading || !canScan}
         onClick={() => void onStrategyScan()}
       >
         {scanLoading ? (
@@ -1735,15 +1712,15 @@ function ActiveStockBoard({
                 {stock.name}
               </h1>
               <span className="text-sm text-muted-foreground">{stock.code}</span>
-              <Badge variant="outline" className="bg-background/35 backdrop-blur">
+              <Tag variant="surface" className="bg-background/35 backdrop-blur">
                 {stockListMeta[stock.list].label}
-              </Badge>
-              <Badge
-                variant={latest ? "secondary" : "destructive"}
-                className="bg-background/55 backdrop-blur"
+              </Tag>
+              <Tag
+                variant="surface"
+                className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}
               >
                 {latest ? "行情正常" : "无数据"}
-              </Badge>
+              </Tag>
               <ChevronDown
                 className={cn(
                   "size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
@@ -1816,10 +1793,8 @@ function ActiveStockBoard({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
                 aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
                 onClick={onThemeToggle}
               >
                 {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
@@ -1829,10 +1804,8 @@ function ActiveStockBoard({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
               aria-label="退出登录"
-              title="退出登录"
               onClick={onLogout}
             >
               <LogOut data-icon="inline-start" />
@@ -1841,11 +1814,9 @@ function ActiveStockBoard({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="bg-background/45 backdrop-blur-xl max-[420px]:w-8 max-[420px]:px-0"
               aria-label={isLoading ? "加载中" : "重载"}
-              title={isLoading ? "加载中" : "重载"}
-              disabled={isLoading}
+              isDisabled={isLoading}
               onClick={onReload}
             >
               <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
@@ -1979,10 +1950,8 @@ function StockBoardLoading({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
                 aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
                 onClick={onThemeToggle}
               >
                 {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
@@ -1992,10 +1961,8 @@ function StockBoardLoading({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
               aria-label="退出登录"
-              title="退出登录"
               onClick={onLogout}
             >
               <LogOut data-icon="inline-start" />
@@ -2004,11 +1971,9 @@ function StockBoardLoading({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="hidden bg-background/45 backdrop-blur-xl md:inline-flex"
               aria-label="重载"
-              title="重载"
-              disabled={isLoading}
+              isDisabled={isLoading}
               onClick={onReload}
             >
               <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
@@ -2326,12 +2291,12 @@ function DesktopStockAccordion({
   return (
     <Accordion
       className="min-h-0 flex-1"
-      value={[activeListKey]}
-      onValueChange={(value) => {
-        const nextListKey = value.at(-1);
+      expandedKeys={new Set([activeListKey])}
+      onExpandedChange={(keys) => {
+        const nextListKey = Array.from(keys).at(-1);
 
         if (nextListKey) {
-          onActiveListChange(nextListKey);
+          onActiveListChange(String(nextListKey));
         }
       }}
       aria-label="股票列表"
@@ -2403,48 +2368,47 @@ function SelectionBatchAccordionItem({
   const value = getSelectionBatchAccordionValue(batch.id);
 
   return (
-    <AccordionItem
-      value={value}
+    <Accordion.Item
+      id={value}
       className={cn(
         "border-border/45 bg-primary/5",
         expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
-        <AccordionTrigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary transition-colors">
-            <CheckCircle2 className="size-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium leading-none">{batch.name}</span>
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                {batch.isLoading ? "..." : batch.stocks.length || batch.total}
+        <Accordion.Heading className="flex min-w-0 flex-1">
+          <Accordion.Trigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary transition-colors">
+              <CheckCircle2 className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm font-medium leading-none">{batch.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {batch.isLoading ? "..." : batch.stocks.length || batch.total}
+                </span>
+              </span>
+              <span className="mt-1 block truncate text-xs text-muted-foreground">
+                历史选股{batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}
               </span>
             </span>
-            <span className="mt-1 block truncate text-xs text-muted-foreground">
-              历史选股{batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}
-            </span>
-          </span>
-        </AccordionTrigger>
+          </Accordion.Trigger>
+        </Accordion.Heading>
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="sm" isIconOnly
           className="size-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive"
           aria-label={`删除历史选股：${batch.name}`}
-          title={`删除历史选股：${batch.name}`}
-          disabled={deletePending}
+          isDisabled={deletePending}
           onClick={() => void onDeleteSelectionBatch(batch.id)}
         >
           {deletePending ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
         </Button>
       </div>
 
-      <AccordionContent
-        panelClassName="min-h-0 flex flex-1 flex-col"
-        className="flex !h-full min-h-0 flex-col pb-0"
-      >
+      <Accordion.Panel className="min-h-0 flex flex-1 flex-col">
+        <Accordion.Body className="flex !h-full min-h-0 flex-col pb-0">
         <div className="min-h-0 flex-1 pb-3 pl-10">
           {batch.error ? (
             <div className="flex h-full min-h-20 flex-col justify-center gap-1 px-1 text-left">
@@ -2457,8 +2421,8 @@ function SelectionBatchAccordionItem({
               加载记录...
             </div>
           ) : batch.stocks.length > 0 ? (
-            <ScrollArea className="h-full pr-2">
-              <ItemGroup className="gap-2">
+            <ScrollShadow orientation="vertical" className="h-full pr-2">
+              <div className="flex w-full flex-col gap-2">
                 {batch.stocks.map((stock) => (
                   <StockListButton
                     key={stock.selectionRecordId ?? stock.code}
@@ -2482,14 +2446,15 @@ function SelectionBatchAccordionItem({
                     })}
                   />
                 ))}
-              </ItemGroup>
-            </ScrollArea>
+              </div>
+            </ScrollShadow>
           ) : (
             <DesktopStockListEmptyState listKey="selected" />
           )}
         </div>
-      </AccordionContent>
-    </AccordionItem>
+        </Accordion.Body>
+      </Accordion.Panel>
+    </Accordion.Item>
   );
 }
 
@@ -2522,9 +2487,9 @@ function DesktopSelectionHistoryHeader({
           历史选股
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Badge variant="secondary" className="shrink-0 tabular-nums">
+          <Tag variant="surface" className="shrink-0 tabular-nums">
             {loading ? "..." : total}
-          </Badge>
+          </Tag>
           <SelectionHistoryPagination
             loading={loading}
             pageNum={pageNum}
@@ -2566,13 +2531,7 @@ function SelectionHistoryPagination({
   const canGoNext = pageNum < pageCount && !loading;
   const disabledClassName = "pointer-events-none opacity-50";
 
-  function handlePageClick(
-    event: React.MouseEvent<HTMLAnchorElement>,
-    nextPageNum: number,
-    enabled: boolean,
-  ) {
-    event.preventDefault();
-
+  function handlePageClick(nextPageNum: number, enabled: boolean) {
     if (enabled) {
       onPageChange(nextPageNum);
     }
@@ -2584,34 +2543,28 @@ function SelectionHistoryPagination({
 
   return (
     <Pagination className={cn("mx-0 w-auto justify-end", className)}>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationLink
-            href="#"
-            size="icon"
-            aria-disabled={!canGoPrevious}
+      <Pagination.Content>
+        <Pagination.Item>
+          <Pagination.Link
+            isDisabled={!canGoPrevious}
             aria-label="上一页"
-            tabIndex={canGoPrevious ? undefined : -1}
             className={cn(!canGoPrevious && disabledClassName)}
-            onClick={(event) => handlePageClick(event, pageNum - 1, canGoPrevious)}
+            onPress={() => handlePageClick(pageNum - 1, canGoPrevious)}
           >
             <ChevronLeft data-icon="inline-start" />
-          </PaginationLink>
-        </PaginationItem>
-        <PaginationItem>
-          <PaginationLink
-            href="#"
-            size="icon"
-            aria-disabled={!canGoNext}
+          </Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link
+            isDisabled={!canGoNext}
             aria-label="下一页"
-            tabIndex={canGoNext ? undefined : -1}
             className={cn(!canGoNext && disabledClassName)}
-            onClick={(event) => handlePageClick(event, pageNum + 1, canGoNext)}
+            onPress={() => handlePageClick(pageNum + 1, canGoNext)}
           >
             <ChevronRight data-icon="inline-start" />
-          </PaginationLink>
-        </PaginationItem>
-      </PaginationContent>
+          </Pagination.Link>
+        </Pagination.Item>
+      </Pagination.Content>
     </Pagination>
   );
 }
@@ -2645,35 +2598,35 @@ function DesktopStockAccordionItem({
   const showCandidateSave = listKey === "candidate";
 
   return (
-    <AccordionItem
-      value={listKey}
+    <Accordion.Item
+      id={listKey}
       className={cn(
         "border-border/45 bg-transparent",
         expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
-        <AccordionTrigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/55 bg-background/65 text-muted-foreground transition-colors group-hover/accordion-trigger:border-border group-hover/accordion-trigger:bg-muted/55 group-hover/accordion-trigger:text-foreground">
-            <Icon className="size-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium leading-none">{meta.label}</span>
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{stocks.length}</span>
+        <Accordion.Heading className="flex min-w-0 flex-1">
+          <Accordion.Trigger className="min-w-0 flex-1 gap-3 rounded-none border-0 px-0 py-3 hover:no-underline active:scale-[0.99]">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/55 bg-background/65 text-muted-foreground transition-colors group-hover/accordion-trigger:border-border group-hover/accordion-trigger:bg-muted/55 group-hover/accordion-trigger:text-foreground">
+              <Icon className="size-4" />
             </span>
-            <span className="mt-1 block truncate text-xs text-muted-foreground">{meta.description}</span>
-          </span>
-        </AccordionTrigger>
+            <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm font-medium leading-none">{meta.label}</span>
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{stocks.length}</span>
+              </span>
+              <span className="mt-1 block truncate text-xs text-muted-foreground">{meta.description}</span>
+            </span>
+          </Accordion.Trigger>
+        </Accordion.Heading>
         {showCandidateSave ? (
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             className="h-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
             aria-label="保存候选"
-            title="保存候选"
-            disabled={candidateSavePending || stocks.length === 0}
+            isDisabled={candidateSavePending || stocks.length === 0}
             onClick={() => void onSaveCandidateSelection()}
           >
             {candidateSavePending ? (
@@ -2687,10 +2640,8 @@ function DesktopStockAccordionItem({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             className="h-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
             aria-label={`导入${meta.label}`}
-            title={`导入${meta.label}`}
             onClick={() => onOpenImport(returnableListKey)}
           >
             <ImportIcon data-icon="inline-start" />
@@ -2699,14 +2650,12 @@ function DesktopStockAccordionItem({
         ) : null}
       </div>
 
-      <AccordionContent
-        panelClassName="min-h-0 flex flex-1 flex-col"
-        className="flex !h-full min-h-0 flex-col pb-0"
-      >
+      <Accordion.Panel className="min-h-0 flex flex-1 flex-col">
+        <Accordion.Body className="flex !h-full min-h-0 flex-col pb-0">
         <div className="min-h-0 flex-1 pb-3 pl-10">
           {stocks.length > 0 ? (
-            <ScrollArea className="h-full pr-2">
-              <ItemGroup className="gap-2">
+            <ScrollShadow orientation="vertical" className="h-full pr-2">
+              <div className="flex w-full flex-col gap-2">
                 {stocks.map((stock) => (
                   <StockListButton
                     key={stock.code}
@@ -2726,14 +2675,15 @@ function DesktopStockAccordionItem({
                     })}
                   />
                 ))}
-              </ItemGroup>
-            </ScrollArea>
+              </div>
+            </ScrollShadow>
           ) : (
             <DesktopStockListEmptyState listKey={listKey} />
           )}
         </div>
-      </AccordionContent>
-    </AccordionItem>
+        </Accordion.Body>
+      </Accordion.Panel>
+    </Accordion.Item>
   );
 }
 
@@ -2797,10 +2747,8 @@ function DesktopPageHeader({ onLogout }: { onLogout: () => void }) {
       <Button
         type="button"
         variant="outline"
-        size="sm"
         className="bg-background/55"
         aria-label="退出登录"
-        title="退出登录"
         onClick={onLogout}
       >
         <LogOut data-icon="inline-start" />
@@ -2951,12 +2899,12 @@ function DesktopStockChartPanel({
               <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{stock.code}</span>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="bg-background/45 backdrop-blur">
+              <Tag variant="surface" className="bg-background/45 backdrop-blur">
                 {stockListMeta[stock.list].label}
-              </Badge>
-              <Badge variant={latest ? "secondary" : "destructive"} className="bg-background/55 backdrop-blur">
+              </Tag>
+              <Tag variant="surface" className={cn("bg-background/55 backdrop-blur", !latest && "text-destructive")}>
                 {latest ? "行情正常" : "无数据"}
-              </Badge>
+              </Tag>
               {latest ? (
                 <span className="text-xs text-muted-foreground tabular-nums">{latest.date}</span>
               ) : null}
@@ -2999,10 +2947,8 @@ function DesktopStockChartPanel({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 className="bg-background/55"
                 aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
                 onClick={onThemeToggle}
               >
                 {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
@@ -3042,11 +2988,9 @@ function DesktopStockChartPanel({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 className="bg-background/55"
                 aria-label={isLoading ? "加载中" : "重载"}
-                title={isLoading ? "加载中" : "重载"}
-                disabled={isLoading}
+                isDisabled={isLoading}
                 onClick={onReload}
               >
                 <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
@@ -3238,11 +3182,9 @@ function DesktopStockBoardLoading({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="bg-background/55"
               aria-label={isLoading ? "加载中" : "重载"}
-              title={isLoading ? "加载中" : "重载"}
-              disabled={isLoading}
+              isDisabled={isLoading}
               onClick={onReload}
             >
               <RefreshCcw data-icon="inline-start" className={cn(isLoading && "animate-spin")} />
@@ -3283,10 +3225,8 @@ function DesktopStockBoardLoading({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 className="bg-background/55"
                 aria-label={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-                title={themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
                 onClick={onThemeToggle}
               >
                 {themeMode === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
@@ -3365,15 +3305,14 @@ function MobileStockTabs({
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <CardDescription className="truncate">{meta.description}</CardDescription>
-            <Badge variant="secondary">{stocks.length}</Badge>
+            <Tag variant="surface">{stocks.length}</Tag>
           </div>
           {showCandidateSave ? (
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="h-8 shrink-0 bg-background/45"
-              disabled={candidateSavePending || stocks.length === 0}
+              isDisabled={candidateSavePending || stocks.length === 0}
               onClick={() => void onSaveCandidateSelection()}
             >
               {candidateSavePending ? (
@@ -3387,7 +3326,6 @@ function MobileStockTabs({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="h-8 shrink-0 bg-background/45"
               onClick={() => onOpenImport(returnableListKey)}
             >
@@ -3399,7 +3337,7 @@ function MobileStockTabs({
       </CardHeader>
       <CardContent className="pb-5">
         {stocks.length > 0 ? (
-          <ItemGroup className="gap-2">
+          <div className="flex w-full flex-col gap-2">
             {stocks.map((stock) => (
               <StockListButton
                 key={stock.code}
@@ -3419,7 +3357,7 @@ function MobileStockTabs({
                 })}
               />
             ))}
-          </ItemGroup>
+          </div>
         ) : (
           <div className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
             暂无股票
@@ -3470,9 +3408,9 @@ function MobileSelectionHistory({
             <CardTitle className="truncate text-base">历史选股</CardTitle>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Badge variant="secondary" className="shrink-0 tabular-nums">
+            <Tag variant="surface" className="shrink-0 tabular-nums">
               {selectionBatchesLoading ? "..." : selectionBatchesTotal}
-            </Badge>
+            </Tag>
             <SelectionHistoryPagination
               loading={selectionBatchesLoading}
               pageNum={selectionBatchesPageNum}
@@ -3486,9 +3424,10 @@ function MobileSelectionHistory({
       <CardContent className="pb-5">
         {selectionBatches.length > 0 ? (
           <Accordion
+            allowsMultipleExpanded
             className="min-h-0"
-            value={openItems}
-            onValueChange={setOpenItems}
+            expandedKeys={new Set(openItems)}
+            onExpandedChange={(keys) => setOpenItems(Array.from(keys, String))}
             aria-label="历史选股"
           >
             {selectionBatches.map((batch) => {
@@ -3740,12 +3679,12 @@ function FiveDayTrendSection({ records }: { records: StockDailyRecord[] }) {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPrice(record.limit_up)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
-                      <Badge
-                        variant={touchedLimitUp ? "secondary" : "outline"}
+                      <Tag
+                        variant="surface"
                         className={cn("bg-background/45", touchedLimitUp && "text-stock-up")}
                       >
                         {touchedLimitUp ? "触及" : "未触及"}
-                      </Badge>
+                      </Tag>
                     </td>
                   </tr>
                 );
@@ -4256,11 +4195,10 @@ function StockListButton({
   action?: StockListAction;
 }) {
   return (
-    <Item
-      variant="outline"
-      size="sm"
+    <Surface
+      variant="transparent"
       className={cn(
-        "group/stock-item min-w-0 flex-nowrap gap-2 bg-background/40 p-1 transition-[background-color,border-color]",
+        "group/stock-item flex w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border bg-background/40 p-1 transition-[background-color,border-color]",
         active
           ? "border-ring/70 bg-secondary/80"
           : "border-transparent hover:border-border/80 hover:bg-muted/50 focus-within:bg-muted/50 [&:has(button:hover)]:bg-muted/50",
@@ -4279,7 +4217,7 @@ function StockListButton({
         </span>
       </button>
       {action ? (
-        <ItemActions
+        <div
           className={cn(
             stockItemActionClassName,
             action.pending && "md:w-8 md:translate-x-0 md:opacity-100",
@@ -4288,11 +4226,10 @@ function StockListButton({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            isIconOnly
             className="size-8 rounded-md border border-border/70 bg-background/35 text-muted-foreground hover:border-ring/60 hover:text-foreground"
             aria-label={`${action.title}：${stock.name} ${stock.code}`}
-            title={action.title}
-            disabled={action.disabled || action.pending}
+            isDisabled={action.disabled || action.pending}
             onClick={action.onClick}
           >
             {action.pending ? (
@@ -4305,9 +4242,9 @@ function StockListButton({
               <Trash2 />
             )}
           </Button>
-        </ItemActions>
+        </div>
       ) : null}
-    </Item>
+    </Surface>
   );
 }
 
@@ -4323,6 +4260,14 @@ function StockImportDialog({
   onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
 }) {
   const importDialog = useStockImportDialog(targetList, onImportStock);
+  const modalState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
   const {
     meta,
     oppositeList,
@@ -4344,47 +4289,55 @@ function StockImportDialog({
   } = importDialog;
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="p-5 pr-12">
-          <DialogTitle className="text-xl text-balance">导入{meta.label}</DialogTitle>
-          <DialogDescription>从股票列表添加标的</DialogDescription>
-        </DialogHeader>
+    <Modal state={modalState}>
+      <Modal.Trigger className="hidden" />
+      <Modal.Backdrop variant="blur">
+        <Modal.Container size="lg" scroll="inside">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+            <Modal.CloseTrigger />
+            <Modal.Header className="p-5 pr-12">
+              <div className="flex flex-col gap-2">
+                <Modal.Heading className="text-xl text-balance">导入{meta.label}</Modal.Heading>
+                <p className="text-sm text-muted-foreground">从股票列表添加标的</p>
+              </div>
+            </Modal.Header>
 
-        <div className="flex max-h-[min(78vh,760px)] flex-col overflow-hidden">
-          <StockImportSearchForm
-            codeQuery={codeQuery}
-            nameQuery={nameQuery}
-            searchMode={searchMode}
-            isLoading={isLoading}
-            onCodeQueryChange={setCodeQuery}
-            onNameQueryChange={setNameQuery}
-            onSearchModeChange={setSearchMode}
-            onSearch={handleSearch}
-          />
-          <StockImportSummary
-            listLabel={meta.label}
-            filteredCount={filteredStocks.length}
-            visibleCount={visibleStocks.length}
-          />
-          {importError ? (
-            <StockImportError message={importError} />
-          ) : null}
-          <StockImportResults
-            targetList={targetList}
-            oppositeList={oppositeList}
-            metaLabel={meta.label}
-            stockGroups={stockGroups}
-            stocks={stocks}
-            visibleStocks={visibleStocks}
-            isLoading={isLoading}
-            error={error}
-            importPendingCode={importPendingCode}
-            onImportStock={handleImportStock}
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
+            <Modal.Body className="flex max-h-[min(78vh,760px)] flex-col overflow-hidden p-0">
+              <StockImportSearchForm
+                codeQuery={codeQuery}
+                nameQuery={nameQuery}
+                searchMode={searchMode}
+                isLoading={isLoading}
+                onCodeQueryChange={setCodeQuery}
+                onNameQueryChange={setNameQuery}
+                onSearchModeChange={setSearchMode}
+                onSearch={handleSearch}
+              />
+              <StockImportSummary
+                listLabel={meta.label}
+                filteredCount={filteredStocks.length}
+                visibleCount={visibleStocks.length}
+              />
+              {importError ? (
+                <StockImportError message={importError} />
+              ) : null}
+              <StockImportResults
+                targetList={targetList}
+                oppositeList={oppositeList}
+                metaLabel={meta.label}
+                stockGroups={stockGroups}
+                stocks={stocks}
+                visibleStocks={visibleStocks}
+                isLoading={isLoading}
+                error={error}
+                importPendingCode={importPendingCode}
+                onImportStock={handleImportStock}
+              />
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
 
@@ -4517,7 +4470,7 @@ function useStockImportDialog(
         importPendingCode: null,
         importError: message,
       }));
-      toast.error("添加黑白名单失败", {
+      toast.danger("添加黑白名单失败", {
         description: message,
       });
     }
@@ -4573,7 +4526,7 @@ function StockImportSearchForm({
             className="bg-background/70"
             value={codeQuery}
             placeholder="600519 / SH600519"
-            onValueChange={onCodeQueryChange}
+            onChange={(event) => onCodeQueryChange(event.target.value)}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-2">
@@ -4583,14 +4536,14 @@ function StockImportSearchForm({
             className="bg-background/70"
             value={nameQuery}
             placeholder="贵州茅台"
-            onValueChange={onNameQueryChange}
+            onChange={(event) => onNameQueryChange(event.target.value)}
           />
         </div>
         <StockImportSearchModeControl
           searchMode={searchMode}
           onSearchModeChange={onSearchModeChange}
         />
-        <Button type="submit" className="h-10" disabled={isLoading}>
+        <Button type="submit" className="h-10" isDisabled={isLoading}>
           {isLoading ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Search data-icon="inline-start" />}
           搜索
         </Button>
@@ -4706,7 +4659,7 @@ function StockImportResults({
   return (
     <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
       {visibleStocks.length > 0 ? (
-        <ItemGroup className="gap-2">
+        <div className="flex w-full flex-col gap-2">
           {visibleStocks.map((stock) => (
             <StockImportResultItem
               key={stock.code}
@@ -4719,7 +4672,7 @@ function StockImportResults({
               onImportStock={onImportStock}
             />
           ))}
-        </ItemGroup>
+        </div>
       ) : (
         <div className="flex min-h-48 items-center justify-center text-sm text-muted-foreground">
           暂无匹配股票
@@ -4752,29 +4705,28 @@ function StockImportResultItem({
   const importTitle = inOppositeList ? "移入名单" : "添加到名单";
 
   return (
-    <Item
-      variant="outline"
-      size="sm"
-      className="group/stock-item flex-nowrap gap-2 bg-background/45 p-2"
+    <Surface
+      variant="transparent"
+      className="group/stock-item flex w-full flex-nowrap items-center gap-2 rounded-lg border border-border bg-background/45 p-2"
     >
-      <ItemContent className="min-w-0 gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <ItemTitle className="min-w-0 flex-1 truncate">{stock.name}</ItemTitle>
-          <ItemDescription className="m-0 shrink-0 text-xs tabular-nums">{stock.code}</ItemDescription>
+          <span className="min-w-0 flex-1 truncate">{stock.name}</span>
+          <p className="m-0 shrink-0 text-xs tabular-nums">{stock.code}</p>
         </div>
         {inTargetList ? (
-          <ItemDescription className="m-0 text-xs">
+          <p className="m-0 text-xs">
             已在{metaLabel}
-          </ItemDescription>
+          </p>
         ) : null}
         {inOppositeList && !inTargetList ? (
-          <ItemDescription className="m-0 text-xs">
+          <p className="m-0 text-xs">
             已在{stockListMeta[oppositeList].label}
-          </ItemDescription>
+          </p>
         ) : null}
-      </ItemContent>
+      </div>
       {!inTargetList ? (
-        <ItemActions
+        <div
           className={cn(
             stockItemActionClassName,
             isImporting && "md:w-8 md:translate-x-0 md:opacity-100",
@@ -4782,12 +4734,11 @@ function StockImportResultItem({
         >
           <Button
             type="button"
-            size="icon"
+            isIconOnly
             variant="outline"
             className="size-8 rounded-md bg-background/55"
             aria-label={`${importTitle}：${stock.name} ${stock.code}`}
-            title={importTitle}
-            disabled={Boolean(importPendingCode)}
+            isDisabled={Boolean(importPendingCode)}
             onClick={() => void onImportStock(stock)}
           >
             {isImporting ? (
@@ -4796,9 +4747,9 @@ function StockImportResultItem({
               <Plus />
             )}
           </Button>
-        </ItemActions>
+        </div>
       ) : null}
-    </Item>
+    </Surface>
   );
 }
 
