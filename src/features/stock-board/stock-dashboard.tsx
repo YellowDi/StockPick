@@ -38,6 +38,7 @@ import {
   CardTitle,
   Disclosure,
   DisclosureGroup,
+  Drawer,
   EmptyState,
   Form,
   Input,
@@ -4225,7 +4226,7 @@ function DesktopCandidateDialog({
   StockListSharedProps,
   "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart"
 >) {
-  const modalState = useOverlayState({
+  const drawerState = useOverlayState({
     isOpen: true,
     onOpenChange: (open) => {
       if (!open) {
@@ -4237,29 +4238,30 @@ function DesktopCandidateDialog({
   const candidateStocks = stockGroups.candidate;
 
   return (
-    <Modal state={modalState}>
-      <Modal.Trigger className="hidden" />
-      <Modal.Backdrop variant="blur">
-        <Modal.Container size="lg" scroll="inside">
-          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl">
-            <Modal.CloseTrigger className="z-20" />
-            <Modal.Header className="p-5 pr-12">
+    <Drawer state={drawerState}>
+      <Drawer.Trigger className="hidden" />
+      <Drawer.Backdrop variant="transparent">
+        <Drawer.Content placement="bottom">
+          <Drawer.Dialog className="mx-auto h-[48vh] min-h-[360px] max-h-[520px] w-full max-w-[1680px] overflow-hidden p-0">
+            <Drawer.Handle className="pt-2 pb-1" />
+            <Drawer.CloseTrigger className="z-20" />
+            <Drawer.Header className="px-5 pb-3 pt-0">
               <div className="flex min-w-0 items-center gap-3">
                 <Badge.Anchor>
                   <StockSectionIconBox icon={ListFilter} active />
                   <StockCountBadge count={availableStocks.length + candidateStocks.length} active />
                 </Badge.Anchor>
                 <div className="min-w-0">
-                  <Modal.Heading className="truncate text-xl text-balance">待选管理</Modal.Heading>
+                  <Drawer.Heading className="truncate text-xl text-balance">待选管理</Drawer.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">
                     将筛选结果加入待保存列表后，可保存为历史选股
                   </p>
                 </div>
               </div>
-            </Modal.Header>
+            </Drawer.Header>
 
-            <Modal.Body className="min-h-0 overflow-hidden p-0">
-              <div className="grid h-[min(72vh,660px)] min-h-[420px] grid-cols-2">
+            <Drawer.Body className="min-h-0 overflow-hidden p-0">
+              <div className="grid h-full min-h-0 grid-cols-2">
                 <DesktopCandidateDialogColumn
                   listKey="initial"
                   title="筛选结果"
@@ -4329,11 +4331,11 @@ function DesktopCandidateDialog({
                   onToggleChart={onToggleChart}
                 />
               </div>
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }
 
