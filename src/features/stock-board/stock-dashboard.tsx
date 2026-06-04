@@ -977,7 +977,11 @@ function StockDashboardLayout({
   }, [closeCandidateDialog, isDesktopViewport, state.candidateDialogOpen]);
 
   return (
-    <main className="min-h-dvh overflow-x-hidden text-foreground">
+    <main className="relative isolate min-h-dvh overflow-x-hidden text-foreground">
+      <div
+        className="pointer-events-none fixed inset-0 -z-10 hidden md:block"
+        style={{ background: "var(--desktop-board-glow-background)" }}
+      />
       <div className="flex flex-col md:hidden">
         <div ref={stockBoardRef}>
           <StockBoard
@@ -1059,7 +1063,7 @@ function StockDashboardLayout({
           />
         </div>
       </div>
-      <div className="mx-auto hidden h-dvh w-full max-w-[1680px] overflow-hidden md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mx-auto hidden min-h-dvh w-full max-w-[1680px] md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
         <DesktopStockBoard
           stock={selectedStock}
           isLoading={state.scanLoading}
@@ -1875,8 +1879,6 @@ function ActiveStockBoard({
         className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
         style={{ background: "var(--chart-hero-background)" }}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
             <BrandLockup />
@@ -2112,17 +2114,19 @@ function StockBoardLoading({
         className="relative min-h-[560px] overflow-hidden sm:min-h-[620px] lg:min-h-[700px]"
         style={{ background: "var(--chart-hero-background)" }}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-background/75 to-transparent" />
-
         <div className="relative z-20 mx-auto grid max-w-[1680px] gap-3 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,auto)_minmax(240px,1fr)] lg:items-start lg:px-8">
           <div className="min-w-0">
             <BrandLockup />
-            <h1 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
-              {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
-            </h1>
-            <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-              {error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "当前策略没有返回候选股票")}
-            </p>
+            {error || isLoading ? (
+              <>
+                <h1 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-normal text-foreground text-balance sm:text-3xl">
+                  {error ? "策略扫描失败" : "正在扫描"}
+                </h1>
+                <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+                  {error ?? "正在从策略扫描接口加载候选股票"}
+                </p>
+              </>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:col-start-3 lg:justify-end lg:justify-self-end">
@@ -2786,11 +2790,7 @@ function DesktopActiveStockBoard({
   } = useStockBoardModel(stock, themeMode);
 
   return (
-    <section className="relative min-h-0 min-w-0 overflow-y-auto px-5 pb-4 lg:px-8">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[1120px]"
-        style={{ background: "var(--desktop-board-glow-background)" }}
-      />
+    <section className="relative min-h-0 min-w-0 px-5 pb-4 lg:px-8">
       <div className="relative z-10 flex w-full flex-col">
         <DesktopPageHeader />
         <DesktopStockChartPanel
@@ -2855,8 +2855,6 @@ function DesktopStockChartPanel({
     <section
       className="relative pt-4"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
-
       <div className="relative z-20 grid gap-0 py-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[300px_minmax(0,1fr)]">
         <div className="flex min-h-[clamp(320px,44vh,440px)] min-w-0 flex-col justify-between py-1">
           <div className="min-w-0">
@@ -3046,17 +3044,12 @@ function DesktopStockBoardLoading({
   const chartColor = themeMode === "light" ? "#4f6f8f" : "#8fb6d8";
 
   return (
-    <section className="relative min-h-0 min-w-0 overflow-y-auto px-5 pb-4 lg:px-8">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[1120px]"
-        style={{ background: "var(--desktop-board-glow-background)" }}
-      />
+    <section className="relative min-h-0 min-w-0 px-5 pb-4 lg:px-8">
       <div className="relative z-10 flex w-full flex-col">
         <DesktopPageHeader />
         <section
           className="relative pt-4"
         >
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-background/75 to-transparent" />
           <div className="relative h-[clamp(320px,44vh,440px)] w-full overflow-hidden">
             <Liveline
               data={[]}
@@ -3079,12 +3072,16 @@ function DesktopStockBoardLoading({
 
         <section className="flex flex-row items-start justify-between gap-3 pb-6 pt-4">
           <div className="min-w-0">
-            <CardTitle className="text-2xl text-balance">
-              {error ? "策略扫描失败" : isLoading ? "正在扫描" : "暂无候选股票"}
-            </CardTitle>
-            <CardDescription className="mt-2 text-pretty">
-              {error ?? (isLoading ? "正在从策略扫描接口加载候选股票" : "当前策略没有返回候选股票")}
-            </CardDescription>
+            {error || isLoading ? (
+              <>
+                <CardTitle className="text-2xl text-balance">
+                  {error ? "策略扫描失败" : "正在扫描"}
+                </CardTitle>
+                <CardDescription className="mt-2 text-pretty">
+                  {error ?? "正在从策略扫描接口加载候选股票"}
+                </CardDescription>
+              </>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {isThemeToggleVisible(themeMode) ? (
