@@ -125,7 +125,7 @@ export function LoginPage({
                 </p>
               ) : null}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="mt-2">
               <Button type="submit" size="lg" className="h-11 w-full text-base" isDisabled={isLoginPending}>
                 <LogIn data-icon="inline-start" />
                 {isLoginPending ? "登录中..." : "进入看板"}
