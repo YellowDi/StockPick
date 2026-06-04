@@ -1,5 +1,6 @@
 import {
   type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -86,7 +87,6 @@ import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
 const mobileListOrder: StockListKey[] = ["candidate", "initial"];
-const desktopStaticListOrder: StockListKey[] = ["candidate", "initial"];
 const filterListButtonOrder: ReturnableListKey[] = ["whitelist", "blacklist"];
 const selectionHistoryPageSize = 5;
 const daySecs = 24 * 60 * 60;
@@ -274,6 +274,7 @@ type StockDashboardState = {
   mobileListKey: StockListKey;
   desktopListKey: string;
   filterDialogList: ReturnableListKey | null;
+  candidateDialogOpen: boolean;
   scanError: string | null;
   scanLoading: boolean;
   filterListsError: string | null;
@@ -299,6 +300,8 @@ type StockDashboardAction =
   | { type: "set-desktop-list"; listKey: string }
   | { type: "open-filter-dialog"; listKey: ReturnableListKey }
   | { type: "close-filter-dialog" }
+  | { type: "open-candidate-dialog" }
+  | { type: "close-candidate-dialog" }
   | { type: "scan-start" }
   | { type: "scan-success"; stocks: StockCandidate[] }
   | { type: "scan-error"; error: string }
@@ -319,6 +322,7 @@ type StockDashboardAction =
   | { type: "save-candidate-start" }
   | { type: "save-candidate-end" }
   | { type: "add-candidate-stock"; stock: StockCandidate }
+  | { type: "add-candidate-stocks"; stocks: StockCandidate[] }
   | { type: "remove-candidate-stock"; stock: StockCandidate }
   | { type: "clear-candidate-stocks" }
   | { type: "strategy-config-load-start" }
@@ -337,6 +341,7 @@ const initialStockDashboardState: StockDashboardState = {
   mobileListKey: "initial",
   desktopListKey: "initial",
   filterDialogList: null,
+  candidateDialogOpen: false,
   scanError: null,
   scanLoading: false,
   filterListsError: null,
@@ -597,6 +602,14 @@ function useStockDashboard() {
     dispatch({ type: "close-filter-dialog" });
   }, []);
 
+  const openCandidateDialog = useCallback(() => {
+    dispatch({ type: "open-candidate-dialog" });
+  }, []);
+
+  const closeCandidateDialog = useCallback(() => {
+    dispatch({ type: "close-candidate-dialog" });
+  }, []);
+
   const importStockToList = useCallback(async (stock: StockInfo, targetList: ReturnableListKey) => {
     await addStockFilter({
       code: stock.code,
@@ -631,6 +644,20 @@ function useStockDashboard() {
     });
   }
 
+  function addStocksToCandidate(stocks: StockCandidate[]) {
+    const nextStocks = stocks.filter((stock) => !candidateStockCodes.has(getComparableStockCode(stock.code)));
+
+    if (nextStocks.length === 0) {
+      toast.info("没有可添加的待选股票");
+      return;
+    }
+
+    dispatch({ type: "add-candidate-stocks", stocks: nextStocks });
+    toast.success("已批量添加到候选", {
+      description: `已添加 ${nextStocks.length} 只股票`,
+    });
+  }
+
   function removeStockFromCandidate(stock: StockCandidate) {
     if (!candidateStockCodes.has(getComparableStockCode(stock.code))) {
       return;
@@ -639,6 +666,20 @@ function useStockDashboard() {
     dispatch({ type: "remove-candidate-stock", stock });
     toast.success("已从候选删除", {
       description: `${stock.name} ${stock.code}`,
+    });
+  }
+
+  function clearCandidateStocks() {
+    const candidates = state.stockGroups.candidate;
+
+    if (candidates.length === 0) {
+      toast.info("候选为空");
+      return;
+    }
+
+    dispatch({ type: "clear-candidate-stocks" });
+    toast.success("已清空候选", {
+      description: `已移除 ${candidates.length} 只股票`,
     });
   }
 
@@ -834,6 +875,9 @@ function useStockDashboard() {
       const stocks = createScanStockCandidates(results);
 
       dispatch({ type: "scan-success", stocks });
+      if (!window.matchMedia(mobileViewportQuery).matches) {
+        dispatch({ type: "open-candidate-dialog" });
+      }
       toast.success("策略筛选完成", {
         description: `待选列表更新 ${stocks.length} 只股票`,
       });
@@ -855,9 +899,13 @@ function useStockDashboard() {
     candidateStockCodes,
     openFilterListDialog,
     closeFilterListDialog,
+    openCandidateDialog,
+    closeCandidateDialog,
     importStockToList,
     addStockToCandidate,
+    addStocksToCandidate,
     removeStockFromCandidate,
+    clearCandidateStocks,
     saveCandidateSelection,
     removeStockFromHistory,
     removeSelectionBatch,
@@ -885,9 +933,13 @@ function StockDashboardLayout({
   candidateStockCodes,
   openFilterListDialog,
   closeFilterListDialog,
+  openCandidateDialog,
+  closeCandidateDialog,
   importStockToList,
   addStockToCandidate,
+  addStocksToCandidate,
   removeStockFromCandidate,
+  clearCandidateStocks,
   saveCandidateSelection,
   removeStockFromHistory,
   removeSelectionBatch,
@@ -902,6 +954,7 @@ function StockDashboardLayout({
   saveStrategyConfig,
   removeStrategyConfig,
 }: StockDashboardProps & ReturnType<typeof useStockDashboard>) {
+  const isDesktopViewport = useIsDesktopViewport();
   const sharedStockListProps = {
     chartSelection: state.chartSelection,
     filterDeletePendingIds: state.filterDeletePendingIds,
@@ -912,6 +965,12 @@ function StockDashboardLayout({
     onToggleChart: toggleSelectedStock,
     onDeleteFromFilterList: deleteStockFromFilterList,
   };
+
+  useEffect(() => {
+    if (state.candidateDialogOpen && !isDesktopViewport) {
+      closeCandidateDialog();
+    }
+  }, [closeCandidateDialog, isDesktopViewport, state.candidateDialogOpen]);
 
   return (
     <main className="min-h-dvh overflow-x-hidden text-foreground">
@@ -1016,7 +1075,6 @@ function StockDashboardLayout({
           selectionBatchesPageNum={state.selectionBatchesPageNum}
           selectionBatchesTotal={state.selectionBatchesTotal}
           selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
-          candidateSavePending={state.candidateSavePending}
           strategyConfig={state.strategyConfig}
           strategyConfigs={state.strategyConfigs}
           strategyConfigLoading={state.strategyConfigLoading}
@@ -1026,7 +1084,7 @@ function StockDashboardLayout({
           scanLoading={state.scanLoading}
           onActiveListChange={setDesktopListKey}
           onOpenFilterList={openFilterListDialog}
-          onSaveCandidateSelection={saveCandidateSelection}
+          onOpenCandidateDialog={openCandidateDialog}
           onRemoveFromHistory={removeStockFromHistory}
           onDeleteSelectionBatch={removeSelectionBatch}
           onSelectionHistoryPageChange={changeSelectionHistoryPage}
@@ -1037,6 +1095,21 @@ function StockDashboardLayout({
           {...sharedStockListProps}
         />
       </div>
+      {state.candidateDialogOpen && isDesktopViewport ? (
+        <DesktopCandidateDialog
+          stockGroups={visibleStockGroups}
+          chartSelection={state.chartSelection}
+          candidateStockCodes={candidateStockCodes}
+          candidateSavePending={state.candidateSavePending}
+          onClose={closeCandidateDialog}
+          onAddToCandidate={addStockToCandidate}
+          onAddStocksToCandidate={addStocksToCandidate}
+          onRemoveFromCandidate={removeStockFromCandidate}
+          onClearCandidateStocks={clearCandidateStocks}
+          onSaveCandidateSelection={saveCandidateSelection}
+          onToggleChart={toggleSelectedStock}
+        />
+      ) : null}
       {state.filterDialogList ? (
         <FilterListDialog
           targetList={state.filterDialogList}
@@ -1073,6 +1146,10 @@ function stockDashboardReducer(
       return { ...state, filterDialogList: action.listKey };
     case "close-filter-dialog":
       return { ...state, filterDialogList: null };
+    case "open-candidate-dialog":
+      return { ...state, candidateDialogOpen: true };
+    case "close-candidate-dialog":
+      return { ...state, candidateDialogOpen: false };
     case "scan-start":
       return { ...state, scanLoading: true, scanError: null };
     case "scan-success":
@@ -1145,6 +1222,8 @@ function stockDashboardReducer(
       return { ...state, candidateSavePending: false };
     case "add-candidate-stock":
       return addCandidateStockState(state, action.stock);
+    case "add-candidate-stocks":
+      return addCandidateStocksState(state, action.stocks);
     case "remove-candidate-stock":
       return removeCandidateStockState(state, action.stock);
     case "clear-candidate-stocks":
@@ -1350,6 +1429,7 @@ function StrategyActionBar({
   className,
   strategyClassName,
   strategyButtonClassName,
+  scanButtonClassName,
   onStrategySelect,
   onStrategySave,
   onStrategyDelete,
@@ -1364,6 +1444,7 @@ function StrategyActionBar({
   className?: string;
   strategyClassName?: string;
   strategyButtonClassName?: string;
+  scanButtonClassName?: string;
   onStrategySelect: (config: StrategyConfig) => void;
   onStrategySave: (config: StrategyConfig) => void | Promise<void>;
   onStrategyDelete: (id: number) => void | Promise<void>;
@@ -1387,7 +1468,7 @@ function StrategyActionBar({
       />
       <Button
         type="button"
-        className="shrink-0"
+        className={cn("shrink-0", scanButtonClassName)}
         isDisabled={scanLoading || !canScan}
         onClick={() => void onStrategyScan()}
       >
@@ -1520,7 +1601,28 @@ function addCandidateStockState(
   state: StockDashboardState,
   stock: StockCandidate,
 ): StockDashboardState {
-  if (state.stockGroups.candidate.some((item) => getComparableStockCode(item.code) === getComparableStockCode(stock.code))) {
+  return addCandidateStocksState(state, [stock]);
+}
+
+function addCandidateStocksState(
+  state: StockDashboardState,
+  stocks: StockCandidate[],
+): StockDashboardState {
+  const candidateCodeKeys = new Set(state.stockGroups.candidate.map((stock) => getComparableStockCode(stock.code)));
+  const nextCandidateStocks: StockCandidate[] = [];
+
+  for (const stock of stocks) {
+    const codeKey = getComparableStockCode(stock.code);
+
+    if (candidateCodeKeys.has(codeKey)) {
+      continue;
+    }
+
+    candidateCodeKeys.add(codeKey);
+    nextCandidateStocks.push(createCandidateStock(stock));
+  }
+
+  if (nextCandidateStocks.length === 0) {
     return state;
   }
 
@@ -1530,15 +1632,19 @@ function addCandidateStockState(
       ...state.stockGroups,
       candidate: [
         ...state.stockGroups.candidate,
-        {
-          code: stock.code,
-          name: stock.name,
-          records: stock.records,
-          list: "candidate",
-          strategyResult: stock.strategyResult,
-        },
+        ...nextCandidateStocks,
       ],
     },
+  };
+}
+
+function createCandidateStock(stock: StockCandidate): StockCandidate {
+  return {
+    code: stock.code,
+    name: stock.name,
+    records: stock.records,
+    list: "candidate",
+    strategyResult: stock.strategyResult,
   };
 }
 
@@ -1652,6 +1758,21 @@ function useIsCompactViewport() {
   }, []);
 
   return isCompact;
+}
+
+function useIsDesktopViewport() {
+  const [isDesktop, setIsDesktop] = useState(() => !window.matchMedia(mobileViewportQuery).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(mobileViewportQuery);
+    const handleChange = () => setIsDesktop(!media.matches);
+
+    media.addEventListener("change", handleChange);
+
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  return isDesktop;
 }
 
 function useStockBoardModel(
@@ -2127,7 +2248,6 @@ function DesktopStockSidebar({
   selectionBatchesPageNum,
   selectionBatchesTotal,
   selectionBatchDeletePendingIds,
-  candidateSavePending,
   strategyConfig,
   strategyConfigs,
   strategyConfigLoading,
@@ -2137,7 +2257,7 @@ function DesktopStockSidebar({
   scanLoading,
   onActiveListChange,
   onOpenFilterList,
-  onSaveCandidateSelection,
+  onOpenCandidateDialog,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
   onSelectionHistoryPageChange,
@@ -2156,7 +2276,6 @@ function DesktopStockSidebar({
   selectionBatchesPageNum: number;
   selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
-  candidateSavePending: boolean;
   strategyConfig: StrategyConfig;
   strategyConfigs: StrategyConfig[];
   strategyConfigLoading: boolean;
@@ -2166,7 +2285,7 @@ function DesktopStockSidebar({
   scanLoading: boolean;
   onActiveListChange: (key: string) => void;
   onOpenFilterList: (listKey: ReturnableListKey) => void;
-  onSaveCandidateSelection: () => void | Promise<void>;
+  onOpenCandidateDialog: () => void;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onSelectionHistoryPageChange: (pageNum: number) => void;
@@ -2176,114 +2295,133 @@ function DesktopStockSidebar({
   onStrategyScan: () => void | Promise<void>;
 } & StockListSharedProps) {
   return (
-    <aside className="flex min-h-0 flex-col gap-4 bg-transparent p-4">
-      <div className="shrink-0">
-        <StrategyActionBar
-          strategyConfig={strategyConfig}
-          strategyConfigs={strategyConfigs}
-          strategyConfigLoading={strategyConfigLoading}
-          strategySavePending={strategySavePending}
-          strategyDeletePendingId={strategyDeletePendingId}
-          scanLoading={scanLoading}
-          className="mt-0 justify-start"
-          strategyClassName="flex-1"
-          strategyButtonClassName="h-10 flex-1 justify-start bg-background/45 px-3 shadow-sm"
-          onStrategySelect={onStrategySelect}
-          onStrategySave={onStrategySave}
-          onStrategyDelete={onStrategyDelete}
-          onStrategyScan={onStrategyScan}
-        />
-        {strategyConfigError ? (
-          <p
-            className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
-            role="alert"
-          >
-            策略配置失败：{strategyConfigError}
-          </p>
-        ) : null}
-        {filterListsError ? (
-          <p
-            className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
-            role="alert"
-          >
-            名单操作失败：{filterListsError}
-          </p>
-        ) : null}
-        {selectionBatchesError ? (
-          <p
-            className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
-            role="alert"
-          >
-            历史选股失败：{selectionBatchesError}
-          </p>
-        ) : null}
-      </div>
+    <aside className="flex h-full min-h-0 flex-col gap-4 bg-transparent p-4">
+      <Card className="shrink-0 bg-card/72 shadow-sm backdrop-blur-xl">
+        <CardHeader className="gap-1 p-4 pb-2">
+          <CardTitle className="text-sm">策略筛选</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 px-4 pb-4">
+          <StrategyActionBar
+            strategyConfig={strategyConfig}
+            strategyConfigs={strategyConfigs}
+            strategyConfigLoading={strategyConfigLoading}
+            strategySavePending={strategySavePending}
+            strategyDeletePendingId={strategyDeletePendingId}
+            scanLoading={scanLoading}
+            className="mt-0 flex-col items-stretch justify-start"
+            strategyClassName="w-full"
+            strategyButtonClassName="h-10 w-full justify-start bg-background/45 px-3 shadow-sm"
+            scanButtonClassName="h-10 w-full justify-start"
+            onStrategySelect={onStrategySelect}
+            onStrategySave={onStrategySave}
+            onStrategyDelete={onStrategyDelete}
+            onStrategyScan={onStrategyScan}
+          />
+          {strategyConfigError ? (
+            <p
+              className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
+              role="alert"
+            >
+              策略配置失败：{strategyConfigError}
+            </p>
+          ) : null}
+          {filterListsError ? (
+            <p
+              className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
+              role="alert"
+            >
+              名单操作失败：{filterListsError}
+            </p>
+          ) : null}
+          {selectionBatchesError ? (
+            <p
+              className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
+              role="alert"
+            >
+              历史选股失败：{selectionBatchesError}
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 w-full justify-start bg-background/40 px-3 shadow-sm"
+        aria-label="打开待选管理"
+        onClick={onOpenCandidateDialog}
+      >
+        <ListFilter data-icon="inline-start" />
+        <span className="min-w-0 flex-1 truncate text-left">待选管理</span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          待选 {stockGroups.initial.length} / 候选 {stockGroups.candidate.length}
+        </span>
+      </Button>
 
       <DesktopStockDisclosureGroup
         activeListKey={activeListKey}
-        stockGroups={stockGroups}
         selectionBatches={selectionBatches}
         selectionBatchesLoading={selectionBatchesLoading}
         selectionBatchesPageNum={selectionBatchesPageNum}
         selectionBatchesTotal={selectionBatchesTotal}
         selectionBatchDeletePendingIds={selectionBatchDeletePendingIds}
-        candidateSavePending={candidateSavePending}
         onActiveListChange={onActiveListChange}
-        onOpenFilterList={onOpenFilterList}
-        onSaveCandidateSelection={onSaveCandidateSelection}
         onRemoveFromHistory={onRemoveFromHistory}
         onDeleteSelectionBatch={onDeleteSelectionBatch}
         onSelectionHistoryPageChange={onSelectionHistoryPageChange}
         {...stockListProps}
       />
+
+      <Card className="mt-auto shrink-0 bg-card/72 shadow-sm backdrop-blur-xl">
+        <CardHeader className="gap-1 p-4 pb-2">
+          <CardTitle className="text-sm">名单管理</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <FilterListButtonGroup
+            stockGroups={stockGroups}
+            className="grid-cols-1"
+            buttonClassName="h-11 w-full bg-background/35 px-3"
+            onOpenFilterList={onOpenFilterList}
+          />
+        </CardContent>
+      </Card>
     </aside>
   );
 }
 
 function DesktopStockDisclosureGroup({
   activeListKey,
-  stockGroups,
   selectionBatches,
   selectionBatchesLoading,
   selectionBatchesPageNum,
   selectionBatchesTotal,
   selectionBatchDeletePendingIds,
-  candidateSavePending,
   chartSelection,
-  filterDeletePendingIds,
   selectionRecordDeletePendingIds,
-  candidateStockCodes,
   onActiveListChange,
-  onOpenFilterList,
-  onSaveCandidateSelection,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
   onSelectionHistoryPageChange,
-  onAddToCandidate,
-  onRemoveFromCandidate,
   onToggleChart,
-  onDeleteFromFilterList,
 }: {
   activeListKey: string;
-  stockGroups: StockGroups;
   selectionBatches: SelectionBatchState[];
   selectionBatchesLoading: boolean;
   selectionBatchesPageNum: number;
   selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
-  candidateSavePending: boolean;
   onActiveListChange: (key: string) => void;
-  onOpenFilterList: (listKey: ReturnableListKey) => void;
-  onSaveCandidateSelection: () => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onSelectionHistoryPageChange: (pageNum: number) => void;
-} & StockListSharedProps) {
+} & Pick<
+  StockListSharedProps,
+  "chartSelection" | "selectionRecordDeletePendingIds" | "onToggleChart"
+>) {
   const pageCount = getPageCount(selectionBatchesTotal, selectionHistoryPageSize);
-  const visibleListOrder = getVisibleStockListOrder(desktopStaticListOrder, stockGroups);
 
   return (
-    <div className="min-h-0 flex flex-1 flex-col">
+    <section className="min-h-0 overflow-y-auto">
       <DesktopSelectionHistoryHeader
         loading={selectionBatchesLoading}
         pageNum={selectionBatchesPageNum}
@@ -2291,14 +2429,8 @@ function DesktopStockDisclosureGroup({
         total={selectionBatchesTotal}
         onPageChange={onSelectionHistoryPageChange}
       />
-      <FilterListButtonGroup
-        stockGroups={stockGroups}
-        className="shrink-0 border-b border-border/45 py-3"
-        buttonClassName="h-11 bg-background/35 px-3"
-        onOpenFilterList={onOpenFilterList}
-      />
       <DisclosureGroup
-        className="flex min-h-0 flex-1 flex-col"
+        className="mt-3 flex min-h-0 flex-col gap-2"
         expandedKeys={new Set([activeListKey])}
         onExpandedChange={(keys) => {
           const nextListKey = Array.from(keys).at(-1);
@@ -2327,26 +2459,8 @@ function DesktopStockDisclosureGroup({
         ) : selectionBatches.length === 0 ? (
           <DesktopSelectionHistoryEmptyState />
         ) : null}
-        {visibleListOrder.map((key) => (
-          <DesktopStockDisclosureItem
-            key={key}
-            listKey={key}
-            stocks={stockGroups[key]}
-            expanded={key === activeListKey}
-            chartSelection={chartSelection}
-            filterDeletePendingIds={filterDeletePendingIds}
-            selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-            candidateStockCodes={candidateStockCodes}
-            candidateSavePending={candidateSavePending}
-            onSaveCandidateSelection={onSaveCandidateSelection}
-            onAddToCandidate={onAddToCandidate}
-            onRemoveFromCandidate={onRemoveFromCandidate}
-            onToggleChart={onToggleChart}
-            onDeleteFromFilterList={onDeleteFromFilterList}
-          />
-        ))}
       </DisclosureGroup>
-    </div>
+    </section>
   );
 }
 
@@ -2372,8 +2486,8 @@ function SelectionBatchDisclosureItem({
     <Disclosure
       id={value}
       className={cn(
-        "border-b border-border/45 bg-primary/5",
-        expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
+        "rounded-lg border border-border/60 bg-surface/70 px-3 shadow-sm",
+        expanded && "bg-surface",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
@@ -2401,10 +2515,10 @@ function SelectionBatchDisclosureItem({
         </Button>
       </div>
 
-      <Disclosure.Content className={cn("min-h-0 flex flex-1 flex-col overflow-hidden", expanded && "!h-full")}>
-        <div className="min-h-0 flex-1 pb-3 pl-10">
+      <Disclosure.Content className="overflow-hidden">
+        <div className="pb-3 pl-10">
           {batch.error ? (
-            <div className="flex h-full min-h-20 flex-col justify-center gap-1 px-1 text-left">
+            <div className="flex min-h-20 flex-col justify-center gap-1 px-1 text-left">
               <div className="text-sm font-medium text-destructive">记录加载失败</div>
               <div className="text-xs text-muted-foreground text-pretty">{batch.error}</div>
             </div>
@@ -2414,7 +2528,7 @@ function SelectionBatchDisclosureItem({
               加载记录...
             </div>
           ) : batch.stocks.length > 0 ? (
-            <ScrollShadow orientation="vertical" className="h-full pr-2">
+            <ScrollShadow orientation="vertical" className="max-h-64 pr-2">
               <div className="flex w-full flex-col gap-2">
                 {batch.stocks.map((stock) => (
                   <StockListButton
@@ -2452,7 +2566,7 @@ function SelectionBatchDisclosureItem({
 
 function DesktopSelectionBatchesLoadingState() {
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border/45 py-3 text-sm text-muted-foreground">
+    <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border/60 bg-surface/70 p-3 text-sm text-muted-foreground">
       <LoaderCircle className="size-4 animate-spin" />
       加载历史选股...
     </div>
@@ -2473,7 +2587,7 @@ function DesktopSelectionHistoryHeader({
   onPageChange: (pageNum: number) => void;
 }) {
   return (
-    <div className="flex shrink-0 border-b border-border/45 py-3">
+    <div className="flex shrink-0 py-1">
       <div className="flex min-w-0 w-full items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Badge.Anchor>
@@ -2482,7 +2596,6 @@ function DesktopSelectionHistoryHeader({
           </Badge.Anchor>
           <div className="min-w-0">
             <div className="truncate text-sm font-medium leading-none">历史选股</div>
-            <div className="mt-1 truncate text-xs text-muted-foreground">已保存选股批次</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -2501,7 +2614,7 @@ function DesktopSelectionHistoryHeader({
 
 function DesktopSelectionHistoryEmptyState() {
   return (
-    <div className="flex shrink-0 flex-col gap-1 border-b border-border/45 py-3 text-sm">
+    <div className="flex shrink-0 flex-col gap-1 rounded-lg border border-border/60 bg-surface/70 p-3 text-sm">
       <div className="font-medium">暂无历史选股</div>
       <div className="text-xs text-muted-foreground">保存候选后会生成历史选股条目</div>
     </div>
@@ -2600,105 +2713,6 @@ function FilterListButtonGroup({
         );
       })}
     </div>
-  );
-}
-
-function DesktopStockDisclosureItem({
-  listKey,
-  stocks,
-  expanded,
-  chartSelection,
-  filterDeletePendingIds,
-  selectionRecordDeletePendingIds,
-  candidateStockCodes,
-  candidateSavePending,
-  onSaveCandidateSelection,
-  onAddToCandidate,
-  onRemoveFromCandidate,
-  onToggleChart,
-  onDeleteFromFilterList,
-}: {
-  listKey: StockListKey;
-  stocks: StockCandidate[];
-  expanded: boolean;
-  candidateSavePending: boolean;
-  onSaveCandidateSelection: () => void | Promise<void>;
-} & StockListSharedProps) {
-  const Icon = listIcons[listKey];
-  const meta = stockListMeta[listKey];
-  const showCandidateSave = listKey === "candidate";
-
-  return (
-    <Disclosure
-      id={listKey}
-      className={cn(
-        "border-b border-border/45 bg-transparent",
-        expanded ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
-      )}
-    >
-      <div className="flex min-w-0 items-center gap-1">
-        <Disclosure.Heading className="flex min-w-0 flex-1">
-          <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
-            <StockDisclosureTitle
-              icon={Icon}
-              title={meta.label}
-              description={meta.description}
-              count={stocks.length}
-              active={expanded}
-            />
-          </Disclosure.Trigger>
-        </Disclosure.Heading>
-        {showCandidateSave ? (
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
-            aria-label="保存候选"
-            isDisabled={candidateSavePending || stocks.length === 0}
-            onClick={() => void onSaveCandidateSelection()}
-          >
-            {candidateSavePending ? (
-              <LoaderCircle data-icon="inline-start" className="animate-spin" />
-            ) : (
-              <CheckCircle2 data-icon="inline-start" />
-            )}
-            保存
-          </Button>
-        ) : null}
-      </div>
-
-      <Disclosure.Content className={cn("min-h-0 flex flex-1 flex-col overflow-hidden", expanded && "!h-full")}>
-        <div className="min-h-0 flex-1 pb-3 pl-10">
-          {stocks.length > 0 ? (
-            <ScrollShadow orientation="vertical" className="h-full pr-2">
-              <div className="flex w-full flex-col gap-2">
-                {stocks.map((stock) => (
-                  <StockListButton
-                    key={stock.code}
-                    stock={stock}
-                    active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
-                    onClick={() => onToggleChart(stock.code, listKey)}
-                    action={getStockListAction({
-                      stock,
-                      listKey,
-                      candidateStockCodes,
-                      filterDeletePendingIds,
-                      selectionRecordDeletePendingIds,
-                      onAddToCandidate,
-                      onRemoveFromCandidate,
-                      onRemoveFromHistory: () => undefined,
-                      onDeleteFromFilterList,
-                    })}
-                  />
-                ))}
-              </div>
-            </ScrollShadow>
-          ) : (
-            <DesktopStockListEmptyState listKey={listKey} />
-          )}
-        </div>
-      </Disclosure.Content>
-    </Disclosure>
   );
 }
 
@@ -4189,6 +4203,221 @@ function StockListButton({
         </div>
       ) : null}
     </Surface>
+  );
+}
+
+function DesktopCandidateDialog({
+  stockGroups,
+  chartSelection,
+  candidateStockCodes,
+  candidateSavePending,
+  onClose,
+  onAddToCandidate,
+  onAddStocksToCandidate,
+  onRemoveFromCandidate,
+  onClearCandidateStocks,
+  onSaveCandidateSelection,
+  onToggleChart,
+}: {
+  stockGroups: StockGroups;
+  chartSelection: ChartSelection | null;
+  candidateStockCodes: Set<string>;
+  candidateSavePending: boolean;
+  onClose: () => void;
+  onAddStocksToCandidate: (stocks: StockCandidate[]) => void;
+  onClearCandidateStocks: () => void;
+  onSaveCandidateSelection: () => void | Promise<void>;
+} & Pick<
+  StockListSharedProps,
+  "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart"
+>) {
+  const modalState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+  const availableStocks = stockGroups.initial.filter((stock) => !candidateStockCodes.has(getComparableStockCode(stock.code)));
+  const candidateStocks = stockGroups.candidate;
+
+  return (
+    <Modal state={modalState}>
+      <Modal.Trigger className="hidden" />
+      <Modal.Backdrop variant="blur">
+        <Modal.Container size="lg" scroll="inside">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl">
+            <Modal.CloseTrigger className="z-20" />
+            <Modal.Header className="p-5 pr-12">
+              <div className="flex min-w-0 items-center gap-3">
+                <Badge.Anchor>
+                  <StockSectionIconBox icon={ListFilter} active />
+                  <StockCountBadge count={availableStocks.length + candidateStocks.length} active />
+                </Badge.Anchor>
+                <div className="min-w-0">
+                  <Modal.Heading className="truncate text-xl text-balance">待选管理</Modal.Heading>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    将筛选结果加入待保存列表后，可保存为历史选股
+                  </p>
+                </div>
+              </div>
+            </Modal.Header>
+
+            <Modal.Body className="min-h-0 overflow-hidden p-0">
+              <div className="grid h-[min(72vh,660px)] min-h-[420px] grid-cols-2">
+                <DesktopCandidateDialogColumn
+                  listKey="initial"
+                  title="筛选结果"
+                  description="本次策略筛选返回的待选股票"
+                  count={availableStocks.length}
+                  stocks={availableStocks}
+                  chartSelection={chartSelection}
+                  candidateStockCodes={candidateStockCodes}
+                  emptyTitle="暂无待选股票"
+                  emptyDescription="开始筛选后会在这里展示结果"
+                  actions={(
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 shrink-0 bg-background/45"
+                      isDisabled={availableStocks.length === 0}
+                      onClick={() => onAddStocksToCandidate(availableStocks)}
+                    >
+                      <Plus data-icon="inline-start" />
+                      全部添加
+                    </Button>
+                  )}
+                  onAddToCandidate={onAddToCandidate}
+                  onRemoveFromCandidate={onRemoveFromCandidate}
+                  onToggleChart={onToggleChart}
+                />
+                <DesktopCandidateDialogColumn
+                  listKey="candidate"
+                  title="等待保存为已选"
+                  description="这些股票会在保存后进入历史选股"
+                  count={candidateStocks.length}
+                  stocks={candidateStocks}
+                  chartSelection={chartSelection}
+                  candidateStockCodes={candidateStockCodes}
+                  emptyTitle="暂无待保存股票"
+                  emptyDescription="从左侧筛选结果添加股票"
+                  className="border-l border-border/60"
+                  actions={(
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 bg-background/45"
+                        isDisabled={candidateStocks.length === 0}
+                        onClick={onClearCandidateStocks}
+                      >
+                        <Trash2 data-icon="inline-start" />
+                        全部移除
+                      </Button>
+                      <Button
+                        type="button"
+                        className="h-9"
+                        isDisabled={candidateSavePending || candidateStocks.length === 0}
+                        onClick={() => void onSaveCandidateSelection()}
+                      >
+                        {candidateSavePending ? (
+                          <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                        ) : (
+                          <CheckCircle2 data-icon="inline-start" />
+                        )}
+                        保存
+                      </Button>
+                    </div>
+                  )}
+                  onAddToCandidate={onAddToCandidate}
+                  onRemoveFromCandidate={onRemoveFromCandidate}
+                  onToggleChart={onToggleChart}
+                />
+              </div>
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
+function DesktopCandidateDialogColumn({
+  listKey,
+  title,
+  description,
+  count,
+  stocks,
+  chartSelection,
+  candidateStockCodes,
+  emptyTitle,
+  emptyDescription,
+  actions,
+  className,
+  onAddToCandidate,
+  onRemoveFromCandidate,
+  onToggleChart,
+}: {
+  listKey: Extract<StockListKey, "initial" | "candidate">;
+  title: string;
+  description: string;
+  count: number;
+  stocks: StockCandidate[];
+  emptyTitle: string;
+  emptyDescription: string;
+  actions: ReactNode;
+  className?: string;
+} & Pick<
+  StockListSharedProps,
+  "chartSelection" | "candidateStockCodes" | "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart"
+>) {
+  return (
+    <section className={cn("flex min-h-0 flex-col", className)}>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 p-4">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="truncate text-sm font-semibold">{title}</h3>
+            <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+              {count}
+            </Chip>
+          </div>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{description}</p>
+        </div>
+        {actions}
+      </div>
+
+      <ScrollShadow orientation="vertical" className="min-h-0 flex-1 p-4">
+        {stocks.length > 0 ? (
+          <div className="flex w-full flex-col gap-2">
+            {stocks.map((stock) => (
+              <StockListButton
+                key={stock.code}
+                stock={stock}
+                active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
+                onClick={() => onToggleChart(stock.code, listKey)}
+                action={getStockListAction({
+                  stock,
+                  listKey,
+                  candidateStockCodes,
+                  filterDeletePendingIds: [],
+                  selectionRecordDeletePendingIds: [],
+                  onAddToCandidate,
+                  onRemoveFromCandidate,
+                  onRemoveFromHistory: () => undefined,
+                  onDeleteFromFilterList: () => undefined,
+                })}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full min-h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 px-4 text-center text-sm">
+            <div className="font-medium">{emptyTitle}</div>
+            <div className="text-xs text-muted-foreground">{emptyDescription}</div>
+          </div>
+        )}
+      </ScrollShadow>
+    </section>
   );
 }
 
