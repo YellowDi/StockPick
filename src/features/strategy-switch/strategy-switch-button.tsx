@@ -110,7 +110,7 @@ export function StrategySwitchButton({
           <SlidersHorizontal data-icon="inline-start" />
           策略切换
           <Chip variant="soft" className="hidden sm:inline-flex">
-            {config.enabled ? "启用" : "停用"} · {getStrategyRulesLabel(config)}
+            {config.name}
           </Chip>
         </Button>
 
@@ -151,7 +151,7 @@ export function StrategySwitchButton({
                           "flex min-w-0 items-center gap-3 rounded-lg border bg-background/45 p-3 text-left transition-[background-color,border-color,box-shadow]",
                           active
                             ? "border-ring bg-secondary/70 shadow-[0_10px_34px_rgba(0,0,0,0.16)] ring-2 ring-ring/25"
-                            : "hover:border-border hover:bg-accent/60",
+                            : "hover:border-border hover:bg-default/60",
                         )}
                         aria-pressed={active}
                         onClick={() => {

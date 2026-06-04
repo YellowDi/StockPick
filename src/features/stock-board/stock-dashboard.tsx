@@ -27,6 +27,7 @@ import {
   RiSunLine as Sun,
 } from "@remixicon/react";
 import {
+  Alert,
   Badge,
   Button,
   Card,
@@ -36,12 +37,16 @@ import {
   CardTitle,
   Disclosure,
   DisclosureGroup,
+  EmptyState,
+  Form,
   Input,
   Label,
   Modal,
   Pagination,
   ScrollShadow,
+  Spinner,
   Surface,
+  TextField,
   Chip,
   toast,
   useOverlayState,
@@ -124,7 +129,6 @@ type ChartSelection = {
 
 type StockGroups = Record<StockListKey, StockCandidate[]>;
 type ReturnableListKey = Extract<StockListKey, "whitelist" | "blacklist">;
-type ImportSearchMode = "fuzzy" | "exact";
 type SelectionBatchState = {
   id: number;
   name: string;
@@ -137,7 +141,6 @@ type SelectionBatchState = {
 type StockImportDialogState = {
   codeQuery: string;
   nameQuery: string;
-  searchMode: ImportSearchMode;
   stocks: StockInfo[];
   isLoading: boolean;
   error: string | null;
@@ -167,7 +170,6 @@ type StockListSharedProps = {
 const initialStockImportDialogState: StockImportDialogState = {
   codeQuery: "",
   nameQuery: "",
-  searchMode: "fuzzy",
   stocks: [],
   isLoading: true,
   error: null,
@@ -198,7 +200,7 @@ function StockSectionIconBox({
         "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
         active
           ? "border-primary/20 bg-primary/10 text-primary"
-          : "border-border/55 bg-background/65 text-muted-foreground group-hover/disclosure-trigger:border-border group-hover/disclosure-trigger:bg-muted/55 group-hover/disclosure-trigger:text-foreground",
+          : "border-border/55 bg-background/65 text-muted-foreground group-hover/disclosure-trigger:border-border group-hover/disclosure-trigger:bg-default/55 group-hover/disclosure-trigger:text-foreground",
       )}
     >
       <Icon className="size-4" />
@@ -1336,7 +1338,6 @@ function StrategyActionBar({
   className,
   strategyClassName,
   strategyButtonClassName,
-  scanButtonClassName,
   onStrategySelect,
   onStrategySave,
   onStrategyDelete,
@@ -1351,7 +1352,6 @@ function StrategyActionBar({
   className?: string;
   strategyClassName?: string;
   strategyButtonClassName?: string;
-  scanButtonClassName?: string;
   onStrategySelect: (config: StrategyConfig) => void;
   onStrategySave: (config: StrategyConfig) => void | Promise<void>;
   onStrategyDelete: (id: number) => void | Promise<void>;
@@ -1375,7 +1375,7 @@ function StrategyActionBar({
       />
       <Button
         type="button"
-        className={cn("h-10 transition-transform active:scale-[0.96]", scanButtonClassName)}
+        className="shrink-0"
         isDisabled={scanLoading || !canScan}
         onClick={() => void onStrategyScan()}
       >
@@ -1822,7 +1822,7 @@ function ActiveStockBoard({
                     "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
                     option.id === chartMode
                       ? "bg-secondary text-secondary-foreground"
-                      : "hover:bg-accent hover:text-accent-foreground",
+                      : "hover:bg-default hover:text-foreground",
                   )}
                   aria-pressed={option.id === chartMode}
                   onClick={() => dispatchBoard({ type: "set-chart-mode", chartMode: option.id })}
@@ -2181,8 +2181,7 @@ function DesktopStockSidebar({
           scanLoading={scanLoading}
           className="mt-0 justify-start"
           strategyClassName="flex-1"
-          strategyButtonClassName="h-10 w-full justify-start bg-background/45 px-3 shadow-sm"
-          scanButtonClassName="shrink-0 bg-background/45 px-3"
+          strategyButtonClassName="h-10 flex-1 justify-start bg-background/45 px-3 shadow-sm"
           onStrategySelect={onStrategySelect}
           onStrategySave={onStrategySave}
           onStrategyDelete={onStrategyDelete}
@@ -2938,7 +2937,7 @@ function DesktopStockChartPanel({
                       "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
                       option.id === chartMode
                         ? "bg-secondary text-secondary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground",
+                        : "hover:bg-default hover:text-foreground",
                     )}
                     aria-pressed={option.id === chartMode}
                     onClick={() => onChartModeChange(option.id)}
@@ -3230,7 +3229,7 @@ function MobileStockTabs({
                 "h-9 min-w-0 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
                 key === currentListKey
                   ? "bg-secondary text-secondary-foreground"
-                  : "hover:bg-accent hover:text-accent-foreground",
+                  : "hover:bg-default hover:text-foreground",
               )}
               aria-pressed={key === currentListKey}
               onClick={() => onActiveListChange(key)}
@@ -3854,17 +3853,6 @@ function isStockInList(stock: StockInfo, stocks: StockCandidate[]) {
   return stocks.some((item) => getComparableStockCode(item.code) === codeKey);
 }
 
-function isExactStockMatch(stock: StockInfo, codeQuery: string, nameQuery: string) {
-  const code = codeQuery.trim();
-  const name = nameQuery.trim();
-  const matchesCode = !code
-    || stock.code.toUpperCase() === code.toUpperCase()
-    || getComparableStockCode(stock.code) === getComparableStockCode(code);
-  const matchesName = !name || stock.name === name;
-
-  return matchesCode && matchesName;
-}
-
 function getComparableStockCode(code: string) {
   return code.trim().replace(exactCodePrefixPattern, "").toUpperCase();
 }
@@ -4011,7 +3999,7 @@ function StockListButton({
         "group/stock-item flex w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border bg-background/40 p-1 transition-[background-color,border-color]",
         active
           ? "border-ring/70 bg-secondary/80"
-          : "border-transparent hover:border-border/80 hover:bg-muted/50 focus-within:bg-muted/50 [&:has(button:hover)]:bg-muted/50",
+          : "border-transparent hover:border-border/80 hover:bg-default/50 focus-within:bg-default/50 [&:has(button:hover)]:bg-default/50",
       )}
     >
       <button
@@ -4083,7 +4071,6 @@ function StockImportDialog({
     oppositeList,
     codeQuery,
     nameQuery,
-    searchMode,
     stocks,
     isLoading,
     error,
@@ -4093,7 +4080,6 @@ function StockImportDialog({
     visibleStocks,
     setCodeQuery,
     setNameQuery,
-    setSearchMode,
     handleSearch,
     handleImportStock,
   } = importDialog;
@@ -4104,7 +4090,7 @@ function StockImportDialog({
       <Modal.Backdrop variant="blur">
         <Modal.Container size="lg" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
-            <Modal.CloseTrigger />
+            <Modal.CloseTrigger className="z-20" />
             <Modal.Header className="p-5 pr-12">
               <div className="flex flex-col gap-2">
                 <Modal.Heading className="text-xl text-balance">导入{meta.label}</Modal.Heading>
@@ -4116,11 +4102,9 @@ function StockImportDialog({
               <StockImportSearchForm
                 codeQuery={codeQuery}
                 nameQuery={nameQuery}
-                searchMode={searchMode}
                 isLoading={isLoading}
                 onCodeQueryChange={setCodeQuery}
                 onNameQueryChange={setNameQuery}
-                onSearchModeChange={setSearchMode}
                 onSearch={handleSearch}
               />
               <StockImportSummary
@@ -4160,7 +4144,6 @@ function useStockImportDialog(
   const {
     codeQuery,
     nameQuery,
-    searchMode,
     stocks,
     isLoading,
     error,
@@ -4169,12 +4152,7 @@ function useStockImportDialog(
   } = dialogState;
   const meta = stockListMeta[targetList];
   const oppositeList = getOppositeReturnableListKey(targetList);
-  const filteredStocks = useMemo(
-    () => searchMode === "exact"
-      ? stocks.filter((stock) => isExactStockMatch(stock, codeQuery, nameQuery))
-      : stocks,
-    [codeQuery, nameQuery, searchMode, stocks],
-  );
+  const filteredStocks = stocks;
   const visibleStocks = filteredStocks.slice(0, stockImportResultLimit);
 
   const setCodeQuery = useCallback((value: string) => {
@@ -4183,10 +4161,6 @@ function useStockImportDialog(
 
   const setNameQuery = useCallback((value: string) => {
     setDialogState((current) => ({ ...current, nameQuery: value }));
-  }, []);
-
-  const setSearchMode = useCallback((value: ImportSearchMode) => {
-    setDialogState((current) => ({ ...current, searchMode: value }));
   }, []);
 
   const cancelActiveStockLoad = useCallback(() => {
@@ -4291,7 +4265,6 @@ function useStockImportDialog(
     oppositeList,
     codeQuery,
     nameQuery,
-    searchMode,
     stocks,
     isLoading,
     error,
@@ -4301,7 +4274,6 @@ function useStockImportDialog(
     visibleStocks,
     setCodeQuery,
     setNameQuery,
-    setSearchMode,
     handleSearch,
     handleImportStock,
   };
@@ -4310,87 +4282,45 @@ function useStockImportDialog(
 function StockImportSearchForm({
   codeQuery,
   nameQuery,
-  searchMode,
   isLoading,
   onCodeQueryChange,
   onNameQueryChange,
-  onSearchModeChange,
   onSearch,
 }: {
   codeQuery: string;
   nameQuery: string;
-  searchMode: ImportSearchMode;
   isLoading: boolean;
   onCodeQueryChange: (value: string) => void;
   onNameQueryChange: (value: string) => void;
-  onSearchModeChange: (value: ImportSearchMode) => void;
   onSearch: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <form className="border-y bg-muted/25 px-5 py-4" onSubmit={onSearch}>
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] md:items-end">
-        <div className="flex min-w-0 flex-col gap-2">
-          <Label htmlFor="stock-import-code">代码</Label>
-          <Input
-            id="stock-import-code"
-            className="bg-background/70"
-            value={codeQuery}
-            placeholder="600519 / SH600519"
-            onChange={(event) => onCodeQueryChange(event.target.value)}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-2">
-          <Label htmlFor="stock-import-name">名称</Label>
-          <Input
-            id="stock-import-name"
-            className="bg-background/70"
-            value={nameQuery}
-            placeholder="贵州茅台"
-            onChange={(event) => onNameQueryChange(event.target.value)}
-          />
-        </div>
-        <StockImportSearchModeControl
-          searchMode={searchMode}
-          onSearchModeChange={onSearchModeChange}
-        />
-        <Button type="submit" className="h-10" isDisabled={isLoading}>
-          {isLoading ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Search data-icon="inline-start" />}
+    <Form className="border-y bg-surface-secondary px-5 py-4" onSubmit={onSearch}>
+      <div className="grid w-full gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+        <TextField
+          className="min-w-0"
+          fullWidth
+          value={codeQuery}
+          onChange={onCodeQueryChange}
+        >
+          <Label>代码</Label>
+          <Input placeholder="600519 / SH600519" />
+        </TextField>
+        <TextField
+          className="min-w-0"
+          fullWidth
+          value={nameQuery}
+          onChange={onNameQueryChange}
+        >
+          <Label>名称</Label>
+          <Input placeholder="贵州茅台" />
+        </TextField>
+        <Button type="submit" className="h-10 md:self-end" isDisabled={isLoading}>
+          {isLoading ? <Spinner size="sm" color="current" data-icon="inline-start" /> : <Search data-icon="inline-start" />}
           搜索
         </Button>
       </div>
-    </form>
-  );
-}
-
-function StockImportSearchModeControl({
-  searchMode,
-  onSearchModeChange,
-}: {
-  searchMode: ImportSearchMode;
-  onSearchModeChange: (value: ImportSearchMode) => void;
-}) {
-  return (
-    <div className="flex h-10 rounded-lg bg-background/70 p-1">
-      {[
-        { id: "fuzzy" as const, label: "模糊" },
-        { id: "exact" as const, label: "精准" },
-      ].map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          className={cn(
-            "h-8 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors",
-            option.id === searchMode
-              ? "bg-secondary text-secondary-foreground"
-              : "hover:bg-accent hover:text-accent-foreground",
-          )}
-          aria-pressed={option.id === searchMode}
-          onClick={() => onSearchModeChange(option.id)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    </Form>
   );
 }
 
@@ -4405,20 +4335,24 @@ function StockImportSummary({
 }) {
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground">
-      <span>
-        结果 {filteredCount}
-        {filteredCount > visibleCount ? `，显示前 ${visibleCount}` : ""}
+      <span className="inline-flex items-center gap-2">
+        <Chip size="sm" variant="soft">结果 {filteredCount}</Chip>
+        {filteredCount > visibleCount ? `显示前 ${visibleCount}` : null}
       </span>
-      <span>{listLabel}</span>
+      <Chip size="sm" variant="soft">{listLabel}</Chip>
     </div>
   );
 }
 
 function StockImportError({ message }: { message: string }) {
   return (
-    <div className="mx-5 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-      添加失败：{message}
-    </div>
+    <Alert status="danger" className="mx-5 mb-3">
+      <Alert.Indicator />
+      <Alert.Content>
+        <Alert.Title>添加失败</Alert.Title>
+        <Alert.Description>{message}</Alert.Description>
+      </Alert.Content>
+    </Alert>
   );
 }
 
@@ -4448,8 +4382,8 @@ function StockImportResults({
   if (isLoading && stocks.length === 0) {
     return (
       <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
-        <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
-          <LoaderCircle className="size-4 animate-spin" />
+        <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+          <Spinner size="md" />
           加载中...
         </div>
       </div>
@@ -4459,9 +4393,13 @@ function StockImportResults({
   if (error) {
     return (
       <div className="min-h-[320px] overflow-y-auto px-5 pb-5">
-        <div className="flex min-h-48 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 px-4 text-sm text-destructive">
-          {error}
-        </div>
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>加载失败</Alert.Title>
+            <Alert.Description>{error}</Alert.Description>
+          </Alert.Content>
+        </Alert>
       </div>
     );
   }
@@ -4484,9 +4422,9 @@ function StockImportResults({
           ))}
         </div>
       ) : (
-        <div className="flex min-h-48 items-center justify-center text-sm text-muted-foreground">
+        <EmptyState className="flex min-h-48 items-center justify-center text-center text-muted-foreground">
           暂无匹配股票
-        </div>
+        </EmptyState>
       )}
     </div>
   );
@@ -4522,17 +4460,17 @@ function StockImportResultItem({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate">{stock.name}</span>
-          <p className="m-0 shrink-0 text-xs tabular-nums">{stock.code}</p>
+          <p className="m-0 shrink-0 text-xs tabular-nums text-muted-foreground">{stock.code}</p>
         </div>
         {inTargetList ? (
-          <p className="m-0 text-xs">
+          <Chip size="sm" variant="soft" color="success" className="self-start">
             已在{metaLabel}
-          </p>
+          </Chip>
         ) : null}
         {inOppositeList && !inTargetList ? (
-          <p className="m-0 text-xs">
+          <Chip size="sm" variant="soft" color="warning" className="self-start">
             已在{stockListMeta[oppositeList].label}
-          </p>
+          </Chip>
         ) : null}
       </div>
       {!inTargetList ? (
@@ -4552,7 +4490,7 @@ function StockImportResultItem({
             onClick={() => void onImportStock(stock)}
           >
             {isImporting ? (
-              <LoaderCircle className="animate-spin" />
+              <Spinner size="sm" color="current" />
             ) : (
               <Plus />
             )}
