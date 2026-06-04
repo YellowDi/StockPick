@@ -3152,19 +3152,19 @@ function MobileCandidateDrawer({
                 }}
                 className="flex h-full min-h-0 flex-col"
               >
-                <Tabs.ListContainer className="shrink-0 border-b border-border/60 px-4 pb-3">
-                  <Tabs.List
-                    aria-label="筛选结果列表"
-                    className="grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1"
-                  >
-                    {tabs.map((tab) => (
+                <Tabs.ListContainer className="shrink-0 px-4 pb-3">
+                  <Tabs.List aria-label="筛选结果列表">
+                    {tabs.map((tab, index) => (
                       <Tabs.Tab
                         key={tab.key}
                         id={tab.key}
-                        className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs"
                       >
-                        <span className="min-w-0 truncate">{tab.label}</span>
-                        <span className="shrink-0 tabular-nums">{tab.count}</span>
+                        {index > 0 ? <Tabs.Separator /> : null}
+                        <Tabs.Indicator />
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 truncate">{tab.label}</span>
+                          <span className="shrink-0 tabular-nums">{tab.count}</span>
+                        </span>
                       </Tabs.Tab>
                     ))}
                   </Tabs.List>
