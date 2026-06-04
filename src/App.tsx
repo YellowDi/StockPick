@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { MotionConfig } from "motion/react";
 import { toast } from "sonner";
 
 import { LoginPage } from "@/components/login-page";
@@ -105,10 +104,10 @@ function App() {
   );
 
   return (
-    <MotionConfig reducedMotion="user">
+    <>
       {content}
       <Toaster theme={themeMode} position="top-right" />
-    </MotionConfig>
+    </>
   );
 }
 
