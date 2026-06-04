@@ -116,7 +116,7 @@ body {
 
 .mobile-dashboard-shell {
   min-height: 100dvh;
-  padding-bottom: calc(7.25rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
 
 .mobile-dashboard-main {
@@ -180,13 +180,13 @@ body {
 
 @media (min-width: 600px) and (max-width: 767px) {
   .mobile-dashboard-shell {
-    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
 
   .mobile-dashboard-main {
     grid-template-columns: minmax(0, 1fr) minmax(260px, 0.86fr);
     align-items: start;
-    min-height: calc(100dvh - 5.75rem);
+    min-height: calc(100dvh - 4.75rem);
     gap: 12px;
   }
 
@@ -196,7 +196,7 @@ body {
   }
 
   .mobile-list-region {
-    max-height: calc(100dvh - 6.75rem - env(safe-area-inset-top));
+    max-height: calc(100dvh - 5.75rem - env(safe-area-inset-top));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding-right: 2px;
@@ -207,7 +207,7 @@ body {
   }
 
   .mobile-bottom-actions__inner {
-    grid-template-columns: minmax(0, 1fr) minmax(210px, 240px);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
   }
 }

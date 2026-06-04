@@ -33,7 +33,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardHeader,
   CardTitle,
   Disclosure,
   DisclosureGroup,
@@ -58,7 +57,7 @@ import { Liveline, type CandlePoint, type LivelinePoint, type LivelineSeries } f
 
 import { BrandLockup } from "@/components/brand-lockup";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
-import { StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
+import { StrategyConfigEditor, StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
 import { stockListMeta } from "@/data/mock-stocks";
 import {
   addStockFilter,
@@ -272,6 +271,10 @@ type StockDashboardState = {
   selectionBatches: SelectionBatchState[];
   chartSelection: ChartSelection | null;
   mobileListKey: StockListKey;
+  mobileStrategyDrawerOpen: boolean;
+  mobileSelectionHistoryDrawerOpen: boolean;
+  mobileFilterListsDrawerOpen: boolean;
+  mobileFilterListKey: ReturnableListKey;
   desktopListKey: string;
   filterDialogList: ReturnableListKey | null;
   candidateDialogOpen: boolean;
@@ -298,6 +301,13 @@ type StockDashboardState = {
 type StockDashboardAction =
   | { type: "set-chart-selection"; selection: ChartSelection | null }
   | { type: "set-mobile-list"; listKey: StockListKey }
+  | { type: "open-mobile-strategy-drawer" }
+  | { type: "close-mobile-strategy-drawer" }
+  | { type: "open-mobile-selection-history-drawer" }
+  | { type: "close-mobile-selection-history-drawer" }
+  | { type: "open-mobile-filter-lists-drawer"; listKey?: ReturnableListKey }
+  | { type: "close-mobile-filter-lists-drawer" }
+  | { type: "set-mobile-filter-list"; listKey: ReturnableListKey }
   | { type: "set-desktop-list"; listKey: string }
   | { type: "open-filter-dialog"; listKey: ReturnableListKey }
   | { type: "close-filter-dialog" }
@@ -341,6 +351,10 @@ const initialStockDashboardState: StockDashboardState = {
   selectionBatches: [],
   chartSelection: null,
   mobileListKey: "initial",
+  mobileStrategyDrawerOpen: false,
+  mobileSelectionHistoryDrawerOpen: false,
+  mobileFilterListsDrawerOpen: false,
+  mobileFilterListKey: "whitelist",
   desktopListKey: "initial",
   filterDialogList: null,
   candidateDialogOpen: false,
@@ -858,7 +872,7 @@ function useStockDashboard() {
     }
   }
 
-  async function startStrategyScan() {
+  async function startStrategyScan(options: { openSheetOnStart?: boolean; closeMobileStrategyDrawer?: boolean } = {}) {
     const configId = state.strategyConfig.id;
 
     if (!configId) {
@@ -871,6 +885,14 @@ function useStockDashboard() {
       return;
     }
 
+    if (options.closeMobileStrategyDrawer) {
+      dispatch({ type: "close-mobile-strategy-drawer" });
+    }
+
+    if (options.openSheetOnStart) {
+      dispatch({ type: "open-candidate-dialog" });
+    }
+
     dispatch({ type: "scan-start" });
 
     try {
@@ -878,7 +900,9 @@ function useStockDashboard() {
       const stocks = createScanStockCandidates(results);
 
       dispatch({ type: "scan-success", stocks });
-      dispatch({ type: "open-candidate-dialog" });
+      if (!options.openSheetOnStart) {
+        dispatch({ type: "open-candidate-dialog" });
+      }
       toast.success("策略筛选完成", {
         description: `待选列表更新 ${stocks.length} 只股票`,
       });
@@ -916,6 +940,13 @@ function useStockDashboard() {
     reloadStrategyScan: startStrategyScan,
     startStrategyScan,
     setMobileListKey: (listKey: StockListKey) => dispatch({ type: "set-mobile-list", listKey }),
+    openMobileStrategyDrawer: () => dispatch({ type: "open-mobile-strategy-drawer" }),
+    closeMobileStrategyDrawer: () => dispatch({ type: "close-mobile-strategy-drawer" }),
+    openMobileSelectionHistoryDrawer: () => dispatch({ type: "open-mobile-selection-history-drawer" }),
+    closeMobileSelectionHistoryDrawer: () => dispatch({ type: "close-mobile-selection-history-drawer" }),
+    openMobileFilterListsDrawer: (listKey?: ReturnableListKey) => dispatch({ type: "open-mobile-filter-lists-drawer", listKey }),
+    closeMobileFilterListsDrawer: () => dispatch({ type: "close-mobile-filter-lists-drawer" }),
+    setMobileFilterListKey: (listKey: ReturnableListKey) => dispatch({ type: "set-mobile-filter-list", listKey }),
     setDesktopListKey: (listKey: string) => dispatch({ type: "set-desktop-list", listKey }),
     setStrategyConfig: (config: StrategyConfig) => dispatch({ type: "set-strategy-config", config }),
     saveStrategyConfig,
@@ -950,6 +981,13 @@ function StockDashboardLayout({
   reloadStrategyScan,
   startStrategyScan,
   setMobileListKey,
+  openMobileStrategyDrawer,
+  closeMobileStrategyDrawer,
+  openMobileSelectionHistoryDrawer,
+  closeMobileSelectionHistoryDrawer,
+  openMobileFilterListsDrawer,
+  closeMobileFilterListsDrawer,
+  setMobileFilterListKey,
   setDesktopListKey,
   setStrategyConfig,
   saveStrategyConfig,
@@ -987,66 +1025,20 @@ function StockDashboardLayout({
             />
           </div>
 
-          <div className="mobile-list-region">
-            {state.strategyConfigError ? (
-              <p
-                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                role="alert"
-              >
-                策略配置失败：{state.strategyConfigError}
-              </p>
-            ) : null}
-            {state.filterListsError ? (
-              <p
-                className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                role="alert"
-              >
-                名单操作失败：{state.filterListsError}
-              </p>
-            ) : null}
-            {state.selectionBatchesError ? (
-              <p
-                className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                role="alert"
-              >
-                历史选股失败：{state.selectionBatchesError}
-              </p>
-            ) : null}
-
-            <MobileSelectionHistory
-              selectionBatches={state.selectionBatches}
-              selectionBatchesLoading={state.selectionBatchesLoading}
-              selectionBatchesPageNum={state.selectionBatchesPageNum}
-              selectionBatchesTotal={state.selectionBatchesTotal}
-              selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
-              chartSelection={state.chartSelection}
-              selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
-              onRemoveFromHistory={removeStockFromHistory}
-              onDeleteSelectionBatch={removeSelectionBatch}
-              onToggleChart={toggleSelectedStock}
-              onPageChange={changeSelectionHistoryPage}
-            />
-          </div>
+          <MobileStatusMessages
+            strategyConfigError={state.strategyConfigError}
+            filterListsError={state.filterListsError}
+            selectionBatchesError={state.selectionBatchesError}
+          />
         </div>
 
         <MobileBottomActions
           stockGroups={visibleStockGroups}
-          strategyConfig={state.strategyConfig}
-          strategyConfigs={state.strategyConfigs}
-          strategyConfigLoading={state.strategyConfigLoading}
-          strategySavePending={state.strategySavePending}
-          strategyDeletePendingId={state.strategyDeletePendingId}
-          scanLoading={state.scanLoading}
-          candidateResultButtonVisible={
-            state.candidateResultAvailable
-            && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0)
-          }
-          onOpenFilterList={openFilterListDialog}
-          onOpenCandidateDialog={openCandidateDialog}
-          onStrategySelect={setStrategyConfig}
-          onStrategySave={saveStrategyConfig}
-          onStrategyDelete={removeStrategyConfig}
-          onStrategyScan={startStrategyScan}
+          selectionBatchesTotal={state.selectionBatchesTotal}
+          selectionBatchesLoading={state.selectionBatchesLoading}
+          onOpenStrategyDrawer={openMobileStrategyDrawer}
+          onOpenSelectionHistoryDrawer={openMobileSelectionHistoryDrawer}
+          onOpenFilterListsDrawer={() => openMobileFilterListsDrawer()}
         />
       </div>
       <div className="mx-auto hidden min-h-dvh w-full max-w-[1680px] md:grid md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -1115,6 +1107,8 @@ function StockDashboardLayout({
             chartSelection={state.chartSelection}
             candidateStockCodes={candidateStockCodes}
             candidateSavePending={state.candidateSavePending}
+            scanLoading={state.scanLoading}
+            scanError={state.scanError}
             onClose={closeCandidateDialog}
             onActiveListChange={setMobileListKey}
             onAddToCandidate={addStockToCandidate}
@@ -1126,7 +1120,55 @@ function StockDashboardLayout({
           />
         )
       ) : null}
-      {state.filterDialogList ? (
+      {state.mobileStrategyDrawerOpen ? (
+        <MobileStrategyConfigDrawer
+          strategyConfig={state.strategyConfig}
+          strategyConfigs={state.strategyConfigs}
+          strategyConfigLoading={state.strategyConfigLoading}
+          strategySavePending={state.strategySavePending}
+          strategyDeletePendingId={state.strategyDeletePendingId}
+          scanLoading={state.scanLoading}
+          onClose={closeMobileStrategyDrawer}
+          onStrategySelect={setStrategyConfig}
+          onStrategySave={saveStrategyConfig}
+          onStrategyDelete={removeStrategyConfig}
+          onStrategyScan={() => startStrategyScan({ openSheetOnStart: true, closeMobileStrategyDrawer: true })}
+        />
+      ) : null}
+      {state.mobileSelectionHistoryDrawerOpen ? (
+        <MobileSelectionHistoryDrawer
+          selectionBatches={state.selectionBatches}
+          selectionBatchesLoading={state.selectionBatchesLoading}
+          selectionBatchesPageNum={state.selectionBatchesPageNum}
+          selectionBatchesTotal={state.selectionBatchesTotal}
+          selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
+          chartSelection={state.chartSelection}
+          selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
+          onClose={closeMobileSelectionHistoryDrawer}
+          onRemoveFromHistory={removeStockFromHistory}
+          onDeleteSelectionBatch={removeSelectionBatch}
+          onToggleChart={toggleSelectedStock}
+          onPageChange={changeSelectionHistoryPage}
+        />
+      ) : null}
+      {state.mobileFilterListsDrawerOpen ? (
+        <MobileFilterListsDrawer
+          activeListKey={state.mobileFilterListKey}
+          stockGroups={visibleStockGroups}
+          chartSelection={state.chartSelection}
+          filterDeletePendingIds={state.filterDeletePendingIds}
+          selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
+          candidateStockCodes={candidateStockCodes}
+          onClose={closeMobileFilterListsDrawer}
+          onActiveListChange={setMobileFilterListKey}
+          onImportStock={importStockToList}
+          onAddToCandidate={addStockToCandidate}
+          onRemoveFromCandidate={removeStockFromCandidate}
+          onToggleChart={toggleSelectedStock}
+          onDeleteFromFilterList={deleteStockFromFilterList}
+        />
+      ) : null}
+      {isDesktopViewport && state.filterDialogList ? (
         <FilterListDialog
           targetList={state.filterDialogList}
           stocks={visibleStockGroups[state.filterDialogList]}
@@ -1156,6 +1198,24 @@ function stockDashboardReducer(
       return { ...state, chartSelection: action.selection };
     case "set-mobile-list":
       return { ...state, mobileListKey: action.listKey };
+    case "open-mobile-strategy-drawer":
+      return { ...state, mobileStrategyDrawerOpen: true };
+    case "close-mobile-strategy-drawer":
+      return { ...state, mobileStrategyDrawerOpen: false };
+    case "open-mobile-selection-history-drawer":
+      return { ...state, mobileSelectionHistoryDrawerOpen: true };
+    case "close-mobile-selection-history-drawer":
+      return { ...state, mobileSelectionHistoryDrawerOpen: false };
+    case "open-mobile-filter-lists-drawer":
+      return {
+        ...state,
+        mobileFilterListsDrawerOpen: true,
+        mobileFilterListKey: action.listKey ?? state.mobileFilterListKey,
+      };
+    case "close-mobile-filter-lists-drawer":
+      return { ...state, mobileFilterListsDrawerOpen: false };
+    case "set-mobile-filter-list":
+      return { ...state, mobileFilterListKey: action.listKey };
     case "set-desktop-list":
       return { ...state, desktopListKey: action.listKey };
     case "open-filter-dialog":
@@ -2144,6 +2204,104 @@ function StockBoardLoading({
   );
 }
 
+function MobileStrategyConfigDrawer({
+  strategyConfig,
+  strategyConfigs,
+  strategyConfigLoading,
+  strategySavePending,
+  strategyDeletePendingId,
+  scanLoading,
+  onClose,
+  onStrategySelect,
+  onStrategySave,
+  onStrategyDelete,
+  onStrategyScan,
+}: {
+  strategyConfig: StrategyConfig;
+  strategyConfigs: StrategyConfig[];
+  strategyConfigLoading: boolean;
+  strategySavePending: boolean;
+  strategyDeletePendingId: number | null;
+  scanLoading: boolean;
+  onClose: () => void;
+  onStrategySelect: (config: StrategyConfig) => void;
+  onStrategySave: (config: StrategyConfig) => void | Promise<void>;
+  onStrategyDelete: (id: number) => void | Promise<void>;
+  onStrategyScan: () => void | Promise<void>;
+}) {
+  const drawerState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+
+  return (
+    <Drawer state={drawerState}>
+      <Drawer.Trigger className="hidden" />
+      <Drawer.Backdrop variant="transparent">
+        <Drawer.Content placement="bottom">
+          <Drawer.Dialog className="mx-auto flex h-[min(86dvh,760px)] min-h-[480px] w-full max-w-[760px] flex-col overflow-hidden p-0">
+            <Drawer.Handle className="pb-1 pt-2" />
+            <Drawer.CloseTrigger className="z-20" />
+            <Drawer.Header className="px-4 pb-3 pt-0">
+              <div className="flex min-w-0 items-center gap-3 pr-8">
+                <Badge.Anchor>
+                  <StockSectionIconBox icon={Search} active />
+                  <StockCountBadge count={strategyConfigs.length || 1} active />
+                </Badge.Anchor>
+                <div className="min-w-0">
+                  <Drawer.Heading className="truncate text-lg text-balance">策略筛选</Drawer.Heading>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">选择配置，保存后开始筛选</p>
+                </div>
+              </div>
+            </Drawer.Header>
+            <StrategyConfigEditor
+              config={strategyConfig}
+              configs={strategyConfigs}
+              configsLoading={strategyConfigLoading}
+              savePending={strategySavePending}
+              deletePendingId={strategyDeletePendingId}
+              showInlineSave
+              className="flex min-h-0 flex-1 flex-col"
+              contentClassName="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              onSelect={onStrategySelect}
+              onSave={onStrategySave}
+              onDelete={onStrategyDelete}
+              renderFooter={(actions) => (
+                <Drawer.Footer className="mx-0 mb-0 rounded-none border-t border-border/60 bg-background/95 p-4">
+                  <Button
+                    type="button"
+                    className="h-11 w-full"
+                    isDisabled={scanLoading || actions.isSaving}
+                    onClick={() => {
+                      if (!actions.normalizedDraft.id || actions.isDirty) {
+                        toast.info("请先保存当前配置后再开始筛选");
+                        return;
+                      }
+
+                      void onStrategyScan();
+                    }}
+                  >
+                    {scanLoading ? (
+                      <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <Search data-icon="inline-start" />
+                    )}
+                    {scanLoading ? "筛选中" : "开始筛选"}
+                  </Button>
+                </Drawer.Footer>
+              )}
+            />
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
+  );
+}
+
 function AnimatedDigits({ value }: { value: string }) {
   return (
     <span className="stock-digit-pop">
@@ -3064,6 +3222,8 @@ function MobileCandidateDrawer({
   chartSelection,
   candidateStockCodes,
   candidateSavePending,
+  scanLoading,
+  scanError,
   onClose,
   onActiveListChange,
   onAddStocksToCandidate,
@@ -3078,6 +3238,8 @@ function MobileCandidateDrawer({
   chartSelection: ChartSelection | null;
   candidateStockCodes: Set<string>;
   candidateSavePending: boolean;
+  scanLoading: boolean;
+  scanError: string | null;
   onClose: () => void;
   onActiveListChange: (key: StockListKey) => void;
   onAddStocksToCandidate: (stocks: StockCandidate[]) => void;
@@ -3140,7 +3302,22 @@ function MobileCandidateDrawer({
               </div>
             </Drawer.Header>
 
-            <Drawer.Body className="min-h-0 overflow-hidden p-0">
+            <Drawer.Body className="flex min-h-0 flex-col overflow-hidden p-0">
+              {scanLoading ? (
+                <div className="mx-4 mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-border/60 bg-background/45 px-3 py-2 text-sm text-muted-foreground">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  正在执行策略筛选...
+                </div>
+              ) : null}
+              {scanError ? (
+                <Alert status="danger" className="mx-4 mb-3 shrink-0">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Title>策略扫描失败</Alert.Title>
+                    <Alert.Description>{scanError}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              ) : null}
               <Tabs
                 selectedKey={currentListKey}
                 onSelectionChange={(key) => {
@@ -3150,7 +3327,7 @@ function MobileCandidateDrawer({
                     onActiveListChange(nextKey);
                   }
                 }}
-                className="flex h-full min-h-0 flex-col"
+                className="flex min-h-0 flex-1 flex-col"
               >
                 <Tabs.ListContainer className="shrink-0 px-4 pb-3">
                   <Tabs.List aria-label="筛选结果列表">
@@ -3273,7 +3450,7 @@ function MobileCandidateDrawer({
   );
 }
 
-function MobileSelectionHistory({
+function MobileSelectionHistoryDrawer({
   selectionBatches,
   selectionBatchesLoading,
   selectionBatchesPageNum,
@@ -3281,6 +3458,7 @@ function MobileSelectionHistory({
   selectionBatchDeletePendingIds,
   chartSelection,
   selectionRecordDeletePendingIds,
+  onClose,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
   onToggleChart,
@@ -3293,6 +3471,7 @@ function MobileSelectionHistory({
   selectionBatchDeletePendingIds: number[];
   chartSelection: ChartSelection | null;
   selectionRecordDeletePendingIds: number[];
+  onClose: () => void;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
@@ -3300,161 +3479,185 @@ function MobileSelectionHistory({
 }) {
   const [openItems, setOpenItems] = useState<string[]>([]);
   const pageCount = getPageCount(selectionBatchesTotal, selectionHistoryPageSize);
+  const drawerState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
 
   useEffect(() => {
     setOpenItems([]);
   }, [selectionBatchesPageNum]);
 
   return (
-    <Card className="mobile-list-card bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
-      <CardHeader className="gap-0">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="truncate text-base">历史选股</CardTitle>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Chip variant="soft" className="shrink-0 tabular-nums">
-              {selectionBatchesLoading ? "..." : selectionBatchesTotal}
-            </Chip>
-            <SelectionHistoryPagination
-              loading={selectionBatchesLoading}
-              pageNum={selectionBatchesPageNum}
-              pageCount={pageCount}
-              total={selectionBatchesTotal}
-              onPageChange={onPageChange}
-            />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pb-5">
-        {selectionBatches.length > 0 ? (
-          <DisclosureGroup
-            allowsMultipleExpanded
-            className="flex min-h-0 flex-col"
-            expandedKeys={new Set(openItems)}
-            onExpandedChange={(keys) => setOpenItems(Array.from(keys, String))}
-            aria-label="历史选股"
-          >
-            {selectionBatches.map((batch) => {
-              const value = getSelectionBatchDisclosureValue(batch.id);
-
-              return (
-                <SelectionBatchDisclosureItem
-                  key={batch.id}
-                  batch={batch}
-                  expanded={openItems.includes(value)}
-                  chartSelection={chartSelection}
-                  selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-                  deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
-                  onDeleteSelectionBatch={onDeleteSelectionBatch}
-                  onRemoveFromHistory={onRemoveFromHistory}
-                  onToggleChart={onToggleChart}
+    <Drawer state={drawerState}>
+      <Drawer.Trigger className="hidden" />
+      <Drawer.Backdrop variant="transparent">
+        <Drawer.Content placement="bottom">
+          <Drawer.Dialog className="mx-auto flex h-[min(78dvh,680px)] min-h-[420px] w-full max-w-[760px] flex-col overflow-hidden p-0">
+            <Drawer.Handle className="pb-1 pt-2" />
+            <Drawer.CloseTrigger className="z-20" />
+            <Drawer.Header className="px-4 pb-3 pt-0">
+              <div className="flex min-w-0 items-center justify-between gap-3 pr-8">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Badge.Anchor>
+                    <StockSectionIconBox icon={Database} active />
+                    <StockCountBadge count={selectionBatchesLoading ? "..." : selectionBatchesTotal} active />
+                  </Badge.Anchor>
+                  <div className="min-w-0">
+                    <Drawer.Heading className="truncate text-lg text-balance">历史选股</Drawer.Heading>
+                  </div>
+                </div>
+                <SelectionHistoryPagination
+                  loading={selectionBatchesLoading}
+                  pageNum={selectionBatchesPageNum}
+                  pageCount={pageCount}
+                  total={selectionBatchesTotal}
+                  onPageChange={onPageChange}
                 />
-              );
-            })}
-          </DisclosureGroup>
-        ) : selectionBatchesLoading ? (
-          <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            加载历史选股...
-          </div>
-        ) : (
-          <div className="flex min-h-28 flex-col items-center justify-center gap-1 text-sm">
-            <div className="font-medium">暂无历史选股</div>
-            <div className="text-xs text-muted-foreground">保存候选后会生成历史选股条目</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              </div>
+            </Drawer.Header>
+            <Drawer.Body className="min-h-0 overflow-y-auto px-4 pb-5 pt-0">
+              {selectionBatches.length > 0 ? (
+                <DisclosureGroup
+                  allowsMultipleExpanded
+                  className="flex min-h-0 flex-col"
+                  expandedKeys={new Set(openItems)}
+                  onExpandedChange={(keys) => setOpenItems(Array.from(keys, String))}
+                  aria-label="历史选股"
+                >
+                  {selectionBatches.map((batch) => {
+                    const value = getSelectionBatchDisclosureValue(batch.id);
+
+                    return (
+                      <SelectionBatchDisclosureItem
+                        key={batch.id}
+                        batch={batch}
+                        expanded={openItems.includes(value)}
+                        chartSelection={chartSelection}
+                        selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                        deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
+                        onDeleteSelectionBatch={onDeleteSelectionBatch}
+                        onRemoveFromHistory={onRemoveFromHistory}
+                        onToggleChart={(code, listKey, selectionBatchId) => {
+                          onToggleChart(code, listKey, selectionBatchId);
+                          onClose();
+                        }}
+                      />
+                    );
+                  })}
+                </DisclosureGroup>
+              ) : selectionBatchesLoading ? (
+                <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  加载历史选股...
+                </div>
+              ) : (
+                <div className="flex min-h-48 flex-col items-center justify-center gap-1 text-sm">
+                  <div className="font-medium">暂无历史选股</div>
+                  <div className="text-xs text-muted-foreground">保存候选后会生成历史选股条目</div>
+                </div>
+              )}
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
+  );
+}
+
+function MobileStatusMessages({
+  strategyConfigError,
+  filterListsError,
+  selectionBatchesError,
+}: {
+  strategyConfigError: string | null;
+  filterListsError: string | null;
+  selectionBatchesError: string | null;
+}) {
+  if (!strategyConfigError && !filterListsError && !selectionBatchesError) {
+    return null;
+  }
+
+  return (
+    <div className="mobile-list-region">
+      {strategyConfigError ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          策略配置失败：{strategyConfigError}
+        </p>
+      ) : null}
+      {filterListsError ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          名单操作失败：{filterListsError}
+        </p>
+      ) : null}
+      {selectionBatchesError ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          历史选股失败：{selectionBatchesError}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
 function MobileBottomActions({
   stockGroups,
-  strategyConfig,
-  strategyConfigs,
-  strategyConfigLoading,
-  strategySavePending,
-  strategyDeletePendingId,
-  scanLoading,
-  candidateResultButtonVisible,
-  onOpenFilterList,
-  onOpenCandidateDialog,
-  onStrategySelect,
-  onStrategySave,
-  onStrategyDelete,
-  onStrategyScan,
+  selectionBatchesTotal,
+  selectionBatchesLoading,
+  onOpenStrategyDrawer,
+  onOpenSelectionHistoryDrawer,
+  onOpenFilterListsDrawer,
 }: {
-  stockGroups: Pick<StockGroups, "initial" | "candidate" | ReturnableListKey>;
-  strategyConfig: StrategyConfig;
-  strategyConfigs: StrategyConfig[];
-  strategyConfigLoading: boolean;
-  strategySavePending: boolean;
-  strategyDeletePendingId: number | null;
-  scanLoading: boolean;
-  candidateResultButtonVisible: boolean;
-  onOpenFilterList: (listKey: ReturnableListKey) => void;
-  onOpenCandidateDialog: () => void;
-  onStrategySelect: (config: StrategyConfig) => void;
-  onStrategySave: (config: StrategyConfig) => void | Promise<void>;
-  onStrategyDelete: (id: number) => void | Promise<void>;
-  onStrategyScan: () => void | Promise<void>;
+  stockGroups: Pick<StockGroups, ReturnableListKey>;
+  selectionBatchesTotal: number;
+  selectionBatchesLoading: boolean;
+  onOpenStrategyDrawer: () => void;
+  onOpenSelectionHistoryDrawer: () => void;
+  onOpenFilterListsDrawer: () => void;
 }) {
+  const filterCount = stockGroups.whitelist.length + stockGroups.blacklist.length;
+
   return (
     <div className="mobile-bottom-actions">
       <div className="mobile-bottom-actions__inner">
-        <StrategyActionBar
-          strategyConfig={strategyConfig}
-          strategyConfigs={strategyConfigs}
-          strategyConfigLoading={strategyConfigLoading}
-          strategySavePending={strategySavePending}
-          strategyDeletePendingId={strategyDeletePendingId}
-          scanLoading={scanLoading}
-          className="mobile-bottom-strategy mt-0 grid grid-cols-[minmax(0,1fr)_auto] items-stretch justify-stretch"
-          strategyClassName="min-w-0 justify-stretch"
-          strategyButtonClassName="h-10 w-full min-w-0 justify-start bg-background/55 px-3 shadow-none"
-          scanButtonClassName="h-10 shrink-0 px-3"
-          onStrategySelect={onStrategySelect}
-          onStrategySave={onStrategySave}
-          onStrategyDelete={onStrategyDelete}
-          onStrategyScan={onStrategyScan}
-        />
         <div className="grid grid-cols-3 gap-2">
           <Button
             type="button"
             variant="outline"
-            className="h-10 min-w-0 justify-start bg-background/55 px-3 shadow-sm"
-            aria-label="打开筛选结果"
-            isDisabled={!candidateResultButtonVisible}
-            onClick={onOpenCandidateDialog}
+            className="h-11 min-w-0 justify-center bg-background/55 px-2 shadow-sm"
+            aria-label="打开策略筛选"
+            onClick={onOpenStrategyDrawer}
           >
-            <ListFilter data-icon="inline-start" className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-left">筛选</span>
+            <Search data-icon="inline-start" className="shrink-0" />
+            <span className="min-w-0 truncate">策略筛选</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 min-w-0 justify-center bg-background/55 px-2 shadow-sm"
+            aria-label="打开历史选股"
+            onClick={onOpenSelectionHistoryDrawer}
+          >
+            <Database data-icon="inline-start" className="shrink-0" />
+            <span className="min-w-0 truncate">历史选股</span>
             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-              {stockGroups.initial.length + stockGroups.candidate.length}
+              {selectionBatchesLoading ? "..." : selectionBatchesTotal}
             </span>
           </Button>
-          {filterListButtonOrder.map((listKey) => {
-            const Icon = listIcons[listKey];
-            const meta = stockListMeta[listKey];
-
-            return (
-              <Button
-                key={listKey}
-                type="button"
-                variant="outline"
-                className="h-10 min-w-0 justify-start bg-background/55 px-3 shadow-sm"
-                aria-label={`打开${meta.label}`}
-                onClick={() => onOpenFilterList(listKey)}
-              >
-                <Icon data-icon="inline-start" className="shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-left">{meta.label}</span>
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {stockGroups[listKey].length}
-                </span>
-              </Button>
-            );
-          })}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 min-w-0 justify-center bg-background/55 px-2 shadow-sm"
+            aria-label="打开红黑名单"
+            onClick={onOpenFilterListsDrawer}
+          >
+            <ShieldCheck data-icon="inline-start" className="shrink-0" />
+            <span className="min-w-0 truncate">红黑名单</span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{filterCount}</span>
+          </Button>
         </div>
       </div>
     </div>
@@ -3480,7 +3683,7 @@ function StockDetailsPanel({
           <h2 className="mb-2 text-sm font-semibold">策略命中</h2>
           <StrategyBasicInfo strategyResult={strategyResult} />
         </section>
-        <MobileDailyKlineSummary records={records} />
+        <DailyKlineDetailSection records={records} />
       </div>
     </div>
   );
@@ -3536,62 +3739,6 @@ function DailyKlineDetailSection({ records }: { records: StockDailyRecord[] }) {
             </Table.Content>
           </Table.ScrollContainer>
         </Table>
-      ) : (
-        <StockDataEmptyState label="暂无日 K 明细数据" />
-      )}
-    </section>
-  );
-}
-
-function MobileDailyKlineSummary({ records }: { records: StockDailyRecord[] }) {
-  const visibleRecords = records.slice(-dailyKVisibleDays).reverse();
-
-  return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">最近日 K</h2>
-        <span className="text-xs text-muted-foreground tabular-nums">{visibleRecords.length}</span>
-      </div>
-      {visibleRecords.length > 0 ? (
-        <div className="grid gap-2">
-          {visibleRecords.map((record) => {
-            const change = record.close - record.open;
-            const changePct = record.open > 0 ? (change / record.open) * 100 : 0;
-            const positive = change >= 0;
-
-            return (
-              <div
-                key={`${record.code}:${record.date}`}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md bg-background/35 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium tabular-nums">{record.date}</div>
-                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                    高 {formatPrice(record.high)} / 低 {formatPrice(record.low)}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div
-                    className={cn(
-                      "text-sm font-semibold tabular-nums",
-                      positive ? "text-stock-up" : "text-stock-down",
-                    )}
-                  >
-                    {formatPrice(record.close)}
-                  </div>
-                  <div
-                    className={cn(
-                      "mt-0.5 text-xs tabular-nums",
-                      positive ? "text-stock-up" : "text-stock-down",
-                    )}
-                  >
-                    {formatSigned(changePct)}%
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       ) : (
         <StockDataEmptyState label="暂无日 K 明细数据" />
       )}
@@ -4445,6 +4592,141 @@ function DesktopCandidateDialogColumn({
   );
 }
 
+function MobileFilterListsDrawer({
+  activeListKey,
+  stockGroups,
+  chartSelection,
+  filterDeletePendingIds,
+  selectionRecordDeletePendingIds,
+  candidateStockCodes,
+  onClose,
+  onActiveListChange,
+  onImportStock,
+  onAddToCandidate,
+  onRemoveFromCandidate,
+  onToggleChart,
+  onDeleteFromFilterList,
+}: {
+  activeListKey: ReturnableListKey;
+  stockGroups: StockGroups;
+  chartSelection: ChartSelection | null;
+  filterDeletePendingIds: number[];
+  selectionRecordDeletePendingIds: number[];
+  candidateStockCodes: Set<string>;
+  onClose: () => void;
+  onActiveListChange: (listKey: ReturnableListKey) => void;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+} & Pick<
+  StockListSharedProps,
+  "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
+>) {
+  const [importListKey, setImportListKey] = useState<ReturnableListKey | null>(null);
+  const drawerState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+  const filterCount = stockGroups.whitelist.length + stockGroups.blacklist.length;
+
+  return (
+    <>
+      <Drawer state={drawerState}>
+        <Drawer.Trigger className="hidden" />
+        <Drawer.Backdrop variant="transparent">
+          <Drawer.Content placement="bottom">
+            <Drawer.Dialog className="mx-auto flex h-[min(82dvh,720px)] min-h-[460px] w-full max-w-[760px] flex-col overflow-hidden p-0">
+              <Drawer.Handle className="pb-1 pt-2" />
+              <Drawer.CloseTrigger className="z-20" />
+              <Drawer.Header className="px-4 pb-3 pt-0">
+                <div className="flex min-w-0 items-center gap-3 pr-8">
+                  <Badge.Anchor>
+                    <StockSectionIconBox icon={ShieldCheck} active />
+                    <StockCountBadge count={filterCount} active />
+                  </Badge.Anchor>
+                  <div className="min-w-0">
+                    <Drawer.Heading className="truncate text-lg text-balance">红黑名单</Drawer.Heading>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">管理红名单和黑名单股票</p>
+                  </div>
+                </div>
+              </Drawer.Header>
+              <Drawer.Body className="min-h-0 overflow-hidden p-0">
+                <Tabs
+                  selectedKey={activeListKey}
+                  onSelectionChange={(key) => {
+                    const nextKey = String(key);
+
+                    if (nextKey === "whitelist" || nextKey === "blacklist") {
+                      onActiveListChange(nextKey);
+                    }
+                  }}
+                  className="flex h-full min-h-0 flex-col"
+                >
+                  <Tabs.ListContainer className="shrink-0 px-4 pb-3">
+                    <Tabs.List aria-label="红黑名单">
+                      {filterListButtonOrder.map((listKey, index) => {
+                        const meta = stockListMeta[listKey];
+
+                        return (
+                          <Tabs.Tab key={listKey} id={listKey}>
+                            {index > 0 ? <Tabs.Separator /> : null}
+                            <Tabs.Indicator />
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 truncate">{meta.label}</span>
+                              <span className="shrink-0 tabular-nums">{stockGroups[listKey].length}</span>
+                            </span>
+                          </Tabs.Tab>
+                        );
+                      })}
+                    </Tabs.List>
+                  </Tabs.ListContainer>
+                  {filterListButtonOrder.map((listKey) => (
+                    <Tabs.Panel key={listKey} id={listKey} className="min-h-0 flex-1 overflow-hidden p-0">
+                      <div className="flex h-full min-h-0 flex-col">
+                        <FilterListCurrentStocks
+                          listKey={listKey}
+                          stocks={stockGroups[listKey]}
+                          className="min-h-0 flex-1 px-4 pb-4"
+                          scrollClassName="h-full max-h-none pr-2"
+                          chartSelection={chartSelection}
+                          filterDeletePendingIds={filterDeletePendingIds}
+                          selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                          candidateStockCodes={candidateStockCodes}
+                          onAddToCandidate={onAddToCandidate}
+                          onRemoveFromCandidate={onRemoveFromCandidate}
+                          onToggleChart={(code, nextListKey) => {
+                            onToggleChart(code, nextListKey);
+                            onClose();
+                          }}
+                          onDeleteFromFilterList={onDeleteFromFilterList}
+                        />
+                        <FilterListAddStockLauncher
+                          metaLabel={stockListMeta[listKey].label}
+                          onOpen={() => setImportListKey(listKey)}
+                        />
+                      </div>
+                    </Tabs.Panel>
+                  ))}
+                </Tabs>
+              </Drawer.Body>
+            </Drawer.Dialog>
+          </Drawer.Content>
+        </Drawer.Backdrop>
+      </Drawer>
+      {importListKey ? (
+        <FilterStockImportDrawer
+          targetList={importListKey}
+          stockGroups={stockGroups}
+          onClose={() => setImportListKey(null)}
+          onImportStock={onImportStock}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function FilterListDialog({
   targetList,
   stocks: currentStocks,
@@ -4569,6 +4851,105 @@ function FilterListAddStockLauncher({
   );
 }
 
+function FilterStockImportDrawer({
+  targetList,
+  stockGroups,
+  onClose,
+  onImportStock,
+}: {
+  targetList: ReturnableListKey;
+  stockGroups: StockGroups;
+  onClose: () => void;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+}) {
+  const importDialog = useStockImportDialog(targetList, onImportStock);
+  const drawerState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+  const {
+    meta,
+    oppositeList,
+    codeQuery,
+    nameQuery,
+    stocks: importStocks,
+    hasSearched,
+    isLoading,
+    error,
+    importPendingCode,
+    importError,
+    filteredStocks,
+    visibleStocks,
+    setCodeQuery,
+    setNameQuery,
+    handleSearch,
+    handleImportStock,
+  } = importDialog;
+
+  return (
+    <Drawer state={drawerState}>
+      <Drawer.Trigger className="hidden" />
+      <Drawer.Backdrop variant="transparent">
+        <Drawer.Content placement="bottom">
+          <Drawer.Dialog className="mx-auto flex h-[min(82dvh,720px)] min-h-[440px] w-full max-w-[760px] flex-col overflow-hidden p-0">
+            <Drawer.Handle className="pb-1 pt-2" />
+            <Drawer.CloseTrigger className="z-20" />
+            <Drawer.Header className="px-4 pb-3 pt-0">
+              <div className="flex min-w-0 items-center gap-3 pr-8">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+                  <ImportIcon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <Drawer.Heading className="truncate text-lg text-balance">添加到{meta.label}</Drawer.Heading>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">搜索股票后选择是否添加</p>
+                </div>
+              </div>
+            </Drawer.Header>
+            <Drawer.Body className="flex min-h-0 flex-col overflow-hidden p-0">
+              <StockImportSearchForm
+                codeQuery={codeQuery}
+                nameQuery={nameQuery}
+                isLoading={isLoading}
+                onCodeQueryChange={setCodeQuery}
+                onNameQueryChange={setNameQuery}
+                onSearch={handleSearch}
+              />
+              {hasSearched && !isLoading && !error ? (
+                <StockImportSummary
+                  listLabel={meta.label}
+                  filteredCount={filteredStocks.length}
+                  visibleCount={visibleStocks.length}
+                />
+              ) : null}
+              {importError ? (
+                <StockImportError message={importError} />
+              ) : null}
+              <StockImportResults
+                targetList={targetList}
+                oppositeList={oppositeList}
+                metaLabel={meta.label}
+                stockGroups={stockGroups}
+                stocks={importStocks}
+                visibleStocks={visibleStocks}
+                hasSearched={hasSearched}
+                isLoading={isLoading}
+                error={error}
+                importPendingCode={importPendingCode}
+                className="min-h-0 flex-1"
+                onImportStock={handleImportStock}
+              />
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
+  );
+}
+
 function FilterStockImportDialog({
   targetList,
   stockGroups,
@@ -4671,6 +5052,8 @@ function FilterStockImportDialog({
 function FilterListCurrentStocks({
   listKey,
   stocks,
+  className,
+  scrollClassName,
   chartSelection,
   filterDeletePendingIds,
   selectionRecordDeletePendingIds,
@@ -4682,13 +5065,15 @@ function FilterListCurrentStocks({
 }: {
   listKey: ReturnableListKey;
   stocks: StockCandidate[];
+  className?: string;
+  scrollClassName?: string;
 } & StockListSharedProps) {
   const meta = stockListMeta[listKey];
 
   return (
-    <section className="shrink-0 px-5 pb-5">
+    <section className={cn("shrink-0 px-5 pb-5", className)}>
       {stocks.length > 0 ? (
-        <ScrollShadow orientation="vertical" className="max-h-56 pr-2">
+        <ScrollShadow orientation="vertical" className={cn("max-h-56 pr-2", scrollClassName)}>
           <div className="flex w-full flex-col gap-2">
             {stocks.map((stock) => (
               <StockListButton
