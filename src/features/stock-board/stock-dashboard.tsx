@@ -99,8 +99,8 @@ import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
-const mobileListOrder: StockListKey[] = ["initial", "candidate", "whitelist", "blacklist"];
-const desktopStaticListOrder: StockListKey[] = ["initial", "candidate", "whitelist", "blacklist"];
+const mobileListOrder: StockListKey[] = ["candidate", "initial", "whitelist", "blacklist"];
+const desktopStaticListOrder: StockListKey[] = ["candidate", "initial", "whitelist", "blacklist"];
 const selectionHistoryPageSize = 5;
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
@@ -1481,11 +1481,6 @@ function addCandidateStockState(
         },
       ],
     },
-    chartSelection: state.chartSelection?.listKey === "initial" && state.chartSelection.code === stock.code
-      ? { code: stock.code, listKey: "candidate" }
-      : state.chartSelection,
-    mobileListKey: state.mobileListKey === "initial" ? "candidate" : state.mobileListKey,
-    desktopListKey: state.desktopListKey === "initial" ? "candidate" : state.desktopListKey,
   };
 }
 
