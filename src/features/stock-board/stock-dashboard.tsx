@@ -217,7 +217,6 @@ type StockDashboardState = {
   desktopListKey: string;
   importTargetList: ReturnableListKey | null;
   scanError: string | null;
-  scanReloadKey: number;
   scanLoading: boolean;
   filterListsError: string | null;
   filterDeletePendingIds: number[];
@@ -243,7 +242,6 @@ type StockDashboardAction =
   | { type: "scan-start" }
   | { type: "scan-success"; stocks: StockCandidate[] }
   | { type: "scan-error"; error: string }
-  | { type: "scan-reload" }
   | { type: "set-filter-error"; error: string | null }
   | { type: "sync-filter-lists"; whitelist: StockCandidate[]; blacklist: StockCandidate[] }
   | { type: "remove-filter-stock"; stock: StockCandidate; listKey: ReturnableListKey }
@@ -279,8 +277,7 @@ const initialStockDashboardState: StockDashboardState = {
   desktopListKey: "initial",
   importTargetList: null,
   scanError: null,
-  scanReloadKey: 0,
-  scanLoading: true,
+  scanLoading: false,
   filterListsError: null,
   filterDeletePendingIds: [],
   selectionBatchesLoading: true,
@@ -332,31 +329,6 @@ function useStockDashboard() {
     dispatch({ type: "sync-strategy-configs", configs });
     return configs;
   }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    dispatch({ type: "scan-start" });
-
-    void scanStrategy({}, controller.signal)
-      .then((results) => {
-        dispatch({ type: "scan-success", stocks: createScanStockCandidates(results) });
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-
-        const message = error instanceof Error ? error.message : "策略扫描失败。";
-
-        dispatch({ type: "scan-error", error: message });
-        toast.error("策略扫描失败", {
-          description: message,
-        });
-      });
-
-    return () => controller.abort();
-  }, [state.scanReloadKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -683,7 +655,6 @@ function useStockDashboard() {
         });
       }
 
-      dispatch({ type: "scan-reload" });
       toast.success("策略配置已保存", {
         description: savedConfig.name,
       });
@@ -717,7 +688,6 @@ function useStockDashboard() {
         });
       }
 
-      dispatch({ type: "scan-reload" });
       toast.success("策略配置已删除");
     } catch (error) {
       const message = error instanceof Error ? error.message : "策略配置删除失败。";
@@ -729,6 +699,39 @@ function useStockDashboard() {
       throw error;
     } finally {
       dispatch({ type: "strategy-delete-end" });
+    }
+  }
+
+  async function startStrategyScan() {
+    const configId = state.strategyConfig.id;
+
+    if (!configId) {
+      const message = "请先保存策略配置后再开始筛选。";
+
+      dispatch({ type: "scan-error", error: message });
+      toast.error("策略扫描失败", {
+        description: message,
+      });
+      return;
+    }
+
+    dispatch({ type: "scan-start" });
+
+    try {
+      const results = await scanStrategy({ config_id: configId });
+      const stocks = createScanStockCandidates(results);
+
+      dispatch({ type: "scan-success", stocks });
+      toast.success("策略筛选完成", {
+        description: `待选列表更新 ${stocks.length} 只股票`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "策略扫描失败。";
+
+      dispatch({ type: "scan-error", error: message });
+      toast.error("策略扫描失败", {
+        description: message,
+      });
     }
   }
 
@@ -745,7 +748,8 @@ function useStockDashboard() {
     removeSelectionBatch,
     toggleSelectedStock,
     deleteStockFromFilterList,
-    reloadStrategyScan: () => dispatch({ type: "scan-reload" }),
+    reloadStrategyScan: startStrategyScan,
+    startStrategyScan,
     setMobileListKey: (listKey: StockListKey) => dispatch({ type: "set-mobile-list", listKey }),
     setDesktopListKey: (listKey: string) => dispatch({ type: "set-desktop-list", listKey }),
     setStrategyConfig: (config: StrategyConfig) => dispatch({ type: "set-strategy-config", config }),
@@ -771,6 +775,7 @@ function StockDashboardLayout({
   toggleSelectedStock,
   deleteStockFromFilterList,
   reloadStrategyScan,
+  startStrategyScan,
   setMobileListKey,
   setDesktopListKey,
   setStrategyConfig,
@@ -805,15 +810,17 @@ function StockDashboardLayout({
         </div>
 
         <div className="mx-auto w-full max-w-[1680px] px-4 pb-6 sm:px-6 lg:px-8">
-          <StrategySwitchButton
-            config={state.strategyConfig}
-            configs={state.strategyConfigs}
-            configsLoading={state.strategyConfigLoading}
-            savePending={state.strategySavePending}
-            deletePendingId={state.strategyDeletePendingId}
-            onSelect={setStrategyConfig}
-            onSave={saveStrategyConfig}
-            onDelete={removeStrategyConfig}
+          <StrategyActionBar
+            strategyConfig={state.strategyConfig}
+            strategyConfigs={state.strategyConfigs}
+            strategyConfigLoading={state.strategyConfigLoading}
+            strategySavePending={state.strategySavePending}
+            strategyDeletePendingId={state.strategyDeletePendingId}
+            scanLoading={state.scanLoading}
+            onStrategySelect={setStrategyConfig}
+            onStrategySave={saveStrategyConfig}
+            onStrategyDelete={removeStrategyConfig}
+            onStrategyScan={startStrategyScan}
           />
           {state.strategyConfigError ? (
             <p
@@ -879,12 +886,14 @@ function StockDashboardLayout({
           strategyConfigError={state.strategyConfigError}
           strategySavePending={state.strategySavePending}
           strategyDeletePendingId={state.strategyDeletePendingId}
+          scanLoading={state.scanLoading}
           onActiveListChange={setDesktopListKey}
           onOpenImport={openImportDialog}
           onDeleteSelectionBatch={removeSelectionBatch}
           onStrategySelect={setStrategyConfig}
           onStrategySave={saveStrategyConfig}
           onStrategyDelete={removeStrategyConfig}
+          onStrategyScan={startStrategyScan}
           {...sharedStockListProps}
         />
       </div>
@@ -921,8 +930,6 @@ function stockDashboardReducer(
       return syncScanStocksState(state, action.stocks);
     case "scan-error":
       return { ...state, scanLoading: false, scanError: action.error };
-    case "scan-reload":
-      return { ...state, scanReloadKey: state.scanReloadKey + 1 };
     case "set-filter-error":
       return { ...state, filterListsError: action.error };
     case "sync-filter-lists":
@@ -1155,24 +1162,85 @@ function syncScanStocksState(
     whitelist,
     blacklist,
   };
-  let chartSelection = reconcileChartSelection({
-    ...state,
-    stockGroups,
-    selectionBatches,
-  });
-
-  if (!chartSelection && initial.length > 0) {
-    chartSelection = { code: initial[0].code, listKey: "initial" };
-  }
+  const chartSelection = initial.length > 0
+    ? { code: initial[0].code, listKey: "initial" as const }
+    : null;
 
   return {
     ...state,
     stockGroups,
     selectionBatches,
     chartSelection,
+    mobileListKey: "initial",
+    desktopListKey: "initial",
     scanLoading: false,
     scanError: null,
   };
+}
+
+function StrategyActionBar({
+  strategyConfig,
+  strategyConfigs,
+  strategyConfigLoading,
+  strategySavePending,
+  strategyDeletePendingId,
+  scanLoading,
+  className,
+  strategyClassName,
+  strategyButtonClassName,
+  scanButtonClassName,
+  onStrategySelect,
+  onStrategySave,
+  onStrategyDelete,
+  onStrategyScan,
+}: {
+  strategyConfig: StrategyConfig;
+  strategyConfigs: StrategyConfig[];
+  strategyConfigLoading: boolean;
+  strategySavePending: boolean;
+  strategyDeletePendingId: number | null;
+  scanLoading: boolean;
+  className?: string;
+  strategyClassName?: string;
+  strategyButtonClassName?: string;
+  scanButtonClassName?: string;
+  onStrategySelect: (config: StrategyConfig) => void;
+  onStrategySave: (config: StrategyConfig) => void | Promise<void>;
+  onStrategyDelete: (id: number) => void | Promise<void>;
+  onStrategyScan: () => void | Promise<void>;
+}) {
+  const canScan = Boolean(strategyConfig.id);
+
+  return (
+    <div className={cn("mt-4 flex flex-wrap items-center justify-center gap-2", className)}>
+      <StrategySwitchButton
+        config={strategyConfig}
+        configs={strategyConfigs}
+        configsLoading={strategyConfigLoading}
+        savePending={strategySavePending}
+        deletePendingId={strategyDeletePendingId}
+        className={cn("mt-0", strategyClassName)}
+        buttonClassName={strategyButtonClassName}
+        onSelect={onStrategySelect}
+        onSave={onStrategySave}
+        onDelete={onStrategyDelete}
+      />
+      <Button
+        type="button"
+        className={cn("h-10 transition-transform active:scale-[0.96]", scanButtonClassName)}
+        disabled={scanLoading || !canScan}
+        title={canScan ? "按当前策略配置筛选待选股票" : "请先保存策略配置"}
+        onClick={() => void onStrategyScan()}
+      >
+        {scanLoading ? (
+          <LoaderCircle data-icon="inline-start" className="animate-spin" />
+        ) : (
+          <Search data-icon="inline-start" />
+        )}
+        {scanLoading ? "筛选中" : "开始筛选"}
+      </Button>
+    </div>
+  );
 }
 
 function hydrateStockCandidate(
@@ -1978,12 +2046,14 @@ function DesktopStockSidebar({
   strategyConfigError,
   strategySavePending,
   strategyDeletePendingId,
+  scanLoading,
   onActiveListChange,
   onOpenImport,
   onDeleteSelectionBatch,
   onStrategySelect,
   onStrategySave,
   onStrategyDelete,
+  onStrategyScan,
   ...stockListProps
 }: {
   activeListKey: string;
@@ -1999,27 +2069,33 @@ function DesktopStockSidebar({
   strategyConfigError: string | null;
   strategySavePending: boolean;
   strategyDeletePendingId: number | null;
+  scanLoading: boolean;
   onActiveListChange: (key: string) => void;
   onOpenImport: (listKey: ReturnableListKey) => void;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onStrategySelect: (config: StrategyConfig) => void;
   onStrategySave: (config: StrategyConfig) => void | Promise<void>;
   onStrategyDelete: (id: number) => void | Promise<void>;
+  onStrategyScan: () => void | Promise<void>;
 } & StockListSharedProps) {
   return (
     <aside className="flex min-h-0 flex-col gap-4 border-l border-border/45 bg-transparent p-4">
       <div className="shrink-0">
-        <StrategySwitchButton
-          config={strategyConfig}
-          configs={strategyConfigs}
-          configsLoading={strategyConfigLoading}
-          savePending={strategySavePending}
-          deletePendingId={strategyDeletePendingId}
+        <StrategyActionBar
+          strategyConfig={strategyConfig}
+          strategyConfigs={strategyConfigs}
+          strategyConfigLoading={strategyConfigLoading}
+          strategySavePending={strategySavePending}
+          strategyDeletePendingId={strategyDeletePendingId}
+          scanLoading={scanLoading}
           className="mt-0 justify-start"
-          buttonClassName="h-10 w-full justify-start bg-background/45 px-3 shadow-sm"
-          onSelect={onStrategySelect}
-          onSave={onStrategySave}
-          onDelete={onStrategyDelete}
+          strategyClassName="flex-1"
+          strategyButtonClassName="h-10 w-full justify-start bg-background/45 px-3 shadow-sm"
+          scanButtonClassName="shrink-0 bg-background/45 px-3"
+          onStrategySelect={onStrategySelect}
+          onStrategySave={onStrategySave}
+          onStrategyDelete={onStrategyDelete}
+          onStrategyScan={onStrategyScan}
         />
         {strategyConfigError ? (
           <p

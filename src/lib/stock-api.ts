@@ -47,10 +47,7 @@ export type DailyKline = {
 };
 
 export type StrategyScanRequest = {
-  code?: string;
-  config_id?: number;
-  x?: number;
-  y?: number;
+  config_id: number;
 };
 
 export type StrategyScanResult = {
@@ -300,18 +297,18 @@ export async function scanStrategy(
   request: StrategyScanRequest,
   signal?: AbortSignal,
 ): Promise<StrategyScanResult[]> {
-  let response: Response;
-  const token = getStoredAuthToken()?.trim();
-  const url = new URL(`${apiBaseUrl}/strategy`);
-
-  if (request.code?.trim()) {
-    url.searchParams.set("code", request.code.trim());
+  if (!Number.isFinite(request.config_id) || request.config_id <= 0) {
+    throw new Error("策略配置ID无效。");
   }
 
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
   try {
-    response = await fetch(url, {
+    response = await fetch(`${apiBaseUrl}/strategy/scan`, {
       method: "POST",
-      headers: createAuthHeaders(token),
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({ config_id: request.config_id }),
       signal,
     });
   } catch (error) {
