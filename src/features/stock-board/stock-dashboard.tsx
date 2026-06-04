@@ -13,6 +13,25 @@ import {
   useState,
 } from "react";
 import {
+  RiAddLine as Plus,
+  RiArrowDownSLine as ChevronDown,
+  RiArrowLeftSLine as ChevronLeft,
+  RiArrowRightSLine as ChevronRight,
+  RiCheckboxCircleLine as CheckCircle2,
+  RiDatabase2Line as Database,
+  RiDeleteBinLine as Trash2,
+  RiFilter3Line as ListFilter,
+  RiImportLine as ImportIcon,
+  RiLoader4Line as LoaderCircle,
+  RiLogoutBoxRLine as LogOut,
+  RiMoonLine as Moon,
+  RiRefreshLine as RefreshCcw,
+  RiSearchLine as Search,
+  RiShieldCheckLine as ShieldCheck,
+  RiShieldCrossLine as ShieldX,
+  RiSunLine as Sun,
+} from "@remixicon/react";
+import {
   Button,
   Card,
   CardContent,
@@ -29,25 +48,6 @@ import {
   toast,
   useOverlayState,
 } from "@heroui/react";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Database,
-  Import as ImportIcon,
-  ListFilter,
-  LogOut,
-  LoaderCircle,
-  Moon,
-  Plus,
-  RefreshCcw,
-  Search,
-  ShieldCheck,
-  ShieldX,
-  Sun,
-  Trash2,
-} from "lucide-react";
 import { Liveline, type CandlePoint, type LivelinePoint } from "liveline";
 
 import { BrandLockup } from "@/components/brand-lockup";

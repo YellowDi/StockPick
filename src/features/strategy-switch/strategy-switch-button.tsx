@@ -1,5 +1,12 @@
 import { type FormEvent, useReducer, useState } from "react";
 import {
+  RiAddLine as Plus,
+  RiCheckboxCircleLine as CheckCircle2,
+  RiDeleteBinLine as Trash2,
+  RiEqualizerLine as SlidersHorizontal,
+  RiLoader4Line as LoaderCircle,
+} from "@remixicon/react";
+import {
   Button,
   Input,
   InputGroup,
@@ -13,7 +20,6 @@ import {
   useOverlayState,
   type Key,
 } from "@heroui/react";
-import { CheckCircle2, LoaderCircle, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { cn } from "@/lib/utils";

@@ -1,5 +1,12 @@
 import { lazy, Suspense, type FormEvent } from "react";
 import {
+  RiLockPasswordLine as LockKeyhole,
+  RiLoginCircleLine as LogIn,
+  RiMoonLine as Moon,
+  RiSunLine as Sun,
+  RiUser3Line as UserRound,
+} from "@remixicon/react";
+import {
   Button,
   Card,
   CardContent,
@@ -10,7 +17,6 @@ import {
   Input,
   Label,
 } from "@heroui/react";
-import { LockKeyhole, LogIn, Moon, Sun, UserRound } from "lucide-react";
 
 import { BrandLockup } from "@/components/brand-lockup";
 import type { LoginCredentials } from "@/lib/auth-api";

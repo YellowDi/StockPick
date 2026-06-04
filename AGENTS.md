@@ -14,7 +14,7 @@ StockPick 是一个前端股票筛选看板原型，用于展示 A 股候选标�
 - Vite
 - Tailwind CSS v4
 - HeroUI 全局组件库
-- lucide-react 图标
+- Remix Icon（remixicon）图标
 - liveline 行情图表
 
 ## 本地运行
@@ -61,6 +61,7 @@ StockPick 是一个前端股票筛选看板原型，用于展示 A 股候选标�
 
 - 保持现有单页结构，除非用户明确要求拆分路由或模块。
 - 优先使用 `@heroui/react`、`src/lib/utils.ts` 和现有 Tailwind token。
+- 图标优先使用 Remix Icon，不要新增或继续使用 `lucide-react`，除非用户明确要求保留。
 - 不要新增运行时依赖，除非必要并获得用户确认。
 - 不要把 mock 数据替换成真实接口，除非用户明确要求。
 - 修改图表行为前，先确认 `liveline` 的实际 API 和当前传参方式。
