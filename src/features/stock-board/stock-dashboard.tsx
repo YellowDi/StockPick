@@ -87,7 +87,6 @@ import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
-const mobileListOrder: StockListKey[] = ["candidate", "initial"];
 const filterListButtonOrder: ReturnableListKey[] = ["whitelist", "blacklist"];
 const selectionHistoryPageSize = 5;
 const daySecs = 24 * 60 * 60;
@@ -879,9 +878,7 @@ function useStockDashboard() {
       const stocks = createScanStockCandidates(results);
 
       dispatch({ type: "scan-success", stocks });
-      if (!window.matchMedia(mobileViewportQuery).matches) {
-        dispatch({ type: "open-candidate-dialog" });
-      }
+      dispatch({ type: "open-candidate-dialog" });
       toast.success("策略筛选完成", {
         description: `待选列表更新 ${stocks.length} 只股票`,
       });
@@ -970,12 +967,6 @@ function StockDashboardLayout({
     onDeleteFromFilterList: deleteStockFromFilterList,
   };
 
-  useEffect(() => {
-    if (state.candidateDialogOpen && !isDesktopViewport) {
-      closeCandidateDialog();
-    }
-  }, [closeCandidateDialog, isDesktopViewport, state.candidateDialogOpen]);
-
   return (
     <main className="relative isolate min-h-dvh overflow-x-hidden text-foreground">
       <div
@@ -1022,14 +1013,6 @@ function StockDashboardLayout({
               </p>
             ) : null}
 
-            <MobileStockTabs
-              activeListKey={state.mobileListKey}
-              stockGroups={visibleStockGroups}
-              candidateSavePending={state.candidateSavePending}
-              onActiveListChange={setMobileListKey}
-              onSaveCandidateSelection={saveCandidateSelection}
-              {...sharedStockListProps}
-            />
             <MobileSelectionHistory
               selectionBatches={state.selectionBatches}
               selectionBatchesLoading={state.selectionBatchesLoading}
@@ -1054,7 +1037,12 @@ function StockDashboardLayout({
           strategySavePending={state.strategySavePending}
           strategyDeletePendingId={state.strategyDeletePendingId}
           scanLoading={state.scanLoading}
+          candidateResultButtonVisible={
+            state.candidateResultAvailable
+            && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0)
+          }
           onOpenFilterList={openFilterListDialog}
+          onOpenCandidateDialog={openCandidateDialog}
           onStrategySelect={setStrategyConfig}
           onStrategySave={saveStrategyConfig}
           onStrategyDelete={removeStrategyConfig}
@@ -1105,20 +1093,38 @@ function StockDashboardLayout({
           {...sharedStockListProps}
         />
       </div>
-      {state.candidateDialogOpen && isDesktopViewport ? (
-        <DesktopCandidateDialog
-          stockGroups={visibleStockGroups}
-          chartSelection={state.chartSelection}
-          candidateStockCodes={candidateStockCodes}
-          candidateSavePending={state.candidateSavePending}
-          onClose={closeCandidateDialog}
-          onAddToCandidate={addStockToCandidate}
-          onAddStocksToCandidate={addStocksToCandidate}
-          onRemoveFromCandidate={removeStockFromCandidate}
-          onClearCandidateStocks={clearCandidateStocks}
-          onSaveCandidateSelection={saveCandidateSelection}
-          onToggleChart={toggleSelectedStock}
-        />
+      {state.candidateDialogOpen ? (
+        isDesktopViewport ? (
+          <DesktopCandidateDialog
+            stockGroups={visibleStockGroups}
+            chartSelection={state.chartSelection}
+            candidateStockCodes={candidateStockCodes}
+            candidateSavePending={state.candidateSavePending}
+            onClose={closeCandidateDialog}
+            onAddToCandidate={addStockToCandidate}
+            onAddStocksToCandidate={addStocksToCandidate}
+            onRemoveFromCandidate={removeStockFromCandidate}
+            onClearCandidateStocks={clearCandidateStocks}
+            onSaveCandidateSelection={saveCandidateSelection}
+            onToggleChart={toggleSelectedStock}
+          />
+        ) : (
+          <MobileCandidateDrawer
+            activeListKey={state.mobileListKey}
+            stockGroups={visibleStockGroups}
+            chartSelection={state.chartSelection}
+            candidateStockCodes={candidateStockCodes}
+            candidateSavePending={state.candidateSavePending}
+            onClose={closeCandidateDialog}
+            onActiveListChange={setMobileListKey}
+            onAddToCandidate={addStockToCandidate}
+            onAddStocksToCandidate={addStocksToCandidate}
+            onRemoveFromCandidate={removeStockFromCandidate}
+            onClearCandidateStocks={clearCandidateStocks}
+            onSaveCandidateSelection={saveCandidateSelection}
+            onToggleChart={toggleSelectedStock}
+          />
+        )
       ) : null}
       {state.filterDialogList ? (
         <FilterListDialog
@@ -1553,10 +1559,6 @@ function createKnownRecordsMap(state: StockDashboardState) {
 
 function createAggregatedSelectedStocks(selectionBatches: SelectionBatchState[]) {
   return selectionBatches.flatMap((batch) => batch.stocks);
-}
-
-function getVisibleStockListOrder(order: StockListKey[], stockGroups: Pick<StockGroups, "candidate">) {
-  return order.filter((key) => key !== "candidate" || stockGroups.candidate.length > 0);
 }
 
 function syncFilterListsState(
@@ -2649,7 +2651,7 @@ function FilterListButtonGroup({
   buttonClassName,
   onOpenFilterList,
 }: {
-  stockGroups: Pick<StockGroups, ReturnableListKey>;
+  stockGroups: Pick<StockGroups, "initial" | "candidate" | ReturnableListKey>;
   className?: string;
   buttonClassName?: string;
   onOpenFilterList: (listKey: ReturnableListKey) => void;
@@ -3076,118 +3078,201 @@ function DesktopStockBoardLoading({
   );
 }
 
-function MobileStockTabs({
+function MobileCandidateDrawer({
   activeListKey,
   stockGroups,
   chartSelection,
-  filterDeletePendingIds,
-  selectionRecordDeletePendingIds,
   candidateStockCodes,
   candidateSavePending,
+  onClose,
   onActiveListChange,
+  onAddStocksToCandidate,
+  onClearCandidateStocks,
   onSaveCandidateSelection,
   onAddToCandidate,
   onRemoveFromCandidate,
   onToggleChart,
-  onDeleteFromFilterList,
 }: {
   activeListKey: StockListKey;
   stockGroups: Record<StockListKey, StockCandidate[]>;
   chartSelection: ChartSelection | null;
-  filterDeletePendingIds: number[];
-  selectionRecordDeletePendingIds: number[];
   candidateStockCodes: Set<string>;
   candidateSavePending: boolean;
+  onClose: () => void;
   onActiveListChange: (key: StockListKey) => void;
+  onAddStocksToCandidate: (stocks: StockCandidate[]) => void;
+  onClearCandidateStocks: () => void;
   onSaveCandidateSelection: () => void | Promise<void>;
   onAddToCandidate: (stock: StockCandidate) => void;
   onRemoveFromCandidate: (stock: StockCandidate) => void;
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
-  onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }) {
-  const visibleListOrder = getVisibleStockListOrder(mobileListOrder, stockGroups);
-  const currentListKey = visibleListOrder.includes(activeListKey) ? activeListKey : "initial";
-  const stocks = stockGroups[currentListKey];
-  const meta = stockListMeta[currentListKey];
-  const showCandidateSave = currentListKey === "candidate";
+  const drawerState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+  const availableStocks = stockGroups.initial.filter((stock) => !candidateStockCodes.has(getComparableStockCode(stock.code)));
+  const candidateStocks = stockGroups.candidate;
+  const currentListKey: Extract<StockListKey, "initial" | "candidate"> = activeListKey === "candidate"
+    ? "candidate"
+    : "initial";
+  const tabs = [
+    {
+      key: "initial" as const,
+      label: "筛选结果",
+      description: "本次策略筛选返回的待选股票",
+      count: availableStocks.length,
+      stocks: availableStocks,
+    },
+    {
+      key: "candidate" as const,
+      label: "等待保存为已选",
+      description: "这些股票会在保存后进入历史选股",
+      count: candidateStocks.length,
+      stocks: candidateStocks,
+    },
+  ];
+  const currentTab = tabs.find((tab) => tab.key === currentListKey) ?? tabs[0];
 
   return (
-    <Card className="mobile-list-card bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
-      <CardHeader className="gap-3">
-        <div
-          className="grid gap-1 rounded-lg bg-background/45 p-1"
-          style={{ gridTemplateColumns: `repeat(${visibleListOrder.length}, minmax(0, 1fr))` }}
-        >
-          {visibleListOrder.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className={cn(
-                "h-10 min-w-0 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
-                key === currentListKey
-                  ? "bg-secondary text-secondary-foreground"
-                  : "hover:bg-default hover:text-foreground",
-              )}
-              aria-pressed={key === currentListKey}
-              onClick={() => onActiveListChange(key)}
-            >
-              <span className="block truncate">{stockListMeta[key].label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <CardDescription className="truncate">{meta.description}</CardDescription>
-            <Chip variant="soft">{stocks.length}</Chip>
-          </div>
-          {showCandidateSave ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 shrink-0 bg-background/45"
-              isDisabled={candidateSavePending || stocks.length === 0}
-              onClick={() => void onSaveCandidateSelection()}
-            >
-              {candidateSavePending ? (
-                <LoaderCircle data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <CheckCircle2 data-icon="inline-start" />
-              )}
-              保存
-            </Button>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="pb-5">
-        {stocks.length > 0 ? (
-          <div className="flex w-full flex-col gap-2">
-            {stocks.map((stock) => (
-              <StockListButton
-                key={stock.code}
-                stock={stock}
-                active={chartSelection?.listKey === currentListKey && chartSelection.code === stock.code}
-                onClick={() => onToggleChart(stock.code, currentListKey)}
-                action={getStockListAction({
-                  stock,
-                  listKey: currentListKey,
-                  candidateStockCodes,
-                  filterDeletePendingIds,
-                  selectionRecordDeletePendingIds,
-                  onAddToCandidate,
-                  onRemoveFromCandidate,
-                  onRemoveFromHistory: () => undefined,
-                  onDeleteFromFilterList,
-                })}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
-            暂无股票
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <Drawer state={drawerState}>
+      <Drawer.Trigger className="hidden" />
+      <Drawer.Backdrop variant="transparent">
+        <Drawer.Content placement="bottom">
+          <Drawer.Dialog className="mx-auto h-[min(78dvh,680px)] min-h-[420px] w-full max-w-[760px] overflow-hidden p-0">
+            <Drawer.Handle className="pb-1 pt-2" />
+            <Drawer.CloseTrigger className="z-20" />
+            <Drawer.Header className="px-4 pb-3 pt-0">
+              <div className="flex min-w-0 items-center gap-3 pr-8">
+                <Badge.Anchor>
+                  <StockSectionIconBox icon={ListFilter} active />
+                  <StockCountBadge count={availableStocks.length + candidateStocks.length} active />
+                </Badge.Anchor>
+                <div className="min-w-0">
+                  <Drawer.Heading className="truncate text-lg text-balance">筛选结果</Drawer.Heading>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">
+                    在筛选结果和待保存列表之间切换
+                  </p>
+                </div>
+              </div>
+            </Drawer.Header>
+
+            <Drawer.Body className="flex min-h-0 flex-col overflow-hidden p-0">
+              <div className="shrink-0 border-b border-border/60 px-4 pb-3">
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      className={cn(
+                        "flex h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors",
+                        tab.key === currentListKey
+                          ? "bg-secondary text-secondary-foreground"
+                          : "hover:bg-default hover:text-foreground",
+                      )}
+                      aria-pressed={tab.key === currentListKey}
+                      onClick={() => onActiveListChange(tab.key)}
+                    >
+                      <span className="min-w-0 truncate">{tab.label}</span>
+                      <span className="shrink-0 tabular-nums">{tab.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h3 className="truncate text-sm font-semibold">{currentTab.label}</h3>
+                    <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+                      {currentTab.count}
+                    </Chip>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{currentTab.description}</p>
+                </div>
+                {currentListKey === "initial" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 bg-background/45"
+                    isDisabled={availableStocks.length === 0}
+                    onClick={() => onAddStocksToCandidate(availableStocks)}
+                  >
+                    <Plus data-icon="inline-start" />
+                    全部添加
+                  </Button>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 bg-background/45 px-3"
+                      isDisabled={candidateStocks.length === 0}
+                      onClick={onClearCandidateStocks}
+                    >
+                      <Trash2 data-icon="inline-start" />
+                      清空
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-10 px-3"
+                      isDisabled={candidateSavePending || candidateStocks.length === 0}
+                      onClick={() => void onSaveCandidateSelection()}
+                    >
+                      {candidateSavePending ? (
+                        <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 data-icon="inline-start" />
+                      )}
+                      保存
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <ScrollShadow orientation="vertical" className="min-h-0 flex-1 p-4">
+                {currentTab.stocks.length > 0 ? (
+                  <div className="flex w-full flex-col gap-2">
+                    {currentTab.stocks.map((stock) => (
+                      <StockListButton
+                        key={stock.code}
+                        stock={stock}
+                        active={chartSelection?.listKey === currentListKey && chartSelection.code === stock.code}
+                        onClick={() => onToggleChart(stock.code, currentListKey)}
+                        action={getStockListAction({
+                          stock,
+                          listKey: currentListKey,
+                          candidateStockCodes,
+                          filterDeletePendingIds: [],
+                          selectionRecordDeletePendingIds: [],
+                          onAddToCandidate,
+                          onRemoveFromCandidate,
+                          onRemoveFromHistory: () => undefined,
+                          onDeleteFromFilterList: () => undefined,
+                        })}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex min-h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 px-4 text-center text-sm">
+                    <div className="font-medium">
+                      {currentListKey === "initial" ? "暂无筛选结果" : "暂无待保存股票"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {currentListKey === "initial" ? "开始筛选后会在这里展示结果" : "从筛选结果添加股票"}
+                    </div>
+                  </div>
+                )}
+              </ScrollShadow>
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }
 
@@ -3295,20 +3380,24 @@ function MobileBottomActions({
   strategySavePending,
   strategyDeletePendingId,
   scanLoading,
+  candidateResultButtonVisible,
   onOpenFilterList,
+  onOpenCandidateDialog,
   onStrategySelect,
   onStrategySave,
   onStrategyDelete,
   onStrategyScan,
 }: {
-  stockGroups: Pick<StockGroups, ReturnableListKey>;
+  stockGroups: Pick<StockGroups, "initial" | "candidate" | ReturnableListKey>;
   strategyConfig: StrategyConfig;
   strategyConfigs: StrategyConfig[];
   strategyConfigLoading: boolean;
   strategySavePending: boolean;
   strategyDeletePendingId: number | null;
   scanLoading: boolean;
+  candidateResultButtonVisible: boolean;
   onOpenFilterList: (listKey: ReturnableListKey) => void;
+  onOpenCandidateDialog: () => void;
   onStrategySelect: (config: StrategyConfig) => void;
   onStrategySave: (config: StrategyConfig) => void | Promise<void>;
   onStrategyDelete: (id: number) => void | Promise<void>;
@@ -3333,12 +3422,43 @@ function MobileBottomActions({
           onStrategyDelete={onStrategyDelete}
           onStrategyScan={onStrategyScan}
         />
-        <FilterListButtonGroup
-          stockGroups={stockGroups}
-          className="mobile-bottom-filter-grid"
-          buttonClassName="h-10 bg-background/55 px-3 shadow-sm"
-          onOpenFilterList={onOpenFilterList}
-        />
+        <div className="grid grid-cols-3 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 min-w-0 justify-start bg-background/55 px-3 shadow-sm"
+            aria-label="打开筛选结果"
+            isDisabled={!candidateResultButtonVisible}
+            onClick={onOpenCandidateDialog}
+          >
+            <ListFilter data-icon="inline-start" className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-left">筛选</span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              {stockGroups.initial.length + stockGroups.candidate.length}
+            </span>
+          </Button>
+          {filterListButtonOrder.map((listKey) => {
+            const Icon = listIcons[listKey];
+            const meta = stockListMeta[listKey];
+
+            return (
+              <Button
+                key={listKey}
+                type="button"
+                variant="outline"
+                className="h-10 min-w-0 justify-start bg-background/55 px-3 shadow-sm"
+                aria-label={`打开${meta.label}`}
+                onClick={() => onOpenFilterList(listKey)}
+              >
+                <Icon data-icon="inline-start" className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-left">{meta.label}</span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {stockGroups[listKey].length}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
