@@ -276,6 +276,7 @@ type StockDashboardState = {
   desktopListKey: string;
   filterDialogList: ReturnableListKey | null;
   candidateDialogOpen: boolean;
+  candidateResultAvailable: boolean;
   scanError: string | null;
   scanLoading: boolean;
   filterListsError: string | null;
@@ -322,6 +323,7 @@ type StockDashboardAction =
   | { type: "delete-selection-record-end"; id: number }
   | { type: "save-candidate-start" }
   | { type: "save-candidate-end" }
+  | { type: "save-candidate-success" }
   | { type: "add-candidate-stock"; stock: StockCandidate }
   | { type: "add-candidate-stocks"; stocks: StockCandidate[] }
   | { type: "remove-candidate-stock"; stock: StockCandidate }
@@ -343,6 +345,7 @@ const initialStockDashboardState: StockDashboardState = {
   desktopListKey: "initial",
   filterDialogList: null,
   candidateDialogOpen: false,
+  candidateResultAvailable: false,
   scanError: null,
   scanLoading: false,
   filterListsError: null,
@@ -698,7 +701,7 @@ function useStockDashboard() {
 
     try {
       await addSelection(candidates.map(createSelectionResultFromStock));
-      dispatch({ type: "clear-candidate-stocks" });
+      dispatch({ type: "save-candidate-success" });
       toast.success("候选已保存", {
         description: `已保存 ${candidates.length} 只股票到历史选股`,
       });
@@ -1083,6 +1086,10 @@ function StockDashboardLayout({
           strategySavePending={state.strategySavePending}
           strategyDeletePendingId={state.strategyDeletePendingId}
           scanLoading={state.scanLoading}
+          candidateResultButtonVisible={
+            state.candidateResultAvailable
+            && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0)
+          }
           onActiveListChange={setDesktopListKey}
           onOpenFilterList={openFilterListDialog}
           onOpenCandidateDialog={openCandidateDialog}
@@ -1221,6 +1228,12 @@ function stockDashboardReducer(
       return { ...state, candidateSavePending: true, selectionBatchesError: null };
     case "save-candidate-end":
       return { ...state, candidateSavePending: false };
+    case "save-candidate-success":
+      return {
+        ...clearCandidateStocksState(state),
+        candidateDialogOpen: false,
+        candidateResultAvailable: false,
+      };
     case "add-candidate-stock":
       return addCandidateStockState(state, action.stock);
     case "add-candidate-stocks":
@@ -1415,6 +1428,7 @@ function syncScanStocksState(
     chartSelection,
     mobileListKey: nextListKey,
     desktopListKey: nextListKey,
+    candidateResultAvailable: true,
     scanLoading: false,
     scanError: null,
   };
@@ -2256,6 +2270,7 @@ function DesktopStockSidebar({
   strategySavePending,
   strategyDeletePendingId,
   scanLoading,
+  candidateResultButtonVisible,
   onActiveListChange,
   onOpenFilterList,
   onOpenCandidateDialog,
@@ -2284,6 +2299,7 @@ function DesktopStockSidebar({
   strategySavePending: boolean;
   strategyDeletePendingId: number | null;
   scanLoading: boolean;
+  candidateResultButtonVisible: boolean;
   onActiveListChange: (key: string) => void;
   onOpenFilterList: (listKey: ReturnableListKey) => void;
   onOpenCandidateDialog: () => void;
@@ -2315,6 +2331,21 @@ function DesktopStockSidebar({
             onStrategyDelete={onStrategyDelete}
             onStrategyScan={onStrategyScan}
           />
+          {candidateResultButtonVisible ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full justify-start bg-background/40 px-3 shadow-sm"
+              aria-label="打开上一次筛选结果"
+              onClick={onOpenCandidateDialog}
+            >
+              <ListFilter data-icon="inline-start" />
+              <span className="min-w-0 flex-1 truncate text-left">上一次筛选结果</span>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                待选 {stockGroups.initial.length} / 候选 {stockGroups.candidate.length}
+              </span>
+            </Button>
+          ) : null}
           {strategyConfigError ? (
             <p
               className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
@@ -2341,20 +2372,6 @@ function DesktopStockSidebar({
           ) : null}
         </CardContent>
       </Card>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="h-11 w-full justify-start bg-background/40 px-3 shadow-sm"
-        aria-label="打开待选管理"
-        onClick={onOpenCandidateDialog}
-      >
-        <ListFilter data-icon="inline-start" />
-        <span className="min-w-0 flex-1 truncate text-left">待选管理</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          待选 {stockGroups.initial.length} / 候选 {stockGroups.candidate.length}
-        </span>
-      </Button>
 
       <DesktopStockDisclosureGroup
         activeListKey={activeListKey}
@@ -4242,7 +4259,7 @@ function DesktopCandidateDialog({
       <Drawer.Trigger className="hidden" />
       <Drawer.Backdrop variant="transparent">
         <Drawer.Content placement="bottom">
-          <Drawer.Dialog className="mx-auto h-[48vh] min-h-[360px] max-h-[520px] w-full max-w-[1680px] overflow-hidden p-0">
+          <Drawer.Dialog className="mx-auto h-[48vh] min-h-[360px] max-h-[520px] w-[min(calc(100%-2rem),1120px)] overflow-hidden p-0">
             <Drawer.Handle className="pt-2 pb-1" />
             <Drawer.CloseTrigger className="z-20" />
             <Drawer.Header className="px-5 pb-3 pt-0">
@@ -4252,7 +4269,7 @@ function DesktopCandidateDialog({
                   <StockCountBadge count={availableStocks.length + candidateStocks.length} active />
                 </Badge.Anchor>
                 <div className="min-w-0">
-                  <Drawer.Heading className="truncate text-xl text-balance">待选管理</Drawer.Heading>
+                  <Drawer.Heading className="truncate text-xl text-balance">上一次筛选结果</Drawer.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">
                     将筛选结果加入待保存列表后，可保存为历史选股
                   </p>
