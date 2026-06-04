@@ -2,7 +2,7 @@ import type { StrategyScanResult } from "@/lib/stock-api";
 
 export type StockDataStatus = "成功" | "无数据";
 
-export type StockListKey = "initial" | "selected" | "whitelist" | "blacklist";
+export type StockListKey = "initial" | "candidate" | "selected" | "whitelist" | "blacklist";
 
 export interface StockDailyRecord {
   code: string;

@@ -4,7 +4,8 @@ const dayMs = 24 * 60 * 60 * 1000;
 
 const listLabels: Record<StockListKey, string> = {
   initial: "待选",
-  selected: "已选",
+  candidate: "候选",
+  selected: "历史选股",
   whitelist: "白名单",
   blacklist: "黑名单",
 };
@@ -116,6 +117,7 @@ export const mockStockGroups = stockSeeds.reduce(
   },
   {
     initial: [],
+    candidate: [],
     selected: [],
     whitelist: [],
     blacklist: [],
@@ -125,19 +127,23 @@ export const mockStockGroups = stockSeeds.reduce(
 export const stockListMeta = {
   initial: {
     label: listLabels.initial,
-    description: "候选待加入",
+    description: "策略筛选结果",
+  },
+  candidate: {
+    label: listLabels.candidate,
+    description: "待保存为选股",
   },
   selected: {
     label: listLabels.selected,
-    description: "行情图表来源",
+    description: "已保存选股批次",
   },
   whitelist: {
     label: listLabels.whitelist,
-    description: "可加入已选",
+    description: "可加入候选",
   },
   blacklist: {
     label: listLabels.blacklist,
-    description: "可加入已选",
+    description: "可加入候选",
   },
 } satisfies Record<StockListKey, { label: string; description: string }>;
 

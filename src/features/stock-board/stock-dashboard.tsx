@@ -60,6 +60,14 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
@@ -91,8 +99,9 @@ import { cn } from "@/lib/utils";
 import { isThemeToggleVisible, type ThemeMode } from "@/types/theme";
 import type { StockCandidate, StockDailyRecord, StockListKey } from "@/types/stock";
 
-const mobileListOrder: StockListKey[] = ["selected", "initial", "whitelist", "blacklist"];
-const desktopStaticListOrder: StockListKey[] = ["initial", "whitelist", "blacklist"];
+const mobileListOrder: StockListKey[] = ["initial", "candidate", "whitelist", "blacklist"];
+const desktopStaticListOrder: StockListKey[] = ["initial", "candidate", "whitelist", "blacklist"];
+const selectionHistoryPageSize = 5;
 const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
 const axisLabelMatchThresholdSecs = daySecs / 2;
@@ -108,6 +117,7 @@ const chartRangeOptionsBase = [
 ] as const;
 const emptyStockGroups: StockGroups = {
   initial: [],
+  candidate: [],
   selected: [],
   whitelist: [],
   blacklist: [],
@@ -177,10 +187,9 @@ type StockListSharedProps = {
   chartSelection: ChartSelection | null;
   filterDeletePendingIds: number[];
   selectionRecordDeletePendingIds: number[];
-  selectionAddPendingCodes: string[];
-  selectedStockCodes: Set<string>;
-  onAddToSelected: (stock: StockCandidate) => void;
-  onRemoveFromSelected: (stock: StockCandidate) => void;
+  candidateStockCodes: Set<string>;
+  onAddToCandidate: (stock: StockCandidate) => void;
+  onRemoveFromCandidate: (stock: StockCandidate) => void;
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 };
@@ -198,7 +207,8 @@ const initialStockImportDialogState: StockImportDialogState = {
 
 const listIcons = {
   initial: ListFilter,
-  selected: CheckCircle2,
+  candidate: CheckCircle2,
+  selected: Database,
   whitelist: ShieldCheck,
   blacklist: ShieldX,
 } satisfies Record<StockListKey, typeof ListFilter>;
@@ -222,9 +232,11 @@ type StockDashboardState = {
   filterDeletePendingIds: number[];
   selectionBatchesLoading: boolean;
   selectionBatchesError: string | null;
+  selectionBatchesPageNum: number;
+  selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
   selectionRecordDeletePendingIds: number[];
-  selectionAddPendingCodes: string[];
+  candidateSavePending: boolean;
   strategyConfig: StrategyConfig;
   strategyConfigs: StrategyConfig[];
   strategyConfigLoading: boolean;
@@ -247,19 +259,20 @@ type StockDashboardAction =
   | { type: "remove-filter-stock"; stock: StockCandidate; listKey: ReturnableListKey }
   | { type: "delete-filter-start"; filterId: number }
   | { type: "delete-filter-end"; filterId: number }
-  | { type: "selection-batches-load-start" }
+  | { type: "selection-batches-load-start"; pageNum: number }
   | { type: "selection-batches-load-error"; error: string }
-  | { type: "sync-selection-batches"; batches: SelectionBatchState[] }
+  | { type: "sync-selection-batches"; batches: SelectionBatchState[]; pageNum: number; total: number }
   | { type: "sync-selection-records"; batchId: number; stocks: StockCandidate[]; total: number }
   | { type: "sync-selection-records-error"; batchId: number; error: string }
   | { type: "delete-selection-batch-start"; id: number }
   | { type: "delete-selection-batch-end"; id: number }
   | { type: "delete-selection-record-start"; id: number }
   | { type: "delete-selection-record-end"; id: number }
-  | { type: "add-selection-start"; code: string }
-  | { type: "add-selection-end"; code: string }
-  | { type: "add-selected-stock"; stock: StockCandidate }
-  | { type: "remove-selected-stock"; stock: StockCandidate }
+  | { type: "save-candidate-start" }
+  | { type: "save-candidate-end" }
+  | { type: "add-candidate-stock"; stock: StockCandidate }
+  | { type: "remove-candidate-stock"; stock: StockCandidate }
+  | { type: "clear-candidate-stocks" }
   | { type: "strategy-config-load-start" }
   | { type: "strategy-config-load-error"; error: string }
   | { type: "sync-strategy-configs"; configs: StrategyConfig[] }
@@ -282,9 +295,11 @@ const initialStockDashboardState: StockDashboardState = {
   filterDeletePendingIds: [],
   selectionBatchesLoading: true,
   selectionBatchesError: null,
+  selectionBatchesPageNum: 1,
+  selectionBatchesTotal: 0,
   selectionBatchDeletePendingIds: [],
   selectionRecordDeletePendingIds: [],
-  selectionAddPendingCodes: [],
+  candidateSavePending: false,
   strategyConfig: defaultStrategyConfig,
   strategyConfigs: [],
   strategyConfigLoading: true,
@@ -317,9 +332,16 @@ function useStockDashboard() {
   const selectedStock = chartSelection
     ? findStockByChartSelection(state, chartSelection)
     : null;
-  const selectedStockCodes = useMemo(
-    () => new Set(state.selectionBatches.flatMap((batch) => batch.stocks.map((stock) => getComparableStockCode(stock.code)))),
-    [state.selectionBatches],
+  const candidateStockCodes = useMemo(
+    () => new Set(state.stockGroups.candidate.map((stock) => getComparableStockCode(stock.code))),
+    [state.stockGroups.candidate],
+  );
+  const visibleStockGroups = useMemo(
+    () => ({
+      ...state.stockGroups,
+      initial: state.stockGroups.initial.filter((stock) => !candidateStockCodes.has(getComparableStockCode(stock.code))),
+    }),
+    [candidateStockCodes, state.stockGroups],
   );
   const syncStrategyConfigs = useCallback(async (signal?: AbortSignal) => {
     dispatch({ type: "strategy-config-load-start" });
@@ -365,13 +387,18 @@ function useStockDashboard() {
     });
   }, []);
 
-  const syncSelectionBatches = useCallback(async (signal?: AbortSignal) => {
-    dispatch({ type: "selection-batches-load-start" });
+  const syncSelectionBatches = useCallback(async (pageNum = 1, signal?: AbortSignal) => {
+    dispatch({ type: "selection-batches-load-start", pageNum });
 
-    const batchPage = await listSelectionBatches({ page_num: 1, page_size: 50 }, signal);
+    const batchPage = await listSelectionBatches({ page_num: pageNum, page_size: selectionHistoryPageSize }, signal);
     const batches = createSelectionBatchStates(batchPage.list);
 
-    dispatch({ type: "sync-selection-batches", batches });
+    dispatch({
+      type: "sync-selection-batches",
+      batches,
+      pageNum: batchPage.page_num,
+      total: batchPage.total,
+    });
 
     await Promise.all(batches.map(async (batch) => {
       try {
@@ -424,16 +451,16 @@ function useStockDashboard() {
   useEffect(() => {
     const controller = new AbortController();
 
-    void syncSelectionBatches(controller.signal)
+    void syncSelectionBatches(1, controller.signal)
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
 
-        const message = error instanceof Error ? error.message : "选股批次加载失败。";
+        const message = error instanceof Error ? error.message : "历史选股加载失败。";
 
         dispatch({ type: "selection-batches-load-error", error: message });
-        toast.error("选股批次加载失败", {
+        toast.error("历史选股加载失败", {
           description: message,
         });
       });
@@ -540,51 +567,84 @@ function useStockDashboard() {
     }
   }, [syncFilterLists]);
 
-  async function addStockToSelected(stock: StockCandidate) {
+  function addStockToCandidate(stock: StockCandidate) {
     const codeKey = getComparableStockCode(stock.code);
 
-    if (state.selectionAddPendingCodes.includes(codeKey)) {
-      return;
-    }
-
-    if (selectedStockCodes.has(codeKey)) {
-      toast.message("已在已选", {
+    if (candidateStockCodes.has(codeKey)) {
+      toast.message("已在候选", {
         description: `${stock.name} ${stock.code}`,
       });
       return;
     }
 
-    dispatch({ type: "add-selection-start", code: codeKey });
+    dispatch({ type: "add-candidate-stock", stock });
+    toast.success("已添加到候选", {
+      description: `${stock.name} ${stock.code}`,
+    });
+  }
+
+  function removeStockFromCandidate(stock: StockCandidate) {
+    if (!candidateStockCodes.has(getComparableStockCode(stock.code))) {
+      return;
+    }
+
+    dispatch({ type: "remove-candidate-stock", stock });
+    toast.success("已从候选删除", {
+      description: `${stock.name} ${stock.code}`,
+    });
+  }
+
+  async function saveCandidateSelection() {
+    const candidates = state.stockGroups.candidate;
+
+    if (candidates.length === 0) {
+      toast.message("候选为空", {
+        description: "请先从待选列表添加股票。",
+      });
+      return;
+    }
+
+    dispatch({ type: "save-candidate-start" });
 
     try {
-      await addSelection([createSelectionResultFromStock(stock)]);
-      await syncSelectionBatches();
-      toast.success("已添加到已选", {
-        description: `${stock.name} ${stock.code}`,
+      await addSelection(candidates.map(createSelectionResultFromStock));
+      dispatch({ type: "clear-candidate-stocks" });
+      toast.success("候选已保存", {
+        description: `已保存 ${candidates.length} 只股票到历史选股`,
       });
+
+      try {
+        await syncSelectionBatches(1);
+      } catch (syncError) {
+        const message = syncError instanceof Error ? syncError.message : "历史选股同步失败。";
+
+        dispatch({ type: "selection-batches-load-error", error: message });
+        toast.error("历史选股同步失败", {
+          description: message,
+        });
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "添加选股批次失败。";
+      const message = error instanceof Error ? error.message : "保存候选失败。";
 
       dispatch({ type: "selection-batches-load-error", error: message });
-      toast.error("添加选股批次失败", {
+      toast.error("保存候选失败", {
         description: message,
       });
     } finally {
-      dispatch({ type: "add-selection-end", code: codeKey });
+      dispatch({ type: "save-candidate-end" });
     }
   }
 
-  async function removeStockFromSelected(stock: StockCandidate) {
+  async function removeStockFromHistory(stock: StockCandidate) {
     const recordId = stock.selectionRecordId;
     const codeKey = getComparableStockCode(stock.code);
 
     if (!recordId) {
-      if (!selectedStockCodes.has(codeKey)) {
+      if (!state.stockGroups.selected.some((item) => getComparableStockCode(item.code) === codeKey)) {
         return;
       }
 
-      dispatch({ type: "remove-selected-stock", stock });
-      toast.success("已从已选删除", {
+      toast.success("已从历史选股删除", {
         description: `${stock.name} ${stock.code}`,
       });
       return;
@@ -594,8 +654,8 @@ function useStockDashboard() {
 
     try {
       await deleteSelectionRecords([recordId]);
-      await syncSelectionBatches();
-      toast.success("已从已选删除", {
+      await syncSelectionBatches(state.selectionBatchesPageNum);
+      toast.success("已从历史选股删除", {
         description: `${stock.name} ${stock.code}`,
       });
     } catch (error) {
@@ -615,13 +675,17 @@ function useStockDashboard() {
 
     try {
       await deleteSelectionBatch(id);
-      await syncSelectionBatches();
-      toast.success("已删除已选列表");
+      const nextPageNum = state.selectionBatches.length <= 1 && state.selectionBatchesPageNum > 1
+        ? state.selectionBatchesPageNum - 1
+        : state.selectionBatchesPageNum;
+
+      await syncSelectionBatches(nextPageNum);
+      toast.success("已删除历史选股");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "删除选股批次失败。";
+      const message = error instanceof Error ? error.message : "删除历史选股失败。";
 
       dispatch({ type: "selection-batches-load-error", error: message });
-      toast.error("删除选股批次失败", {
+      toast.error("删除历史选股失败", {
         description: message,
       });
     } finally {
@@ -738,16 +802,20 @@ function useStockDashboard() {
   return {
     stockBoardRef,
     state,
+    visibleStockGroups,
     selectedStock,
-    selectedStockCodes,
+    candidateStockCodes,
     openImportDialog,
     closeImportDialog,
     importStockToList,
-    addStockToSelected,
-    removeStockFromSelected,
+    addStockToCandidate,
+    removeStockFromCandidate,
+    saveCandidateSelection,
+    removeStockFromHistory,
     removeSelectionBatch,
     toggleSelectedStock,
     deleteStockFromFilterList,
+    changeSelectionHistoryPage: (pageNum: number) => void syncSelectionBatches(pageNum),
     reloadStrategyScan: startStrategyScan,
     startStrategyScan,
     setMobileListKey: (listKey: StockListKey) => dispatch({ type: "set-mobile-list", listKey }),
@@ -764,16 +832,20 @@ function StockDashboardLayout({
   onLogout,
   stockBoardRef,
   state,
+  visibleStockGroups,
   selectedStock,
-  selectedStockCodes,
+  candidateStockCodes,
   openImportDialog,
   closeImportDialog,
   importStockToList,
-  addStockToSelected,
-  removeStockFromSelected,
+  addStockToCandidate,
+  removeStockFromCandidate,
+  saveCandidateSelection,
+  removeStockFromHistory,
   removeSelectionBatch,
   toggleSelectedStock,
   deleteStockFromFilterList,
+  changeSelectionHistoryPage,
   reloadStrategyScan,
   startStrategyScan,
   setMobileListKey,
@@ -786,10 +858,9 @@ function StockDashboardLayout({
     chartSelection: state.chartSelection,
     filterDeletePendingIds: state.filterDeletePendingIds,
     selectionRecordDeletePendingIds: state.selectionRecordDeletePendingIds,
-    selectionAddPendingCodes: state.selectionAddPendingCodes,
-    selectedStockCodes,
-    onAddToSelected: addStockToSelected,
-    onRemoveFromSelected: removeStockFromSelected,
+    candidateStockCodes,
+    onAddToCandidate: addStockToCandidate,
+    onRemoveFromCandidate: removeStockFromCandidate,
     onToggleChart: toggleSelectedStock,
     onDeleteFromFilterList: deleteStockFromFilterList,
   };
@@ -843,16 +914,31 @@ function StockDashboardLayout({
               className="mx-auto mt-3 max-w-[720px] rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
               role="alert"
             >
-              已选列表失败：{state.selectionBatchesError}
+              历史选股失败：{state.selectionBatchesError}
             </p>
           ) : null}
 
           <MobileStockTabs
             activeListKey={state.mobileListKey}
-            stockGroups={state.stockGroups}
+            stockGroups={visibleStockGroups}
+            candidateSavePending={state.candidateSavePending}
             onOpenImport={openImportDialog}
             onActiveListChange={setMobileListKey}
+            onSaveCandidateSelection={saveCandidateSelection}
             {...sharedStockListProps}
+          />
+          <MobileSelectionHistory
+            selectionBatches={state.selectionBatches}
+            selectionBatchesLoading={state.selectionBatchesLoading}
+            selectionBatchesPageNum={state.selectionBatchesPageNum}
+            selectionBatchesTotal={state.selectionBatchesTotal}
+            selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
+            chartSelection={state.chartSelection}
+            selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
+            onRemoveFromHistory={removeStockFromHistory}
+            onDeleteSelectionBatch={removeSelectionBatch}
+            onToggleChart={toggleSelectedStock}
+            onPageChange={changeSelectionHistoryPage}
           />
 
           <MobileAccountActions
@@ -876,10 +962,13 @@ function StockDashboardLayout({
           activeListKey={state.desktopListKey}
           filterListsError={state.filterListsError}
           selectionBatchesError={state.selectionBatchesError}
-          stockGroups={state.stockGroups}
+          stockGroups={visibleStockGroups}
           selectionBatches={state.selectionBatches}
           selectionBatchesLoading={state.selectionBatchesLoading}
+          selectionBatchesPageNum={state.selectionBatchesPageNum}
+          selectionBatchesTotal={state.selectionBatchesTotal}
           selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
+          candidateSavePending={state.candidateSavePending}
           strategyConfig={state.strategyConfig}
           strategyConfigs={state.strategyConfigs}
           strategyConfigLoading={state.strategyConfigLoading}
@@ -889,7 +978,10 @@ function StockDashboardLayout({
           scanLoading={state.scanLoading}
           onActiveListChange={setDesktopListKey}
           onOpenImport={openImportDialog}
+          onSaveCandidateSelection={saveCandidateSelection}
+          onRemoveFromHistory={removeStockFromHistory}
           onDeleteSelectionBatch={removeSelectionBatch}
+          onSelectionHistoryPageChange={changeSelectionHistoryPage}
           onStrategySelect={setStrategyConfig}
           onStrategySave={saveStrategyConfig}
           onStrategyDelete={removeStrategyConfig}
@@ -950,11 +1042,16 @@ function stockDashboardReducer(
         filterDeletePendingIds: state.filterDeletePendingIds.filter((pendingId) => pendingId !== action.filterId),
       };
     case "selection-batches-load-start":
-      return { ...state, selectionBatchesLoading: true, selectionBatchesError: null };
+      return {
+        ...state,
+        selectionBatchesLoading: true,
+        selectionBatchesError: null,
+        selectionBatchesPageNum: action.pageNum,
+      };
     case "selection-batches-load-error":
       return { ...state, selectionBatchesLoading: false, selectionBatchesError: action.error };
     case "sync-selection-batches":
-      return syncSelectionBatchesState(state, action.batches);
+      return syncSelectionBatchesState(state, action.batches, action.pageNum, action.total);
     case "sync-selection-records":
       return syncSelectionRecordsState(state, action.batchId, action.stocks, action.total);
     case "sync-selection-records-error":
@@ -985,23 +1082,16 @@ function stockDashboardReducer(
         ...state,
         selectionRecordDeletePendingIds: state.selectionRecordDeletePendingIds.filter((pendingId) => pendingId !== action.id),
       };
-    case "add-selection-start":
-      return {
-        ...state,
-        selectionAddPendingCodes: state.selectionAddPendingCodes.includes(action.code)
-          ? state.selectionAddPendingCodes
-          : [...state.selectionAddPendingCodes, action.code],
-        selectionBatchesError: null,
-      };
-    case "add-selection-end":
-      return {
-        ...state,
-        selectionAddPendingCodes: state.selectionAddPendingCodes.filter((pendingCode) => pendingCode !== action.code),
-      };
-    case "add-selected-stock":
-      return addSelectedStockState(state, action.stock);
-    case "remove-selected-stock":
-      return removeSelectedStockState(state, action.stock);
+    case "save-candidate-start":
+      return { ...state, candidateSavePending: true, selectionBatchesError: null };
+    case "save-candidate-end":
+      return { ...state, candidateSavePending: false };
+    case "add-candidate-stock":
+      return addCandidateStockState(state, action.stock);
+    case "remove-candidate-stock":
+      return removeCandidateStockState(state, action.stock);
+    case "clear-candidate-stocks":
+      return clearCandidateStocksState(state);
     case "strategy-config-load-start":
       return { ...state, strategyConfigLoading: true, strategyConfigError: null };
     case "strategy-config-load-error":
@@ -1045,6 +1135,8 @@ function syncStrategyConfigsState(
 function syncSelectionBatchesState(
   state: StockDashboardState,
   batches: SelectionBatchState[],
+  pageNum: number,
+  total: number,
 ): StockDashboardState {
   const existingBatches = new Map(state.selectionBatches.map((batch) => [batch.id, batch]));
   const selectionBatches = batches.map((batch) => {
@@ -1068,14 +1160,21 @@ function syncSelectionBatchesState(
     stockGroups,
     selectionBatches,
   });
+  const activeSelectionBatchId = getSelectionBatchIdFromAccordionValue(state.desktopListKey);
+  const desktopListKey = activeSelectionBatchId && !selectionBatches.some((batch) => batch.id === activeSelectionBatchId)
+    ? "initial"
+    : state.desktopListKey;
 
   return {
     ...state,
     stockGroups,
     selectionBatches,
     chartSelection,
+    desktopListKey,
     selectionBatchesLoading: false,
     selectionBatchesError: null,
+    selectionBatchesPageNum: pageNum,
+    selectionBatchesTotal: total,
   };
 }
 
@@ -1152,27 +1251,33 @@ function syncScanStocksState(
     ...batch,
     stocks: batch.stocks.map((stock) => hydrateStockCandidate(stock, knownRecords)),
   }));
+  const candidate = state.stockGroups.candidate.map((stock) => hydrateStockCandidate(stock, knownRecords));
   const selected = createAggregatedSelectedStocks(selectionBatches);
   const whitelist = state.stockGroups.whitelist.map((stock) => hydrateStockCandidate(stock, knownRecords));
   const blacklist = state.stockGroups.blacklist.map((stock) => hydrateStockCandidate(stock, knownRecords));
   const stockGroups = {
     ...state.stockGroups,
     initial,
+    candidate,
     selected,
     whitelist,
     blacklist,
   };
-  const chartSelection = initial.length > 0
-    ? { code: initial[0].code, listKey: "initial" as const }
+  const visibleInitial = initial.filter((stock) => !candidate.some((item) => getComparableStockCode(item.code) === getComparableStockCode(stock.code)));
+  const chartSelection = visibleInitial.length > 0
+    ? { code: visibleInitial[0].code, listKey: "initial" as const }
+    : candidate.length > 0
+      ? { code: candidate[0].code, listKey: "candidate" as const }
     : null;
+  const nextListKey = chartSelection?.listKey ?? "initial";
 
   return {
     ...state,
     stockGroups,
     selectionBatches,
     chartSelection,
-    mobileListKey: "initial",
-    desktopListKey: "initial",
+    mobileListKey: nextListKey,
+    desktopListKey: nextListKey,
     scanLoading: false,
     scanError: null,
   };
@@ -1281,6 +1386,7 @@ function createKnownRecordsMap(state: StockDashboardState) {
   const knownRecords = new Map<string, StockDailyRecord[]>();
   const knownStocks = [
     ...state.stockGroups.initial,
+    ...state.stockGroups.candidate,
     ...state.stockGroups.whitelist,
     ...state.stockGroups.blacklist,
     ...state.selectionBatches.flatMap((batch) => batch.stocks),
@@ -1352,11 +1458,11 @@ function removeFilterStockState(
   };
 }
 
-function addSelectedStockState(
+function addCandidateStockState(
   state: StockDashboardState,
   stock: StockCandidate,
 ): StockDashboardState {
-  if (state.stockGroups.selected.some((item) => item.code === stock.code)) {
+  if (state.stockGroups.candidate.some((item) => getComparableStockCode(item.code) === getComparableStockCode(stock.code))) {
     return state;
   }
 
@@ -1364,28 +1470,31 @@ function addSelectedStockState(
     ...state,
     stockGroups: {
       ...state.stockGroups,
-      selected: [
-        ...state.stockGroups.selected,
+      candidate: [
+        ...state.stockGroups.candidate,
         {
           code: stock.code,
           name: stock.name,
           records: stock.records,
-          list: "selected",
+          list: "candidate",
+          strategyResult: stock.strategyResult,
         },
       ],
     },
     chartSelection: state.chartSelection?.listKey === "initial" && state.chartSelection.code === stock.code
-      ? { code: stock.code, listKey: "selected" }
+      ? { code: stock.code, listKey: "candidate" }
       : state.chartSelection,
+    mobileListKey: state.mobileListKey === "initial" ? "candidate" : state.mobileListKey,
+    desktopListKey: state.desktopListKey === "initial" ? "candidate" : state.desktopListKey,
   };
 }
 
-function removeSelectedStockState(
+function removeCandidateStockState(
   state: StockDashboardState,
   stock: StockCandidate,
 ): StockDashboardState {
-  const selected = state.stockGroups.selected.filter((item) => item.code !== stock.code);
-  const chartSelection = state.chartSelection?.listKey === "selected" && state.chartSelection.code === stock.code
+  const candidate = state.stockGroups.candidate.filter((item) => getComparableStockCode(item.code) !== getComparableStockCode(stock.code));
+  const chartSelection = state.chartSelection?.listKey === "candidate" && state.chartSelection.code === stock.code
     ? state.stockGroups.initial.some((item) => item.code === stock.code)
       ? { code: stock.code, listKey: "initial" as const }
       : null
@@ -1395,9 +1504,26 @@ function removeSelectedStockState(
     ...state,
     stockGroups: {
       ...state.stockGroups,
-      selected,
+      candidate,
     },
     chartSelection,
+  };
+}
+
+function clearCandidateStocksState(state: StockDashboardState): StockDashboardState {
+  const chartSelection = state.chartSelection?.listKey === "candidate"
+    ? null
+    : state.chartSelection;
+
+  return {
+    ...state,
+    stockGroups: {
+      ...state.stockGroups,
+      candidate: [],
+    },
+    chartSelection,
+    mobileListKey: state.mobileListKey === "candidate" ? "initial" : state.mobileListKey,
+    desktopListKey: state.desktopListKey === "candidate" ? "initial" : state.desktopListKey,
   };
 }
 type StockBoardProps = {
@@ -2039,7 +2165,10 @@ function DesktopStockSidebar({
   stockGroups,
   selectionBatches,
   selectionBatchesLoading,
+  selectionBatchesPageNum,
+  selectionBatchesTotal,
   selectionBatchDeletePendingIds,
+  candidateSavePending,
   strategyConfig,
   strategyConfigs,
   strategyConfigLoading,
@@ -2049,7 +2178,10 @@ function DesktopStockSidebar({
   scanLoading,
   onActiveListChange,
   onOpenImport,
+  onSaveCandidateSelection,
+  onRemoveFromHistory,
   onDeleteSelectionBatch,
+  onSelectionHistoryPageChange,
   onStrategySelect,
   onStrategySave,
   onStrategyDelete,
@@ -2062,7 +2194,10 @@ function DesktopStockSidebar({
   stockGroups: StockGroups;
   selectionBatches: SelectionBatchState[];
   selectionBatchesLoading: boolean;
+  selectionBatchesPageNum: number;
+  selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
+  candidateSavePending: boolean;
   strategyConfig: StrategyConfig;
   strategyConfigs: StrategyConfig[];
   strategyConfigLoading: boolean;
@@ -2072,7 +2207,10 @@ function DesktopStockSidebar({
   scanLoading: boolean;
   onActiveListChange: (key: string) => void;
   onOpenImport: (listKey: ReturnableListKey) => void;
+  onSaveCandidateSelection: () => void | Promise<void>;
+  onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
+  onSelectionHistoryPageChange: (pageNum: number) => void;
   onStrategySelect: (config: StrategyConfig) => void;
   onStrategySave: (config: StrategyConfig) => void | Promise<void>;
   onStrategyDelete: (id: number) => void | Promise<void>;
@@ -2118,7 +2256,7 @@ function DesktopStockSidebar({
             className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-pretty"
             role="alert"
           >
-            已选列表失败：{selectionBatchesError}
+            历史选股失败：{selectionBatchesError}
           </p>
         ) : null}
       </div>
@@ -2128,10 +2266,16 @@ function DesktopStockSidebar({
         stockGroups={stockGroups}
         selectionBatches={selectionBatches}
         selectionBatchesLoading={selectionBatchesLoading}
+        selectionBatchesPageNum={selectionBatchesPageNum}
+        selectionBatchesTotal={selectionBatchesTotal}
         selectionBatchDeletePendingIds={selectionBatchDeletePendingIds}
+        candidateSavePending={candidateSavePending}
         onActiveListChange={onActiveListChange}
         onOpenImport={onOpenImport}
+        onSaveCandidateSelection={onSaveCandidateSelection}
+        onRemoveFromHistory={onRemoveFromHistory}
         onDeleteSelectionBatch={onDeleteSelectionBatch}
+        onSelectionHistoryPageChange={onSelectionHistoryPageChange}
         {...stockListProps}
       />
     </aside>
@@ -2143,17 +2287,22 @@ function DesktopStockAccordion({
   stockGroups,
   selectionBatches,
   selectionBatchesLoading,
+  selectionBatchesPageNum,
+  selectionBatchesTotal,
   selectionBatchDeletePendingIds,
+  candidateSavePending,
   chartSelection,
   filterDeletePendingIds,
   selectionRecordDeletePendingIds,
-  selectionAddPendingCodes,
-  selectedStockCodes,
+  candidateStockCodes,
   onActiveListChange,
   onOpenImport,
+  onSaveCandidateSelection,
+  onRemoveFromHistory,
   onDeleteSelectionBatch,
-  onAddToSelected,
-  onRemoveFromSelected,
+  onSelectionHistoryPageChange,
+  onAddToCandidate,
+  onRemoveFromCandidate,
   onToggleChart,
   onDeleteFromFilterList,
 }: {
@@ -2161,11 +2310,19 @@ function DesktopStockAccordion({
   stockGroups: StockGroups;
   selectionBatches: SelectionBatchState[];
   selectionBatchesLoading: boolean;
+  selectionBatchesPageNum: number;
+  selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
+  candidateSavePending: boolean;
   onActiveListChange: (key: string) => void;
   onOpenImport: (listKey: ReturnableListKey) => void;
+  onSaveCandidateSelection: () => void | Promise<void>;
+  onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
+  onSelectionHistoryPageChange: (pageNum: number) => void;
 } & StockListSharedProps) {
+  const pageCount = getPageCount(selectionBatchesTotal, selectionHistoryPageSize);
+
   return (
     <Accordion
       className="min-h-0 flex-1"
@@ -2179,22 +2336,30 @@ function DesktopStockAccordion({
       }}
       aria-label="股票列表"
     >
+      <DesktopSelectionHistoryHeader
+        loading={selectionBatchesLoading}
+        pageNum={selectionBatchesPageNum}
+        pageCount={pageCount}
+        total={selectionBatchesTotal}
+        onPageChange={onSelectionHistoryPageChange}
+      />
       {selectionBatches.map((batch) => (
-        <DesktopSelectionBatchAccordionItem
+        <SelectionBatchAccordionItem
           key={batch.id}
           batch={batch}
           expanded={getSelectionBatchAccordionValue(batch.id) === activeListKey}
           chartSelection={chartSelection}
           selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-          selectedStockCodes={selectedStockCodes}
           deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
           onDeleteSelectionBatch={onDeleteSelectionBatch}
-          onRemoveFromSelected={onRemoveFromSelected}
+          onRemoveFromHistory={onRemoveFromHistory}
           onToggleChart={onToggleChart}
         />
       ))}
       {selectionBatches.length === 0 && selectionBatchesLoading ? (
         <DesktopSelectionBatchesLoadingState />
+      ) : selectionBatches.length === 0 ? (
+        <DesktopSelectionHistoryEmptyState />
       ) : null}
       {desktopStaticListOrder.map((key) => (
         <DesktopStockAccordionItem
@@ -2205,11 +2370,12 @@ function DesktopStockAccordion({
           chartSelection={chartSelection}
           filterDeletePendingIds={filterDeletePendingIds}
           selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-          selectionAddPendingCodes={selectionAddPendingCodes}
-          selectedStockCodes={selectedStockCodes}
+          candidateStockCodes={candidateStockCodes}
+          candidateSavePending={candidateSavePending}
           onOpenImport={onOpenImport}
-          onAddToSelected={onAddToSelected}
-          onRemoveFromSelected={onRemoveFromSelected}
+          onSaveCandidateSelection={onSaveCandidateSelection}
+          onAddToCandidate={onAddToCandidate}
+          onRemoveFromCandidate={onRemoveFromCandidate}
           onToggleChart={onToggleChart}
           onDeleteFromFilterList={onDeleteFromFilterList}
         />
@@ -2218,29 +2384,22 @@ function DesktopStockAccordion({
   );
 }
 
-function DesktopSelectionBatchAccordionItem({
+function SelectionBatchAccordionItem({
   batch,
   expanded,
   chartSelection,
   selectionRecordDeletePendingIds,
-  selectedStockCodes,
   deletePending,
   onDeleteSelectionBatch,
-  onRemoveFromSelected,
+  onRemoveFromHistory,
   onToggleChart,
 }: {
   batch: SelectionBatchState;
   expanded: boolean;
   deletePending: boolean;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
-} & Pick<
-  StockListSharedProps,
-  | "chartSelection"
-  | "selectionRecordDeletePendingIds"
-  | "selectedStockCodes"
-  | "onRemoveFromSelected"
-  | "onToggleChart"
->) {
+  onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
+} & Pick<StockListSharedProps, "chartSelection" | "selectionRecordDeletePendingIds" | "onToggleChart">) {
   const value = getSelectionBatchAccordionValue(batch.id);
 
   return (
@@ -2264,7 +2423,7 @@ function DesktopSelectionBatchAccordionItem({
               </span>
             </span>
             <span className="mt-1 block truncate text-xs text-muted-foreground">
-              已选候选区{batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}
+              历史选股{batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}
             </span>
           </span>
         </AccordionTrigger>
@@ -2273,8 +2432,8 @@ function DesktopSelectionBatchAccordionItem({
           variant="ghost"
           size="icon-sm"
           className="size-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive"
-          aria-label={`删除已选列表：${batch.name}`}
-          title={`删除已选列表：${batch.name}`}
+          aria-label={`删除历史选股：${batch.name}`}
+          title={`删除历史选股：${batch.name}`}
           disabled={deletePending}
           onClick={() => void onDeleteSelectionBatch(batch.id)}
         >
@@ -2313,12 +2472,12 @@ function DesktopSelectionBatchAccordionItem({
                     action={getStockListAction({
                       stock,
                       listKey: "selected",
-                      selectedStockCodes,
+                      candidateStockCodes: new Set(),
                       filterDeletePendingIds: [],
                       selectionRecordDeletePendingIds,
-                      selectionAddPendingCodes: [],
-                      onAddToSelected: () => undefined,
-                      onRemoveFromSelected,
+                      onAddToCandidate: () => undefined,
+                      onRemoveFromCandidate: () => undefined,
+                      onRemoveFromHistory,
                       onDeleteFromFilterList: () => undefined,
                     })}
                   />
@@ -2338,8 +2497,127 @@ function DesktopSelectionBatchesLoadingState() {
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border/45 py-3 text-sm text-muted-foreground">
       <LoaderCircle className="size-4 animate-spin" />
-      加载已选列表...
+      加载历史选股...
     </div>
+  );
+}
+
+function DesktopSelectionHistoryHeader({
+  loading,
+  pageNum,
+  pageCount,
+  total,
+  onPageChange,
+}: {
+  loading: boolean;
+  pageNum: number;
+  pageCount: number;
+  total: number;
+  onPageChange: (pageNum: number) => void;
+}) {
+  return (
+    <div className="flex shrink-0 flex-col gap-2 border-b border-border/45 py-3">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">历史选股</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            每页 5 条历史选股
+          </div>
+        </div>
+        <Badge variant="secondary" className="shrink-0 tabular-nums">
+          {loading ? "..." : total}
+        </Badge>
+      </div>
+      <SelectionHistoryPagination
+        loading={loading}
+        pageNum={pageNum}
+        pageCount={pageCount}
+        total={total}
+        onPageChange={onPageChange}
+      />
+    </div>
+  );
+}
+
+function DesktopSelectionHistoryEmptyState() {
+  return (
+    <div className="flex shrink-0 flex-col gap-1 border-b border-border/45 py-3 text-sm">
+      <div className="font-medium">暂无历史选股</div>
+      <div className="text-xs text-muted-foreground">保存候选后会生成历史选股条目</div>
+    </div>
+  );
+}
+
+function SelectionHistoryPagination({
+  loading,
+  pageNum,
+  pageCount,
+  total,
+  className,
+  onPageChange,
+}: {
+  loading: boolean;
+  pageNum: number;
+  pageCount: number;
+  total: number;
+  className?: string;
+  onPageChange: (pageNum: number) => void;
+}) {
+  const canGoPrevious = pageNum > 1 && !loading;
+  const canGoNext = pageNum < pageCount && !loading;
+  const disabledClassName = "pointer-events-none opacity-50";
+
+  function handlePageClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    nextPageNum: number,
+    enabled: boolean,
+  ) {
+    event.preventDefault();
+
+    if (enabled) {
+      onPageChange(nextPageNum);
+    }
+  }
+
+  if (total === 0) {
+    return null;
+  }
+
+  return (
+    <Pagination className={cn("justify-start", className)}>
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            href="#"
+            text="上一页"
+            aria-disabled={!canGoPrevious}
+            tabIndex={canGoPrevious ? undefined : -1}
+            className={cn(!canGoPrevious && disabledClassName)}
+            onClick={(event) => handlePageClick(event, pageNum - 1, canGoPrevious)}
+          />
+        </PaginationItem>
+        <PaginationItem>
+          <PaginationLink
+            href="#"
+            isActive
+            size="default"
+            onClick={(event) => event.preventDefault()}
+          >
+            {pageNum} / {pageCount}
+          </PaginationLink>
+        </PaginationItem>
+        <PaginationItem>
+          <PaginationNext
+            href="#"
+            text="下一页"
+            aria-disabled={!canGoNext}
+            tabIndex={canGoNext ? undefined : -1}
+            className={cn(!canGoNext && disabledClassName)}
+            onClick={(event) => handlePageClick(event, pageNum + 1, canGoNext)}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
   );
 }
 
@@ -2350,22 +2628,26 @@ function DesktopStockAccordionItem({
   chartSelection,
   filterDeletePendingIds,
   selectionRecordDeletePendingIds,
-  selectionAddPendingCodes,
-  selectedStockCodes,
+  candidateStockCodes,
+  candidateSavePending,
   onOpenImport,
-  onAddToSelected,
-  onRemoveFromSelected,
+  onSaveCandidateSelection,
+  onAddToCandidate,
+  onRemoveFromCandidate,
   onToggleChart,
   onDeleteFromFilterList,
 }: {
   listKey: StockListKey;
   stocks: StockCandidate[];
   expanded: boolean;
+  candidateSavePending: boolean;
   onOpenImport: (listKey: ReturnableListKey) => void;
+  onSaveCandidateSelection: () => void | Promise<void>;
 } & StockListSharedProps) {
   const Icon = listIcons[listKey];
   const meta = stockListMeta[listKey];
   const returnableListKey = getReturnableListKey(listKey);
+  const showCandidateSave = listKey === "candidate";
 
   return (
     <AccordionItem
@@ -2388,7 +2670,25 @@ function DesktopStockAccordionItem({
             <span className="mt-1 block truncate text-xs text-muted-foreground">{meta.description}</span>
           </span>
         </AccordionTrigger>
-        {returnableListKey ? (
+        {showCandidateSave ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+            aria-label="保存候选"
+            title="保存候选"
+            disabled={candidateSavePending || stocks.length === 0}
+            onClick={() => void onSaveCandidateSelection()}
+          >
+            {candidateSavePending ? (
+              <LoaderCircle data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <CheckCircle2 data-icon="inline-start" />
+            )}
+            保存
+          </Button>
+        ) : returnableListKey ? (
           <Button
             type="button"
             variant="ghost"
@@ -2421,12 +2721,12 @@ function DesktopStockAccordionItem({
                     action={getStockListAction({
                       stock,
                       listKey,
-                      selectedStockCodes,
+                      candidateStockCodes,
                       filterDeletePendingIds,
                       selectionRecordDeletePendingIds,
-                      selectionAddPendingCodes,
-                      onAddToSelected,
-                      onRemoveFromSelected,
+                      onAddToCandidate,
+                      onRemoveFromCandidate,
+                      onRemoveFromHistory: () => undefined,
                       onDeleteFromFilterList,
                     })}
                   />
@@ -2445,8 +2745,10 @@ function DesktopStockAccordionItem({
 function DesktopStockListEmptyState({ listKey }: { listKey: StockListKey }) {
   const message = listKey === "initial"
     ? "调整策略后重载扫描"
-    : listKey === "selected"
+    : listKey === "candidate"
       ? "从待选列表添加股票"
+    : listKey === "selected"
+      ? "保存候选后生成历史选股"
       : "点击上方导入添加股票";
 
   return (
@@ -3009,12 +3311,13 @@ function MobileStockTabs({
   chartSelection,
   filterDeletePendingIds,
   selectionRecordDeletePendingIds,
-  selectionAddPendingCodes,
-  selectedStockCodes,
+  candidateStockCodes,
+  candidateSavePending,
   onOpenImport,
   onActiveListChange,
-  onAddToSelected,
-  onRemoveFromSelected,
+  onSaveCandidateSelection,
+  onAddToCandidate,
+  onRemoveFromCandidate,
   onToggleChart,
   onDeleteFromFilterList,
 }: {
@@ -3023,18 +3326,20 @@ function MobileStockTabs({
   chartSelection: ChartSelection | null;
   filterDeletePendingIds: number[];
   selectionRecordDeletePendingIds: number[];
-  selectionAddPendingCodes: string[];
-  selectedStockCodes: Set<string>;
+  candidateStockCodes: Set<string>;
+  candidateSavePending: boolean;
   onOpenImport: (listKey: ReturnableListKey) => void;
   onActiveListChange: (key: StockListKey) => void;
-  onAddToSelected: (stock: StockCandidate) => void;
-  onRemoveFromSelected: (stock: StockCandidate) => void;
+  onSaveCandidateSelection: () => void | Promise<void>;
+  onAddToCandidate: (stock: StockCandidate) => void;
+  onRemoveFromCandidate: (stock: StockCandidate) => void;
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }) {
   const stocks = stockGroups[activeListKey];
   const meta = stockListMeta[activeListKey];
   const returnableListKey = getReturnableListKey(activeListKey);
+  const showCandidateSave = activeListKey === "candidate";
 
   return (
     <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
@@ -3062,7 +3367,23 @@ function MobileStockTabs({
             <CardDescription className="truncate">{meta.description}</CardDescription>
             <Badge variant="secondary">{stocks.length}</Badge>
           </div>
-          {returnableListKey ? (
+          {showCandidateSave ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 bg-background/45"
+              disabled={candidateSavePending || stocks.length === 0}
+              onClick={() => void onSaveCandidateSelection()}
+            >
+              {candidateSavePending ? (
+                <LoaderCircle data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <CheckCircle2 data-icon="inline-start" />
+              )}
+              保存
+            </Button>
+          ) : returnableListKey ? (
             <Button
               type="button"
               variant="outline"
@@ -3088,12 +3409,12 @@ function MobileStockTabs({
                 action={getStockListAction({
                   stock,
                   listKey: activeListKey,
-                  selectedStockCodes,
+                  candidateStockCodes,
                   filterDeletePendingIds,
                   selectionRecordDeletePendingIds,
-                  selectionAddPendingCodes,
-                  onAddToSelected,
-                  onRemoveFromSelected,
+                  onAddToCandidate,
+                  onRemoveFromCandidate,
+                  onRemoveFromHistory: () => undefined,
                   onDeleteFromFilterList,
                 })}
               />
@@ -3102,6 +3423,100 @@ function MobileStockTabs({
         ) : (
           <div className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
             暂无股票
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MobileSelectionHistory({
+  selectionBatches,
+  selectionBatchesLoading,
+  selectionBatchesPageNum,
+  selectionBatchesTotal,
+  selectionBatchDeletePendingIds,
+  chartSelection,
+  selectionRecordDeletePendingIds,
+  onRemoveFromHistory,
+  onDeleteSelectionBatch,
+  onToggleChart,
+  onPageChange,
+}: {
+  selectionBatches: SelectionBatchState[];
+  selectionBatchesLoading: boolean;
+  selectionBatchesPageNum: number;
+  selectionBatchesTotal: number;
+  selectionBatchDeletePendingIds: number[];
+  chartSelection: ChartSelection | null;
+  selectionRecordDeletePendingIds: number[];
+  onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
+  onDeleteSelectionBatch: (id: number) => void | Promise<void>;
+  onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
+  onPageChange: (pageNum: number) => void;
+}) {
+  const [openItems, setOpenItems] = useState<string[]>([]);
+  const pageCount = getPageCount(selectionBatchesTotal, selectionHistoryPageSize);
+
+  useEffect(() => {
+    setOpenItems([]);
+  }, [selectionBatchesPageNum]);
+
+  return (
+    <Card className="mt-4 bg-card/88 shadow-[0_16px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl md:hidden">
+      <CardHeader className="gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="truncate text-base">历史选股</CardTitle>
+            <CardDescription className="mt-1 truncate">每页 5 条历史选股</CardDescription>
+          </div>
+          <Badge variant="secondary" className="shrink-0 tabular-nums">
+            {selectionBatchesLoading ? "..." : selectionBatchesTotal}
+          </Badge>
+        </div>
+        <SelectionHistoryPagination
+          loading={selectionBatchesLoading}
+          pageNum={selectionBatchesPageNum}
+          pageCount={pageCount}
+          total={selectionBatchesTotal}
+          onPageChange={onPageChange}
+        />
+      </CardHeader>
+      <CardContent className="pb-5">
+        {selectionBatches.length > 0 ? (
+          <Accordion
+            className="min-h-0"
+            value={openItems}
+            onValueChange={setOpenItems}
+            aria-label="历史选股"
+          >
+            {selectionBatches.map((batch) => {
+              const value = getSelectionBatchAccordionValue(batch.id);
+
+              return (
+                <SelectionBatchAccordionItem
+                  key={batch.id}
+                  batch={batch}
+                  expanded={openItems.includes(value)}
+                  chartSelection={chartSelection}
+                  selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                  deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
+                  onDeleteSelectionBatch={onDeleteSelectionBatch}
+                  onRemoveFromHistory={onRemoveFromHistory}
+                  onToggleChart={onToggleChart}
+                />
+              );
+            })}
+          </Accordion>
+        ) : selectionBatchesLoading ? (
+          <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" />
+            加载历史选股...
+          </div>
+        ) : (
+          <div className="flex min-h-28 flex-col items-center justify-center gap-1 text-sm">
+            <div className="font-medium">暂无历史选股</div>
+            <div className="text-xs text-muted-foreground">保存候选后会生成历史选股条目</div>
           </div>
         )}
       </CardContent>
@@ -3708,6 +4123,16 @@ function getSelectionBatchAccordionValue(id: number) {
   return `selected:${id}`;
 }
 
+function getSelectionBatchIdFromAccordionValue(value: string) {
+  const match = value.match(/^selected:(\d+)$/);
+
+  return match ? Number(match[1]) : null;
+}
+
+function getPageCount(total: number, pageSize: number) {
+  return Math.max(1, Math.ceil(total / pageSize));
+}
+
 function formatRecordDate(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -3749,40 +4174,45 @@ function isFiniteNumber(value: unknown): value is number {
 function getStockListAction({
   stock,
   listKey,
-  selectedStockCodes,
+  candidateStockCodes,
   filterDeletePendingIds,
   selectionRecordDeletePendingIds,
-  selectionAddPendingCodes,
-  onAddToSelected,
-  onRemoveFromSelected,
+  onAddToCandidate,
+  onRemoveFromCandidate,
+  onRemoveFromHistory,
   onDeleteFromFilterList,
 }: {
   stock: StockCandidate;
   listKey: StockListKey;
-  selectedStockCodes: Set<string>;
+  candidateStockCodes: Set<string>;
   filterDeletePendingIds: number[];
   selectionRecordDeletePendingIds: number[];
-  selectionAddPendingCodes: string[];
-  onAddToSelected: (stock: StockCandidate) => void;
-  onRemoveFromSelected: (stock: StockCandidate) => void;
+  onAddToCandidate: (stock: StockCandidate) => void;
+  onRemoveFromCandidate: (stock: StockCandidate) => void;
+  onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
 }): StockListAction | undefined {
   if (listKey === "initial") {
-    const addPending = selectionAddPendingCodes.includes(getComparableStockCode(stock.code));
-
-    if (selectedStockCodes.has(getComparableStockCode(stock.code))) {
+    if (candidateStockCodes.has(getComparableStockCode(stock.code))) {
       return {
         icon: "added",
-        title: "已在已选",
+        title: "已在候选",
         disabled: true,
       };
     }
 
     return {
       icon: "add",
-      title: "添加到已选",
-      pending: addPending,
-      onClick: () => onAddToSelected(stock),
+      title: "添加到候选",
+      onClick: () => onAddToCandidate(stock),
+    };
+  }
+
+  if (listKey === "candidate") {
+    return {
+      icon: "delete",
+      title: "从候选删除",
+      onClick: () => onRemoveFromCandidate(stock),
     };
   }
 
@@ -3791,9 +4221,9 @@ function getStockListAction({
 
     return {
       icon: "delete",
-      title: "从已选删除",
+      title: "从历史选股删除",
       pending,
-      onClick: () => onRemoveFromSelected(stock),
+      onClick: () => void onRemoveFromHistory(stock),
     };
   }
 
