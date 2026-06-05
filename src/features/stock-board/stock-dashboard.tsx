@@ -60,7 +60,7 @@ import { Liveline, type CandlePoint, type LivelinePoint, type LivelineSeries } f
 import { BrandLockup } from "@/components/brand-lockup";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import {
-  StrategyConfigEditorModal,
+  StrategyConfigEditor,
   StrategyConfigPicker,
   StrategyDeleteConfirmModal,
   StrategySwitchButton,
@@ -2448,7 +2448,7 @@ function MobileStrategyConfigDrawer({
           </Drawer.Content>
         </Drawer.Backdrop>
       </Drawer>
-      <StrategyConfigEditorModal
+      <MobileStrategyConfigEditorSheet
         isOpen={editorOpen}
         config={editingConfig}
         savePending={strategySavePending}
@@ -2470,6 +2470,78 @@ function MobileStrategyConfigDrawer({
         onDelete={onStrategyDelete}
       />
     </>
+  );
+}
+
+function MobileStrategyConfigEditorSheet({
+  isOpen,
+  config,
+  savePending,
+  onOpenChange,
+  onSave,
+  onSaved,
+}: {
+  isOpen: boolean;
+  config: StrategyConfig;
+  savePending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (config: StrategyConfig) => void | Promise<void>;
+  onSaved: () => void;
+}) {
+  const drawerState = useOverlayState({ isOpen, onOpenChange });
+  const isExistingConfig = Boolean(config.id);
+
+  return (
+    <Drawer state={drawerState}>
+      <Drawer.Trigger className="hidden" />
+      <Drawer.Backdrop variant="transparent">
+        <Drawer.Content placement="bottom">
+          <Drawer.Dialog className="mx-auto flex h-[min(82dvh,720px)] min-h-[460px] w-full max-w-[760px] flex-col overflow-hidden p-0">
+            <Drawer.Handle className="pb-1 pt-2" />
+            <Drawer.CloseTrigger className="z-20" />
+            <Drawer.Header className="px-4 pb-3 pt-0">
+              <div className="min-w-0 pr-8">
+                <Drawer.Heading className="truncate text-lg text-balance">
+                  {isExistingConfig ? "修改策略配置" : "新建策略配置"}
+                </Drawer.Heading>
+                <p className="mt-1 truncate text-sm text-muted-foreground">设置策略名称、计算参数和规则开关</p>
+              </div>
+            </Drawer.Header>
+            <StrategyConfigEditor
+              config={config}
+              savePending={savePending}
+              className="flex min-h-0 flex-1 flex-col"
+              contentClassName="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              onSave={onSave}
+              onSaved={() => {
+                onSaved();
+                drawerState.close();
+              }}
+              renderFooter={(actions) => (
+                <Drawer.Footer className="mx-0 mb-0 rounded-none border-t border-border/60 bg-background/95 p-4 sm:justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-background/55 transition-transform active:scale-[0.96]"
+                    slot="close"
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="transition-transform active:scale-[0.96]"
+                    isDisabled={actions.isSaving}
+                  >
+                    {actions.isSaving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
+                    保存配置
+                  </Button>
+                </Drawer.Footer>
+              )}
+            />
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }
 
