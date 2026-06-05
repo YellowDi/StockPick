@@ -9,7 +9,7 @@
 
 ## 项目概览
 
-StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeScript 单页应用，连接后端 API `http://192.168.2.16:1889/api/v1`，用于登录认证、策略扫描、股票筛选列表和入选历史。Mock 股票数据仍在 `src/data/mock-stocks.ts` 中按过程生成。界面文案全部为中文。
+StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeScript 单页应用，连接后端 API `http://192.168.2.16:1889/api/v1`，用于登录认证、策略扫描、股票筛选列表和入选历史。界面文案全部为中文。
 
 ## 命令
 
@@ -36,7 +36,7 @@ StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeSc
 - `src/components/login-page.tsx`：登录表单和 WebGL thread 动效。
 - `src/components/threads.tsx`：基于 OGL/WebGL shader 的动态背景。
 - `src/types/stock.ts`：`StockCandidate`、`StockDailyRecord`、`StockListKey`。
-- `src/data/mock-stocks.ts`：10 个 seed stocks 和 28 日过程生成 OHLC 历史。
+- `src/data/stock-list-meta.ts`：股票列表标签和说明元信息。
 - `src/lib/utils.ts`：`cn()` 工具函数（clsx + tailwind-merge）。
 - `src/styles/globals.css`：Tailwind CSS v4 和主题 CSS custom properties。
 
@@ -55,7 +55,7 @@ StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeSc
 - 界面应偏交易工具风格：信息密度高、易扫读、状态明确。
 - 四列股票列表（初筛/已选/白名单/黑名单）支持 HTML5 drag-and-drop 跨列拖拽。
 - 不要新增运行时依赖，除非用户确认。
-- 不要把 mock 数据替换成真实接口，除非用户明确要求。
+- 不要新增 mock 数据替代现有后端接口，除非用户明确要求。
 - 修改图表行为前，先确认 `liveline` 的实际 API 和当前用法。
 - 除非用户要求路由或模块拆分，否则保持现有单页结构。
 

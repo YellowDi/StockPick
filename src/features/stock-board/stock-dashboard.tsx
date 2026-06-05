@@ -59,7 +59,7 @@ import { Liveline, type CandlePoint, type LivelinePoint, type LivelineSeries } f
 import { BrandLockup } from "@/components/brand-lockup";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
 import { StrategyConfigEditor, StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
-import { stockListMeta } from "@/data/mock-stocks";
+import { stockListMeta } from "@/data/stock-list-meta";
 import {
   addStockFilter,
   addSelection,

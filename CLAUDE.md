@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-StockPick is a Chinese A-share stock screening dashboard prototype. It is a React/TypeScript SPA that connects to a backend API at `http://192.168.2.16:1889/api/v1` for authentication, strategy scanning, stock filter lists, and selection history. Mock stock data is also procedurally generated in `src/data/mock-stocks.ts`. The UI is entirely in Chinese.
+StockPick is a Chinese A-share stock screening dashboard prototype. It is a React/TypeScript SPA that connects to a backend API at `http://192.168.2.16:1889/api/v1` for authentication, strategy scanning, stock filter lists, and selection history. The UI is entirely in Chinese.
 
 ## Commands
 
@@ -35,7 +35,7 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a Reac
 - `src/components/login-page.tsx` — Login form with WebGL thread animation
 - `src/components/threads.tsx` — OGL/WebGL shader-based animated background
 - `src/types/stock.ts` — `StockCandidate`, `StockDailyRecord`, `StockListKey`
-- `src/data/mock-stocks.ts` — 10 seed stocks with 28-day procedural OHLC history
+- `src/data/stock-list-meta.ts` — Stock list labels and description metadata
 - `src/lib/utils.ts` — `cn()` utility (clsx + tailwind-merge)
 - `src/styles/globals.css` — Tailwind CSS v4 with CSS custom properties for theming
 
@@ -54,7 +54,7 @@ StockPick is a Chinese A-share stock screening dashboard prototype. It is a Reac
 - Trading-tool aesthetic: high information density, scannable, clear status indicators.
 - The four stock list columns (初筛/已选/白名单/黑名单) support HTML5 drag-and-drop between them.
 - Do not add runtime dependencies without user confirmation.
-- Do not replace mock data with real APIs unless explicitly asked.
+- Do not add mock data in place of existing backend APIs unless explicitly asked.
 - Before modifying chart behavior, verify `liveline`'s actual API and current usage.
 - Preserve the existing single-page structure unless the user requests routing or module splits.
 
