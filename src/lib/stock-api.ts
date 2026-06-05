@@ -1,6 +1,6 @@
 import { ApiError, getStoredAuthToken, isAuthFailureStatus, notifyAuthExpired } from "./auth-api";
 
-const apiBaseUrl = "http://192.168.2.16:1889/api/v1";
+const apiBaseUrl = import.meta.env.DEV ? "http://192.168.2.16:1889/api/v1" : "/api/v1";
 
 export type StockInfo = {
   code: string;
@@ -112,7 +112,7 @@ export type PagedResponse<T> = {
 };
 
 export async function listStocks(signal?: AbortSignal): Promise<StockInfo[]> {
-  const url = new URL(`${apiBaseUrl}/stock/list`);
+  const url = new URL(`${apiBaseUrl}/stock/list`, window.location.origin);
 
   let response: Response;
   const token = getStoredAuthToken()?.trim();
@@ -156,7 +156,7 @@ export async function listStockFilters(
   type: StockFilterListType,
   signal?: AbortSignal,
 ): Promise<StockFilter[]> {
-  const url = new URL(`${apiBaseUrl}/strategy/filter`);
+  const url = new URL(`${apiBaseUrl}/strategy/filter`, window.location.origin);
 
   url.searchParams.set("type", type);
 
