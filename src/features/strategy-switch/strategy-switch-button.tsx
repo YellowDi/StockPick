@@ -334,7 +334,7 @@ export function StrategyConfigEditor({
           <h3 className="text-sm font-semibold">计算参数</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2">
-              <Label htmlFor="strategy-x">往前推第 X 天</Label>
+              <Label id="strategy-x-label" htmlFor="strategy-x">往前推第 X 天</Label>
               <StrategyXSelect
                 id="strategy-x"
                 value={normalizeStrategyX(draft.x)}
@@ -410,6 +410,7 @@ function StrategyXSelect({
 }) {
   return (
     <Select
+      aria-labelledby={`${id}-label`}
       value={String(value)}
       onChange={(nextValue: Key | null) => {
         if (nextValue !== null) {
