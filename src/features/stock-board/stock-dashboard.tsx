@@ -1106,6 +1106,8 @@ function StockDashboardLayout({
   removeStrategyConfig,
 }: StockDashboardProps & ReturnType<typeof useStockDashboard>) {
   const isDesktopViewport = useIsDesktopViewport();
+  const candidateResultButtonVisible = state.candidateResultAvailable
+    && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0);
   const sharedStockListProps = {
     chartSelection: state.chartSelection,
     filterDeletePendingIds: state.filterDeletePendingIds,
@@ -1178,10 +1180,7 @@ function StockDashboardLayout({
           strategySavePending={state.strategySavePending}
           strategyDeletePendingId={state.strategyDeletePendingId}
           scanLoading={state.scanLoading}
-          candidateResultButtonVisible={
-            state.candidateResultAvailable
-            && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0)
-          }
+          candidateResultButtonVisible={candidateResultButtonVisible}
           onLogout={onLogout}
           onReload={reloadStrategyScan}
           onActiveListChange={setDesktopListKey}
@@ -1240,11 +1239,16 @@ function StockDashboardLayout({
           strategySavePending={state.strategySavePending}
           strategyDeletePendingId={state.strategyDeletePendingId}
           scanLoading={state.scanLoading}
+          candidateResultButtonVisible={candidateResultButtonVisible}
           onClose={closeMobileStrategyDrawer}
           onStrategySelect={setStrategyConfig}
           onStrategySave={saveStrategyConfig}
           onStrategyDelete={removeStrategyConfig}
           onStrategyScan={() => startStrategyScan({ openSheetOnStart: true, closeMobileStrategyDrawer: true })}
+          onOpenCandidateDialog={() => {
+            closeMobileStrategyDrawer();
+            openCandidateDialog();
+          }}
         />
       ) : null}
       {state.mobileSelectionHistoryDrawerOpen ? (
@@ -2341,11 +2345,13 @@ function MobileStrategyConfigDrawer({
   strategySavePending,
   strategyDeletePendingId,
   scanLoading,
+  candidateResultButtonVisible,
   onClose,
   onStrategySelect,
   onStrategySave,
   onStrategyDelete,
   onStrategyScan,
+  onOpenCandidateDialog,
 }: {
   strategyConfig: StrategyConfig;
   strategyConfigs: StrategyConfig[];
@@ -2353,11 +2359,13 @@ function MobileStrategyConfigDrawer({
   strategySavePending: boolean;
   strategyDeletePendingId: number | null;
   scanLoading: boolean;
+  candidateResultButtonVisible: boolean;
   onClose: () => void;
   onStrategySelect: (config: StrategyConfig) => void;
   onStrategySave: (config: StrategyConfig) => void | Promise<void>;
   onStrategyDelete: (id: number) => void | Promise<void>;
   onStrategyScan: () => void | Promise<void>;
+  onOpenCandidateDialog: () => void;
 }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<StrategyConfig>(strategyConfig);
@@ -2423,26 +2431,45 @@ function MobileStrategyConfigDrawer({
                 onRequestDelete={handleRequestDelete}
               />
               <Drawer.Footer className="mx-0 mb-0 rounded-none border-t border-border/60 bg-background/95 p-4">
-                <Button
-                  type="button"
-                  className="h-11 w-full"
-                  isDisabled={scanLoading || strategySavePending}
-                  onClick={() => {
-                    if (!strategyConfig.id) {
-                      toast.info("请先选择或保存配置后再开始筛选");
-                      return;
-                    }
-
-                    void onStrategyScan();
-                  }}
-                >
-                  {scanLoading ? (
-                    <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                  ) : (
-                    <Search data-icon="inline-start" />
+                <div
+                  className={cn(
+                    "grid w-full gap-2",
+                    candidateResultButtonVisible ? "grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]" : "grid-cols-1",
                   )}
-                  {scanLoading ? "筛选中" : "开始筛选"}
-                </Button>
+                >
+                  <Button
+                    type="button"
+                    className="h-11 w-full min-w-0"
+                    isDisabled={scanLoading || strategySavePending}
+                    onClick={() => {
+                      if (!strategyConfig.id) {
+                        toast.info("请先选择或保存配置后再开始筛选");
+                        return;
+                      }
+
+                      void onStrategyScan();
+                    }}
+                  >
+                    {scanLoading ? (
+                      <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <Search data-icon="inline-start" />
+                    )}
+                    <span className="min-w-0 truncate">{scanLoading ? "筛选中" : "开始筛选"}</span>
+                  </Button>
+                  {candidateResultButtonVisible ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-full min-w-0 bg-background/55 px-3 transition-transform active:scale-[0.96]"
+                      aria-label="打开上一次筛选结果"
+                      onClick={onOpenCandidateDialog}
+                    >
+                      <ListFilter data-icon="inline-start" className="shrink-0" />
+                      <span className="min-w-0 truncate">上一次结果</span>
+                    </Button>
+                  ) : null}
+                </div>
               </Drawer.Footer>
             </Drawer.Dialog>
           </Drawer.Content>

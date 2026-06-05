@@ -181,17 +181,6 @@ export function StrategySwitchButton({
                 onEdit={openEditor}
                 onRequestDelete={onDelete ? handleRequestDelete : undefined}
               />
-              <Separator />
-              <Modal.Footer className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="bg-background/55 transition-transform active:scale-[0.96]"
-                  slot="close"
-                >
-                  关闭
-                </Button>
-              </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>
