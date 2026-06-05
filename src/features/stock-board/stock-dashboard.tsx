@@ -59,7 +59,12 @@ import { Liveline, type CandlePoint, type LivelinePoint, type LivelineSeries } f
 
 import { BrandLockup } from "@/components/brand-lockup";
 import { defaultStrategyConfig, type StrategyConfig } from "@/features/strategy-switch/strategy-config";
-import { StrategyConfigEditor, StrategySwitchButton } from "@/features/strategy-switch/strategy-switch-button";
+import {
+  StrategyConfigEditorModal,
+  StrategyConfigPicker,
+  StrategyDeleteConfirmModal,
+  StrategySwitchButton,
+} from "@/features/strategy-switch/strategy-switch-button";
 import { stockListMeta } from "@/data/stock-list-meta";
 import {
   addStockFilter,
@@ -2354,76 +2359,117 @@ function MobileStrategyConfigDrawer({
   onStrategyDelete: (id: number) => void | Promise<void>;
   onStrategyScan: () => void | Promise<void>;
 }) {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<StrategyConfig>(strategyConfig);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<StrategyConfig | null>(null);
   const drawerState = useOverlayState({
     isOpen: true,
     onOpenChange: (open) => {
       if (!open) {
+        setEditorOpen(false);
+        setDeleteConfirmOpen(false);
+        setDeleteTarget(null);
         onClose();
       }
     },
   });
 
-  return (
-    <Drawer state={drawerState}>
-      <Drawer.Trigger className="hidden" />
-      <Drawer.Backdrop variant="transparent">
-        <Drawer.Content placement="bottom">
-          <Drawer.Dialog className="mx-auto flex h-[min(86dvh,760px)] min-h-[480px] w-full max-w-[760px] flex-col overflow-hidden p-0">
-            <Drawer.Handle className="pb-1 pt-2" />
-            <Drawer.CloseTrigger className="z-20" />
-            <Drawer.Header className="px-4 pb-3 pt-0">
-              <div className="flex min-w-0 items-center gap-3 pr-8">
-                <Badge.Anchor>
-                  <StockSectionIconBox icon={Search} active />
-                  <StockCountBadge count={strategyConfigs.length || 1} active />
-                </Badge.Anchor>
-                <div className="min-w-0">
-                  <Drawer.Heading className="truncate text-lg text-balance">策略筛选</Drawer.Heading>
-                  <p className="mt-1 truncate text-sm text-muted-foreground">选择配置，保存后开始筛选</p>
-                </div>
-              </div>
-            </Drawer.Header>
-            <StrategyConfigEditor
-              config={strategyConfig}
-              configs={strategyConfigs}
-              configsLoading={strategyConfigLoading}
-              savePending={strategySavePending}
-              deletePendingId={strategyDeletePendingId}
-              showInlineSave
-              className="flex min-h-0 flex-1 flex-col"
-              contentClassName="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
-              onSelect={onStrategySelect}
-              onSave={onStrategySave}
-              onDelete={onStrategyDelete}
-              renderFooter={(actions) => (
-                <Drawer.Footer className="mx-0 mb-0 rounded-none border-t border-border/60 bg-background/95 p-4">
-                  <Button
-                    type="button"
-                    className="h-11 w-full"
-                    isDisabled={scanLoading || actions.isSaving}
-                    onClick={() => {
-                      if (!actions.normalizedDraft.id || actions.isDirty) {
-                        toast.info("请先保存当前配置后再开始筛选");
-                        return;
-                      }
+  function openEditor(nextConfig: StrategyConfig) {
+    setEditingConfig(nextConfig);
+    setEditorOpen(true);
+  }
 
-                      void onStrategyScan();
-                    }}
-                  >
-                    {scanLoading ? (
-                      <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                    ) : (
-                      <Search data-icon="inline-start" />
-                    )}
-                    {scanLoading ? "筛选中" : "开始筛选"}
-                  </Button>
-                </Drawer.Footer>
-              )}
-            />
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
+  function handleCreate() {
+    openEditor(defaultStrategyConfig);
+  }
+
+  function handleRequestDelete(nextConfig: StrategyConfig) {
+    setDeleteTarget(nextConfig);
+    setDeleteConfirmOpen(true);
+  }
+
+  return (
+    <>
+      <Drawer state={drawerState}>
+        <Drawer.Trigger className="hidden" />
+        <Drawer.Backdrop variant="transparent">
+          <Drawer.Content placement="bottom">
+            <Drawer.Dialog className="mx-auto flex h-[min(86dvh,760px)] min-h-[480px] w-full max-w-[760px] flex-col overflow-hidden p-0">
+              <Drawer.Handle className="pb-1 pt-2" />
+              <Drawer.CloseTrigger className="z-20" />
+              <Drawer.Header className="px-4 pb-3 pt-0">
+                <div className="flex min-w-0 items-center gap-3 pr-8">
+                  <Badge.Anchor>
+                    <StockSectionIconBox icon={Search} active />
+                    <StockCountBadge count={strategyConfigs.length || 1} active />
+                  </Badge.Anchor>
+                  <div className="min-w-0">
+                    <Drawer.Heading className="truncate text-lg text-balance">策略筛选</Drawer.Heading>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">选择配置，保存后开始筛选</p>
+                  </div>
+                </div>
+              </Drawer.Header>
+              <StrategyConfigPicker
+                config={strategyConfig}
+                configs={strategyConfigs}
+                configsLoading={strategyConfigLoading}
+                deletePendingId={strategyDeletePendingId}
+                className="flex min-h-0 flex-1 flex-col"
+                contentClassName="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+                onSelect={onStrategySelect}
+                onCreate={handleCreate}
+                onEdit={openEditor}
+                onRequestDelete={handleRequestDelete}
+              />
+              <Drawer.Footer className="mx-0 mb-0 rounded-none border-t border-border/60 bg-background/95 p-4">
+                <Button
+                  type="button"
+                  className="h-11 w-full"
+                  isDisabled={scanLoading || strategySavePending}
+                  onClick={() => {
+                    if (!strategyConfig.id) {
+                      toast.info("请先选择或保存配置后再开始筛选");
+                      return;
+                    }
+
+                    void onStrategyScan();
+                  }}
+                >
+                  {scanLoading ? (
+                    <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                  ) : (
+                    <Search data-icon="inline-start" />
+                  )}
+                  {scanLoading ? "筛选中" : "开始筛选"}
+                </Button>
+              </Drawer.Footer>
+            </Drawer.Dialog>
+          </Drawer.Content>
+        </Drawer.Backdrop>
+      </Drawer>
+      <StrategyConfigEditorModal
+        isOpen={editorOpen}
+        config={editingConfig}
+        savePending={strategySavePending}
+        onOpenChange={setEditorOpen}
+        onSave={onStrategySave}
+        onSaved={() => setEditorOpen(false)}
+      />
+      <StrategyDeleteConfirmModal
+        isOpen={deleteConfirmOpen}
+        target={deleteTarget}
+        deletePendingId={strategyDeletePendingId}
+        onOpenChange={(nextOpen) => {
+          setDeleteConfirmOpen(nextOpen);
+
+          if (!nextOpen) {
+            setDeleteTarget(null);
+          }
+        }}
+        onDelete={onStrategyDelete}
+      />
+    </>
   );
 }
 
