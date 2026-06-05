@@ -2,11 +2,6 @@ import { ApiError, getStoredAuthToken, isAuthFailureStatus, notifyAuthExpired } 
 
 const apiBaseUrl = "http://192.168.2.16:1889/api/v1";
 
-export type StockListRequest = {
-  code?: string;
-  name?: string;
-};
-
 export type StockInfo = {
   code: string;
   name: string;
@@ -116,19 +111,8 @@ export type PagedResponse<T> = {
   total: number;
 };
 
-export async function listStocks(
-  query: StockListRequest,
-  signal?: AbortSignal,
-): Promise<StockInfo[]> {
+export async function listStocks(signal?: AbortSignal): Promise<StockInfo[]> {
   const url = new URL(`${apiBaseUrl}/stock/list`);
-
-  if (query.code?.trim()) {
-    url.searchParams.set("code", query.code.trim());
-  }
-
-  if (query.name?.trim()) {
-    url.searchParams.set("name", query.name.trim());
-  }
 
   let response: Response;
   const token = getStoredAuthToken()?.trim();

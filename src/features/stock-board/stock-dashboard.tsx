@@ -112,7 +112,6 @@ const chartModeOptions = [
   { id: "candle" as const, label: "K线" },
   { id: "line" as const, label: "折线" },
 ];
-const stockImportResultLimit = 80;
 const exactCodePrefixPattern = /^(SH|SZ)/i;
 const stockItemActionClassName = cn(
   "w-10 translate-x-0 shrink-0 overflow-hidden opacity-100 transition-[width,opacity,transform] duration-150",
@@ -142,7 +141,7 @@ type StockImportDialogState = {
   codeQuery: string;
   nameQuery: string;
   stocks: StockInfo[];
-  hasSearched: boolean;
+  hasLoaded: boolean;
   isLoading: boolean;
   error: string | null;
   importPendingCode: string | null;
@@ -172,8 +171,8 @@ const initialStockImportDialogState: StockImportDialogState = {
   codeQuery: "",
   nameQuery: "",
   stocks: [],
-  hasSearched: false,
-  isLoading: false,
+  hasLoaded: false,
+  isLoading: true,
   error: null,
   importPendingCode: null,
   importError: null,
@@ -4283,10 +4282,8 @@ function createImportedNoDataRecord(code: string, name: string): StockDailyRecor
   };
 }
 
-function isStockInList(stock: StockInfo, stocks: StockCandidate[]) {
-  const codeKey = getComparableStockCode(stock.code);
-
-  return stocks.some((item) => getComparableStockCode(item.code) === codeKey);
+function createStockCodeSet(stocks: { code: string }[]) {
+  return new Set(stocks.map((stock) => getComparableStockCode(stock.code)));
 }
 
 function isStockRedListHighlighted(stock: StockCandidate) {
@@ -4996,7 +4993,7 @@ function FilterStockImportDrawer({
     codeQuery,
     nameQuery,
     stocks: importStocks,
-    hasSearched,
+    hasLoaded,
     isLoading,
     error,
     importPendingCode,
@@ -5037,11 +5034,10 @@ function FilterStockImportDrawer({
                 onNameQueryChange={setNameQuery}
                 onSearch={handleSearch}
               />
-              {hasSearched && !isLoading && !error ? (
+              {hasLoaded && !isLoading && !error ? (
                 <StockImportSummary
                   listLabel={meta.label}
                   filteredCount={filteredStocks.length}
-                  visibleCount={visibleStocks.length}
                 />
               ) : null}
               {importError ? (
@@ -5054,7 +5050,7 @@ function FilterStockImportDrawer({
                 stockGroups={stockGroups}
                 stocks={importStocks}
                 visibleStocks={visibleStocks}
-                hasSearched={hasSearched}
+                hasLoaded={hasLoaded}
                 isLoading={isLoading}
                 error={error}
                 importPendingCode={importPendingCode}
@@ -5095,7 +5091,7 @@ function FilterStockImportDialog({
     codeQuery,
     nameQuery,
     stocks: importStocks,
-    hasSearched,
+    hasLoaded,
     isLoading,
     error,
     importPendingCode,
@@ -5136,11 +5132,10 @@ function FilterStockImportDialog({
                 onNameQueryChange={setNameQuery}
                 onSearch={handleSearch}
               />
-              {hasSearched && !isLoading && !error ? (
+              {hasLoaded && !isLoading && !error ? (
                 <StockImportSummary
                   listLabel={meta.label}
                   filteredCount={filteredStocks.length}
-                  visibleCount={visibleStocks.length}
                 />
               ) : null}
               {importError ? (
@@ -5153,7 +5148,7 @@ function FilterStockImportDialog({
                 stockGroups={stockGroups}
                 stocks={importStocks}
                 visibleStocks={visibleStocks}
-                hasSearched={hasSearched}
+                hasLoaded={hasLoaded}
                 isLoading={isLoading}
                 error={error}
                 importPendingCode={importPendingCode}
@@ -5190,9 +5185,9 @@ function FilterListCurrentStocks({
   const meta = stockListMeta[listKey];
 
   return (
-    <section className={cn("shrink-0 px-5 pb-5", className)}>
+    <section className={cn("flex min-h-0 flex-1 flex-col px-5 pb-5", className)}>
       {stocks.length > 0 ? (
-        <ScrollShadow orientation="vertical" className={cn("max-h-56 pr-2", scrollClassName)}>
+        <ScrollShadow orientation="vertical" className={cn("min-h-0 flex-1 pr-2", scrollClassName)}>
           <div className="flex w-full flex-col gap-2">
             {stocks.map((stock) => (
               <StockListButton
@@ -5216,7 +5211,7 @@ function FilterListCurrentStocks({
           </div>
         </ScrollShadow>
       ) : (
-        <div className="flex min-h-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 text-center text-sm">
+        <div className="flex min-h-24 flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 text-center text-sm">
           <div className="font-medium">暂无股票</div>
           <div className="text-xs text-muted-foreground">点击添加股票后搜索添加到{meta.label}</div>
         </div>
@@ -5235,7 +5230,7 @@ function useStockImportDialog(
     codeQuery,
     nameQuery,
     stocks,
-    hasSearched,
+    hasLoaded,
     isLoading,
     error,
     importPendingCode,
@@ -5243,55 +5238,64 @@ function useStockImportDialog(
   } = dialogState;
   const meta = stockListMeta[targetList];
   const oppositeList = getOppositeReturnableListKey(targetList);
-  const filteredStocks = stocks;
-  const visibleStocks = filteredStocks.slice(0, stockImportResultLimit);
+  const filteredStocks = useMemo(() => {
+    const normalizedCodeQuery = getComparableStockCode(codeQuery);
+    const normalizedNameQuery = nameQuery.trim().toLowerCase();
+
+    if (!normalizedCodeQuery && !normalizedNameQuery) {
+      return stocks;
+    }
+
+    return stocks.filter((stock) => {
+      const matchesCode = !normalizedCodeQuery
+        || getComparableStockCode(stock.code).includes(normalizedCodeQuery);
+      const matchesName = !normalizedNameQuery
+        || stock.name.toLowerCase().includes(normalizedNameQuery);
+
+      return matchesCode && matchesName;
+    });
+  }, [codeQuery, nameQuery, stocks]);
+  const visibleStocks = filteredStocks;
 
   const cancelActiveStockLoad = useCallback(() => {
     requestIdRef.current += 1;
   }, [requestIdRef]);
 
   const setCodeQuery = useCallback((value: string) => {
-    cancelActiveStockLoad();
     setDialogState((current) => ({
       ...current,
       codeQuery: value,
-      stocks: [],
-      hasSearched: false,
-      error: null,
       importError: null,
     }));
-  }, [cancelActiveStockLoad]);
+  }, []);
 
   const setNameQuery = useCallback((value: string) => {
-    cancelActiveStockLoad();
     setDialogState((current) => ({
       ...current,
       nameQuery: value,
-      stocks: [],
-      hasSearched: false,
-      error: null,
       importError: null,
     }));
-  }, [cancelActiveStockLoad]);
+  }, []);
 
-  const loadStocks = useCallback(async (query: { code?: string; name?: string }, signal?: AbortSignal) => {
+  const loadStocks = useCallback(async (signal?: AbortSignal) => {
     const requestId = requestIdRef.current + 1;
 
     requestIdRef.current = requestId;
     setDialogState((current) => ({
       ...current,
-      hasSearched: true,
+      hasLoaded: false,
       isLoading: true,
       error: null,
     }));
 
     try {
-      const stockList = await listStocks(query, signal);
+      const stockList = await listStocks(signal);
 
       if (requestId === requestIdRef.current) {
         setDialogState((current) => ({
           ...current,
           stocks: stockList,
+          hasLoaded: true,
         }));
       }
     } catch (loadError) {
@@ -5303,6 +5307,7 @@ function useStockImportDialog(
         setDialogState((current) => ({
           ...current,
           stocks: [],
+          hasLoaded: false,
           error: loadError instanceof Error ? loadError.message : "股票列表加载失败。",
         }));
       }
@@ -5317,31 +5322,23 @@ function useStockImportDialog(
   }, [requestIdRef]);
 
   useEffect(() => {
-    return cancelActiveStockLoad;
-  }, [cancelActiveStockLoad]);
+    const controller = new AbortController();
+
+    void loadStocks(controller.signal);
+
+    return () => {
+      controller.abort();
+      cancelActiveStockLoad();
+    };
+  }, [cancelActiveStockLoad, loadStocks]);
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedCodeQuery = codeQuery.trim();
-    const trimmedNameQuery = nameQuery.trim();
-
-    if (!trimmedCodeQuery && !trimmedNameQuery) {
-      cancelActiveStockLoad();
-      setDialogState((current) => ({
-        ...current,
-        stocks: [],
-        hasSearched: true,
-        isLoading: false,
-        error: "请输入代码或名称后搜索。",
-      }));
-      return;
-    }
-
-    void loadStocks({
-      code: trimmedCodeQuery,
-      name: trimmedNameQuery,
-    });
+    setDialogState((current) => ({
+      ...current,
+      importError: null,
+    }));
   }
 
   async function handleImportStock(stock: StockInfo) {
@@ -5383,7 +5380,7 @@ function useStockImportDialog(
     codeQuery,
     nameQuery,
     stocks,
-    hasSearched,
+    hasLoaded,
     isLoading,
     error,
     importPendingCode,
@@ -5445,17 +5442,14 @@ function StockImportSearchForm({
 function StockImportSummary({
   listLabel,
   filteredCount,
-  visibleCount,
 }: {
   listLabel: string;
   filteredCount: number;
-  visibleCount: number;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-2">
         <Chip size="sm" variant="soft">结果 {filteredCount}</Chip>
-        {filteredCount > visibleCount ? `显示前 ${visibleCount}` : null}
       </span>
       <Chip size="sm" variant="soft">{listLabel}</Chip>
     </div>
@@ -5481,7 +5475,7 @@ function StockImportResults({
   stockGroups,
   stocks,
   visibleStocks,
-  hasSearched,
+  hasLoaded,
   isLoading,
   error,
   importPendingCode,
@@ -5494,7 +5488,7 @@ function StockImportResults({
   stockGroups: StockGroups;
   stocks: StockInfo[];
   visibleStocks: StockInfo[];
-  hasSearched: boolean;
+  hasLoaded: boolean;
   isLoading: boolean;
   error: string | null;
   importPendingCode: string | null;
@@ -5502,6 +5496,14 @@ function StockImportResults({
   onImportStock: (stock: StockInfo) => void | Promise<void>;
 }) {
   const containerClassName = cn("min-h-[320px] overflow-y-auto px-5 pb-5", className);
+  const targetListCodes = useMemo(
+    () => createStockCodeSet(stockGroups[targetList]),
+    [stockGroups, targetList],
+  );
+  const oppositeListCodes = useMemo(
+    () => createStockCodeSet(stockGroups[oppositeList]),
+    [stockGroups, oppositeList],
+  );
 
   if (isLoading && stocks.length === 0) {
     return (
@@ -5525,11 +5527,11 @@ function StockImportResults({
     );
   }
 
-  if (!hasSearched) {
+  if (!hasLoaded) {
     return (
       <div className={containerClassName}>
         <EmptyState className="flex min-h-48 items-center justify-center text-center text-muted-foreground">
-          输入代码或名称后搜索
+          正在加载股票列表
         </EmptyState>
       </div>
     );
@@ -5543,10 +5545,10 @@ function StockImportResults({
             <StockImportResultItem
               key={stock.code}
               stock={stock}
-              targetList={targetList}
               oppositeList={oppositeList}
               metaLabel={metaLabel}
-              stockGroups={stockGroups}
+              targetListCodes={targetListCodes}
+              oppositeListCodes={oppositeListCodes}
               importPendingCode={importPendingCode}
               onImportStock={onImportStock}
             />
@@ -5563,24 +5565,25 @@ function StockImportResults({
 
 function StockImportResultItem({
   stock,
-  targetList,
   oppositeList,
   metaLabel,
-  stockGroups,
+  targetListCodes,
+  oppositeListCodes,
   importPendingCode,
   onImportStock,
 }: {
   stock: StockInfo;
-  targetList: ReturnableListKey;
   oppositeList: ReturnableListKey;
   metaLabel: string;
-  stockGroups: StockGroups;
+  targetListCodes: Set<string>;
+  oppositeListCodes: Set<string>;
   importPendingCode: string | null;
   onImportStock: (stock: StockInfo) => void | Promise<void>;
 }) {
-  const inTargetList = isStockInList(stock, stockGroups[targetList]);
-  const inOppositeList = isStockInList(stock, stockGroups[oppositeList]);
-  const isImporting = importPendingCode === getComparableStockCode(stock.code);
+  const stockCodeKey = getComparableStockCode(stock.code);
+  const inTargetList = targetListCodes.has(stockCodeKey);
+  const inOppositeList = oppositeListCodes.has(stockCodeKey);
+  const isImporting = importPendingCode === stockCodeKey;
   const importTitle = inOppositeList ? "移入名单" : "添加到名单";
 
   return (
