@@ -3751,11 +3751,11 @@ function MobileBottomActions({
   return (
     <div className="mobile-bottom-actions">
       <div className="mobile-bottom-actions__inner">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid w-full grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
           <Button
             type="button"
             variant="outline"
-            className="h-11 min-w-0 justify-center bg-background/55 px-2 shadow-sm"
+            className="h-11 w-full min-w-0 justify-center gap-1 bg-background/55 px-2 shadow-sm"
             aria-label="打开策略筛选"
             onClick={onOpenStrategyDrawer}
           >
@@ -3765,7 +3765,7 @@ function MobileBottomActions({
           <Button
             type="button"
             variant="outline"
-            className="h-11 min-w-0 justify-center bg-background/55 px-2 shadow-sm"
+            className="h-11 w-full min-w-0 justify-center gap-1 bg-background/55 px-2 shadow-sm"
             aria-label="打开历史选股"
             onClick={onOpenSelectionHistoryDrawer}
           >
@@ -3778,7 +3778,7 @@ function MobileBottomActions({
           <Button
             type="button"
             variant="outline"
-            className="h-11 min-w-0 justify-center bg-background/55 px-2 shadow-sm"
+            className="h-11 w-full min-w-0 justify-center gap-1 bg-background/55 px-2 shadow-sm"
             aria-label="打开红黑名单"
             onClick={onOpenFilterListsDrawer}
           >
