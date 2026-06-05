@@ -1,6 +1,7 @@
 import {
   type FormEvent,
   type ReactNode,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -140,6 +141,8 @@ type SelectionBatchState = {
 type StockImportDialogState = {
   codeQuery: string;
   nameQuery: string;
+  appliedCodeQuery: string;
+  appliedNameQuery: string;
   stocks: StockInfo[];
   hasLoaded: boolean;
   isLoading: boolean;
@@ -170,6 +173,8 @@ type StockListSharedProps = {
 const initialStockImportDialogState: StockImportDialogState = {
   codeQuery: "",
   nameQuery: "",
+  appliedCodeQuery: "",
+  appliedNameQuery: "",
   stocks: [],
   hasLoaded: false,
   isLoading: true,
@@ -5229,6 +5234,8 @@ function useStockImportDialog(
   const {
     codeQuery,
     nameQuery,
+    appliedCodeQuery,
+    appliedNameQuery,
     stocks,
     hasLoaded,
     isLoading,
@@ -5239,8 +5246,8 @@ function useStockImportDialog(
   const meta = stockListMeta[targetList];
   const oppositeList = getOppositeReturnableListKey(targetList);
   const filteredStocks = useMemo(() => {
-    const normalizedCodeQuery = getComparableStockCode(codeQuery);
-    const normalizedNameQuery = nameQuery.trim().toLowerCase();
+    const normalizedCodeQuery = getComparableStockCode(appliedCodeQuery);
+    const normalizedNameQuery = appliedNameQuery.trim().toLowerCase();
 
     if (!normalizedCodeQuery && !normalizedNameQuery) {
       return stocks;
@@ -5254,7 +5261,7 @@ function useStockImportDialog(
 
       return matchesCode && matchesName;
     });
-  }, [codeQuery, nameQuery, stocks]);
+  }, [appliedCodeQuery, appliedNameQuery, stocks]);
   const visibleStocks = filteredStocks;
 
   const cancelActiveStockLoad = useCallback(() => {
@@ -5337,11 +5344,13 @@ function useStockImportDialog(
 
     setDialogState((current) => ({
       ...current,
+      appliedCodeQuery: current.codeQuery.trim(),
+      appliedNameQuery: current.nameQuery.trim(),
       importError: null,
     }));
   }
 
-  async function handleImportStock(stock: StockInfo) {
+  const handleImportStock = useCallback(async (stock: StockInfo) => {
     const stockCodeKey = getComparableStockCode(stock.code);
 
     setDialogState((current) => ({
@@ -5372,7 +5381,7 @@ function useStockImportDialog(
         description: message,
       });
     }
-  }
+  }, [meta.label, onImportStock, targetList]);
 
   return {
     meta,
@@ -5468,7 +5477,7 @@ function StockImportError({ message }: { message: string }) {
   );
 }
 
-function StockImportResults({
+const StockImportResults = memo(function StockImportResults({
   targetList,
   oppositeList,
   metaLabel,
@@ -5561,7 +5570,7 @@ function StockImportResults({
       )}
     </div>
   );
-}
+});
 
 function StockImportResultItem({
   stock,
