@@ -5457,12 +5457,12 @@ function StockImportSearchForm({
           <Label>名称</Label>
           <Input placeholder="贵州茅台" />
         </TextField>
-        <div className="grid grid-cols-2 gap-2 md:flex md:self-end">
-          <Button type="button" variant="outline" className="h-10" onClick={onReset}>
+        <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:self-end">
+          <Button type="button" variant="outline" className="h-10 w-full md:w-auto" onClick={onReset}>
             <RefreshCcw data-icon="inline-start" />
             重置
           </Button>
-          <Button type="submit" className="h-10" isDisabled={isLoading}>
+          <Button type="submit" className="h-10 w-full md:w-auto" isDisabled={isLoading}>
             {isLoading ? <Spinner size="sm" color="current" data-icon="inline-start" /> : <Search data-icon="inline-start" />}
             搜索
           </Button>
