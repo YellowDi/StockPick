@@ -5008,6 +5008,7 @@ function FilterStockImportDrawer({
     setCodeQuery,
     setNameQuery,
     handleSearch,
+    handleResetSearch,
     handleImportStock,
   } = importDialog;
 
@@ -5038,6 +5039,7 @@ function FilterStockImportDrawer({
                 onCodeQueryChange={setCodeQuery}
                 onNameQueryChange={setNameQuery}
                 onSearch={handleSearch}
+                onReset={handleResetSearch}
               />
               {hasLoaded && !isLoading && !error ? (
                 <StockImportSummary
@@ -5106,6 +5108,7 @@ function FilterStockImportDialog({
     setCodeQuery,
     setNameQuery,
     handleSearch,
+    handleResetSearch,
     handleImportStock,
   } = importDialog;
 
@@ -5136,6 +5139,7 @@ function FilterStockImportDialog({
                 onCodeQueryChange={setCodeQuery}
                 onNameQueryChange={setNameQuery}
                 onSearch={handleSearch}
+                onReset={handleResetSearch}
               />
               {hasLoaded && !isLoading && !error ? (
                 <StockImportSummary
@@ -5350,6 +5354,17 @@ function useStockImportDialog(
     }));
   }
 
+  const handleResetSearch = useCallback(() => {
+    setDialogState((current) => ({
+      ...current,
+      codeQuery: "",
+      nameQuery: "",
+      appliedCodeQuery: "",
+      appliedNameQuery: "",
+      importError: null,
+    }));
+  }, []);
+
   const handleImportStock = useCallback(async (stock: StockInfo) => {
     const stockCodeKey = getComparableStockCode(stock.code);
 
@@ -5399,6 +5414,7 @@ function useStockImportDialog(
     setCodeQuery,
     setNameQuery,
     handleSearch,
+    handleResetSearch,
     handleImportStock,
   };
 }
@@ -5410,6 +5426,7 @@ function StockImportSearchForm({
   onCodeQueryChange,
   onNameQueryChange,
   onSearch,
+  onReset,
 }: {
   codeQuery: string;
   nameQuery: string;
@@ -5417,6 +5434,7 @@ function StockImportSearchForm({
   onCodeQueryChange: (value: string) => void;
   onNameQueryChange: (value: string) => void;
   onSearch: (event: FormEvent<HTMLFormElement>) => void;
+  onReset: () => void;
 }) {
   return (
     <Form className="border-y bg-surface-secondary px-5 py-4" onSubmit={onSearch}>
@@ -5439,10 +5457,16 @@ function StockImportSearchForm({
           <Label>名称</Label>
           <Input placeholder="贵州茅台" />
         </TextField>
-        <Button type="submit" className="h-10 md:self-end" isDisabled={isLoading}>
-          {isLoading ? <Spinner size="sm" color="current" data-icon="inline-start" /> : <Search data-icon="inline-start" />}
-          搜索
-        </Button>
+        <div className="grid grid-cols-2 gap-2 md:flex md:self-end">
+          <Button type="button" variant="outline" className="h-10" onClick={onReset}>
+            <RefreshCcw data-icon="inline-start" />
+            重置
+          </Button>
+          <Button type="submit" className="h-10" isDisabled={isLoading}>
+            {isLoading ? <Spinner size="sm" color="current" data-icon="inline-start" /> : <Search data-icon="inline-start" />}
+            搜索
+          </Button>
+        </div>
       </div>
     </Form>
   );
