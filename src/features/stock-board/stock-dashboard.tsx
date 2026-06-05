@@ -4891,7 +4891,7 @@ function FilterListDialog({
   return (
     <>
       <Modal state={modalState}>
-        <Modal.Trigger className="hidden" />
+        <Modal.Trigger className="sr-only" tabIndex={-1} aria-label={`打开${meta.label}弹窗`} />
         <Modal.Backdrop variant="blur">
           <Modal.Container size="lg" scroll="inside">
             <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
@@ -5114,7 +5114,7 @@ function FilterStockImportDialog({
 
   return (
     <Modal state={modalState}>
-      <Modal.Trigger className="hidden" />
+      <Modal.Trigger className="sr-only" tabIndex={-1} aria-label={`打开添加到${meta.label}弹窗`} />
       <Modal.Backdrop variant="blur">
         <Modal.Container size="lg" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
