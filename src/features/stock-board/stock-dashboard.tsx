@@ -5501,6 +5501,14 @@ function StockImportError({ message }: { message: string }) {
   );
 }
 
+type StockImportResultRow = {
+  stock: StockInfo;
+  stockCodeKey: string;
+  inTargetList: boolean;
+  inOppositeList: boolean;
+  isImporting: boolean;
+};
+
 const StockImportResults = memo(function StockImportResults({
   targetList,
   oppositeList,
@@ -5537,6 +5545,21 @@ const StockImportResults = memo(function StockImportResults({
     () => createStockCodeSet(stockGroups[oppositeList]),
     [stockGroups, oppositeList],
   );
+  const resultRows = useMemo<StockImportResultRow[]>(
+    () => visibleStocks.map((stock) => {
+      const stockCodeKey = getComparableStockCode(stock.code);
+
+      return {
+        stock,
+        stockCodeKey,
+        inTargetList: targetListCodes.has(stockCodeKey),
+        inOppositeList: oppositeListCodes.has(stockCodeKey),
+        isImporting: importPendingCode === stockCodeKey,
+      };
+    }),
+    [importPendingCode, oppositeListCodes, targetListCodes, visibleStocks],
+  );
+  const importDisabled = Boolean(importPendingCode);
 
   if (isLoading && stocks.length === 0) {
     return (
@@ -5572,17 +5595,15 @@ const StockImportResults = memo(function StockImportResults({
 
   return (
     <div className={containerClassName}>
-      {visibleStocks.length > 0 ? (
+      {resultRows.length > 0 ? (
         <div className="flex w-full flex-col gap-2">
-          {visibleStocks.map((stock) => (
+          {resultRows.map((row) => (
             <StockImportResultItem
-              key={stock.code}
-              stock={stock}
+              key={row.stock.code}
+              row={row}
               oppositeList={oppositeList}
               metaLabel={metaLabel}
-              targetListCodes={targetListCodes}
-              oppositeListCodes={oppositeListCodes}
-              importPendingCode={importPendingCode}
+              importDisabled={importDisabled}
               onImportStock={onImportStock}
             />
           ))}
@@ -5596,33 +5617,26 @@ const StockImportResults = memo(function StockImportResults({
   );
 });
 
-function StockImportResultItem({
-  stock,
+const StockImportResultItem = memo(function StockImportResultItem({
+  row,
   oppositeList,
   metaLabel,
-  targetListCodes,
-  oppositeListCodes,
-  importPendingCode,
+  importDisabled,
   onImportStock,
 }: {
-  stock: StockInfo;
+  row: StockImportResultRow;
   oppositeList: ReturnableListKey;
   metaLabel: string;
-  targetListCodes: Set<string>;
-  oppositeListCodes: Set<string>;
-  importPendingCode: string | null;
+  importDisabled: boolean;
   onImportStock: (stock: StockInfo) => void | Promise<void>;
 }) {
-  const stockCodeKey = getComparableStockCode(stock.code);
-  const inTargetList = targetListCodes.has(stockCodeKey);
-  const inOppositeList = oppositeListCodes.has(stockCodeKey);
-  const isImporting = importPendingCode === stockCodeKey;
+  const { stock, inTargetList, inOppositeList, isImporting } = row;
   const importTitle = inOppositeList ? "移入名单" : "添加到名单";
 
   return (
     <Surface
       variant="transparent"
-      className="group/stock-item flex w-full flex-nowrap items-center gap-2 rounded-lg border border-border bg-background/45 p-2"
+      className="group/stock-item flex w-full flex-nowrap items-center gap-2 rounded-lg border border-border bg-background/45 p-2 [contain-intrinsic-size:64px] [content-visibility:auto]"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex min-w-0 items-baseline gap-2">
@@ -5653,7 +5667,7 @@ function StockImportResultItem({
             variant="outline"
             className="size-10 rounded-md bg-background/55 md:size-8"
             aria-label={`${importTitle}：${stock.name} ${stock.code}`}
-            isDisabled={Boolean(importPendingCode)}
+            isDisabled={importDisabled}
             onClick={() => void onImportStock(stock)}
           >
             {isImporting ? (
@@ -5666,7 +5680,7 @@ function StockImportResultItem({
       ) : null}
     </Surface>
   );
-}
+});
 
 function EmptyChart({ error, className }: { error?: string; className?: string }) {
   return (
