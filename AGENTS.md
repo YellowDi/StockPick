@@ -14,6 +14,7 @@ StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeSc
 ## 命令
 
 - `npm run dev`：启动 Vite dev server，通常在 5173 端口。除非用户明确要求，不要主动启动。
+- 检查浏览器运行态时，先使用用户已打开或已说明的实际端口；不要假设 5173，尤其要确认页面标题为 StockPick。
 - `npm run build`：执行 TypeScript 构建检查（`tsc -b`）并打包。代码改动后必须运行。
 - `npm run preview`：预览生产构建。
 - `npm run postinstall`：为 A 股涨跌颜色约定 patch `liveline`。依赖安装后自动运行。

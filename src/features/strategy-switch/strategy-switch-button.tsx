@@ -492,7 +492,7 @@ function strategyDraftReducer(
   return state;
 }
 
-export function normalizeStrategyConfig(config: StrategyConfig): StrategyConfig {
+function normalizeStrategyConfig(config: StrategyConfig): StrategyConfig {
   return {
     ...config,
     name: config.name.trim() || defaultStrategyConfig.name,
@@ -501,7 +501,7 @@ export function normalizeStrategyConfig(config: StrategyConfig): StrategyConfig 
   };
 }
 
-export function isStrategyConfigDirty(draft: StrategyConfig, baseline: StrategyConfig) {
+function isStrategyConfigDirty(draft: StrategyConfig, baseline: StrategyConfig) {
   return !areStrategyConfigsEqual(normalizeStrategyConfig(draft), normalizeStrategyConfig(baseline));
 }
 

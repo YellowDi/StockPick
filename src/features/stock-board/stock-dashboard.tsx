@@ -324,7 +324,7 @@ function SelectionBatchSkeletonList({ count = 3 }: { count?: number }) {
 
 function StockImportResultsSkeleton() {
   return (
-    <div className="flex w-full flex-col gap-2" role="status">
+    <div className="flex w-full flex-col gap-2" aria-busy="true" aria-live="polite">
       <span className="sr-only">加载搜索结果...</span>
       <StockListSkeleton count={5} />
     </div>
@@ -1240,6 +1240,7 @@ function StockDashboardLayout({
       ) : null}
       {state.mobileSelectionHistoryDrawerOpen ? (
         <MobileSelectionHistoryDrawer
+          key={state.selectionBatchesPageNum}
           selectionBatches={state.selectionBatches}
           selectionBatchesLoading={state.selectionBatchesLoading}
           selectionBatchesPageNum={state.selectionBatchesPageNum}
@@ -2788,7 +2789,7 @@ function SelectionBatchDisclosureItem({
 
 function DesktopSelectionBatchesLoadingState() {
   return (
-    <div className="shrink-0" role="status">
+    <div className="shrink-0" aria-busy="true" aria-live="polite">
       <span className="sr-only">加载历史选股...</span>
       <SelectionBatchSkeletonList />
     </div>
@@ -3615,10 +3616,6 @@ function MobileSelectionHistoryDrawer({
     },
   });
 
-  useEffect(() => {
-    setOpenItems([]);
-  }, [selectionBatchesPageNum]);
-
   return (
     <Drawer state={drawerState}>
       <Drawer.Trigger className="hidden" />
@@ -3678,7 +3675,7 @@ function MobileSelectionHistoryDrawer({
                   })}
                 </DisclosureGroup>
               ) : selectionBatchesLoading ? (
-                <div className="py-1" role="status">
+                <div className="py-1" aria-busy="true" aria-live="polite">
                   <span className="sr-only">加载历史选股...</span>
                   <SelectionBatchSkeletonList count={4} />
                 </div>
