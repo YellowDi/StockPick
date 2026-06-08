@@ -2979,33 +2979,20 @@ function SelectionBatchDisclosureItem({
         expanded && "bg-surface",
       )}
     >
-      <div className="flex min-w-0 items-center gap-1">
-        <Disclosure.Heading className="flex min-w-0 flex-1">
-          <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
-            <StockDisclosureTitle
-              icon={CheckCircle2}
-              title={batch.name}
-              description={`历史选股${batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}`}
-              count={batch.isLoading ? "..." : batch.stocks.length || batch.total}
-              active
-            />
-          </Disclosure.Trigger>
-        </Disclosure.Heading>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm" isIconOnly
-          className="size-10 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive md:size-8"
-          aria-label={`删除历史选股：${batch.name}`}
-          isDisabled={deletePending}
-          onClick={() => void onDeleteSelectionBatch(batch.id)}
-        >
-          {deletePending ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
-        </Button>
-      </div>
+      <Disclosure.Heading className="flex min-w-0">
+        <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
+          <StockDisclosureTitle
+            icon={CheckCircle2}
+            title={batch.name}
+            description={`历史选股${batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}`}
+            count={batch.isLoading ? "..." : batch.stocks.length || batch.total}
+            active
+          />
+        </Disclosure.Trigger>
+      </Disclosure.Heading>
 
       <Disclosure.Content className="overflow-hidden">
-        <div className="pb-3 pl-10">
+        <div className="pb-3">
           {batch.error ? (
             <div className="flex min-h-20 flex-col justify-center gap-1 px-1 text-left">
               <div className="text-sm font-medium text-destructive">记录加载失败</div>
@@ -3044,6 +3031,31 @@ function SelectionBatchDisclosureItem({
           ) : (
             <DesktopStockListEmptyState listKey="selected" />
           )}
+          <div className="mt-3 grid grid-cols-2 gap-2 px-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 w-full border-destructive/35 bg-background/45 text-destructive hover:bg-destructive/10"
+              aria-label={`删除已选列表：${batch.name}`}
+              isDisabled={deletePending}
+              onClick={() => void onDeleteSelectionBatch(batch.id)}
+            >
+              {deletePending ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
+              删除已选列表
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 w-full bg-background/45"
+              aria-label={`添加股票到历史选股：${batch.name}`}
+              isDisabled
+            >
+              <Plus data-icon="inline-start" />
+              添加股票
+            </Button>
+          </div>
         </div>
       </Disclosure.Content>
     </Disclosure>
