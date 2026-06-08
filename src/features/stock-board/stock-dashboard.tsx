@@ -2975,7 +2975,7 @@ function SelectionBatchDisclosureItem({
     <Disclosure
       id={value}
       className={cn(
-        "rounded-lg border border-border/60 bg-surface/70 px-3 shadow-sm",
+        "overflow-hidden rounded-[min(32px,var(--radius-3xl))] border border-border/60 bg-surface/70 px-3 shadow-sm",
         expanded && "bg-surface",
       )}
     >
