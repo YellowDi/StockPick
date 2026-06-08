@@ -47,6 +47,7 @@ import {
   ScrollShadow,
   Skeleton,
   Spinner,
+  Separator,
   Surface,
   Tabs,
   Table,
@@ -143,6 +144,9 @@ type SelectionBatchState = {
   isLoading: boolean;
   error: string | null;
 };
+type SelectionDeleteConfirmTarget =
+  | { type: "batch"; batch: SelectionBatchState }
+  | { type: "record"; stock: StockCandidate };
 type StockImportDialogState = {
   codeQuery: string;
   nameQuery: string;
@@ -1106,6 +1110,7 @@ function StockDashboardLayout({
   removeStrategyConfig,
 }: StockDashboardProps & ReturnType<typeof useStockDashboard>) {
   const isDesktopViewport = useIsDesktopViewport();
+  const [selectionDeleteTarget, setSelectionDeleteTarget] = useState<SelectionDeleteConfirmTarget | null>(null);
   const candidateResultButtonVisible = state.candidateResultAvailable
     && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0);
   const sharedStockListProps = {
@@ -1118,6 +1123,18 @@ function StockDashboardLayout({
     onToggleChart: toggleSelectedStock,
     onDeleteFromFilterList: deleteStockFromFilterList,
   };
+
+  function requestRemoveStockFromHistory(stock: StockCandidate) {
+    setSelectionDeleteTarget({ type: "record", stock });
+  }
+
+  function requestRemoveSelectionBatch(id: number) {
+    const batch = state.selectionBatches.find((item) => item.id === id);
+
+    if (batch) {
+      setSelectionDeleteTarget({ type: "batch", batch });
+    }
+  }
 
   return (
     <main className="relative isolate min-h-dvh overflow-x-hidden text-foreground">
@@ -1186,8 +1203,8 @@ function StockDashboardLayout({
           onActiveListChange={setDesktopListKey}
           onOpenFilterList={openFilterListDialog}
           onOpenCandidateDialog={openCandidateDialog}
-          onRemoveFromHistory={removeStockFromHistory}
-          onDeleteSelectionBatch={removeSelectionBatch}
+          onRemoveFromHistory={requestRemoveStockFromHistory}
+          onDeleteSelectionBatch={requestRemoveSelectionBatch}
           onSelectionHistoryPageChange={changeSelectionHistoryPage}
           onStrategySelect={setStrategyConfig}
           onStrategySave={saveStrategyConfig}
@@ -1262,8 +1279,8 @@ function StockDashboardLayout({
           chartSelection={state.chartSelection}
           selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
           onClose={closeMobileSelectionHistoryDrawer}
-          onRemoveFromHistory={removeStockFromHistory}
-          onDeleteSelectionBatch={removeSelectionBatch}
+          onRemoveFromHistory={requestRemoveStockFromHistory}
+          onDeleteSelectionBatch={requestRemoveSelectionBatch}
           onToggleChart={toggleSelectedStock}
           onPageChange={changeSelectionHistoryPage}
         />
@@ -1302,7 +1319,104 @@ function StockDashboardLayout({
           onDeleteFromFilterList={deleteStockFromFilterList}
         />
       ) : null}
+      <SelectionDeleteConfirmModal
+        isOpen={selectionDeleteTarget !== null}
+        target={selectionDeleteTarget}
+        selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
+        selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectionDeleteTarget(null);
+          }
+        }}
+        onDeleteSelectionBatch={removeSelectionBatch}
+        onRemoveFromHistory={removeStockFromHistory}
+      />
     </main>
+  );
+}
+
+function SelectionDeleteConfirmModal({
+  isOpen,
+  target,
+  selectionBatchDeletePendingIds,
+  selectionRecordDeletePendingIds,
+  onOpenChange,
+  onDeleteSelectionBatch,
+  onRemoveFromHistory,
+}: {
+  isOpen: boolean;
+  target: SelectionDeleteConfirmTarget | null;
+  selectionBatchDeletePendingIds: number[];
+  selectionRecordDeletePendingIds: number[];
+  onOpenChange: (open: boolean) => void;
+  onDeleteSelectionBatch: (id: number) => void | Promise<void>;
+  onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
+}) {
+  const modalState = useOverlayState({ isOpen, onOpenChange });
+  const batchId = target?.type === "batch" ? target.batch.id : null;
+  const recordId = target?.type === "record" ? target.stock.selectionRecordId : null;
+  const deleting = Boolean(
+    (batchId && selectionBatchDeletePendingIds.includes(batchId))
+    || (recordId && selectionRecordDeletePendingIds.includes(recordId)),
+  );
+  const title = target?.type === "batch" ? "删除历史选股？" : "删除历史选股条目？";
+  const description = target?.type === "batch"
+    ? `将删除「${target.batch.name}」及其中已保存的股票记录。删除后不可恢复。`
+    : `将从历史选股中删除「${target?.stock.name ?? "当前股票"} ${target?.stock.code ?? ""}」。删除后不可恢复。`;
+
+  async function confirmDelete() {
+    if (!target) {
+      return;
+    }
+
+    if (target.type === "batch") {
+      await onDeleteSelectionBatch(target.batch.id);
+    } else {
+      await onRemoveFromHistory(target.stock);
+    }
+
+    modalState.close();
+  }
+
+  return (
+    <Modal state={modalState}>
+      <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开删除历史选股确认" />
+      <Modal.Backdrop variant="blur" isDismissable={!deleting}>
+        <Modal.Container size="sm" scroll="inside">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
+            <Modal.Header className="p-5">
+              <div className="flex flex-col gap-2">
+                <Modal.Heading className="text-xl text-balance">{title}</Modal.Heading>
+                <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+              </div>
+            </Modal.Header>
+            <Separator />
+            <Modal.Footer className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                className="bg-background/55 transition-transform active:scale-[0.96]"
+                isDisabled={deleting}
+                slot="close"
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                className="transition-transform active:scale-[0.96]"
+                isDisabled={deleting || !target}
+                onClick={() => void confirmDelete()}
+              >
+                {deleting ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
+                确认删除
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
 
