@@ -21,6 +21,15 @@ export type AddStockFilterRequest = {
   listType: StockFilterListType;
 };
 
+export type ImportStockFiltersRequest = {
+  file: File;
+  listType: StockFilterListType;
+};
+
+export type ImportStockFiltersResponse = {
+  errors: string[];
+};
+
 export type DailyKline = {
   amount?: number;
   close?: number;
@@ -275,6 +284,52 @@ export async function deleteStockFilter(id: number): Promise<void> {
   if (apiStatus !== null && apiStatus !== 0) {
     throw new ApiError(getErrorMessage(payload) ?? "删除名单失败。", response.status);
   }
+}
+
+export async function importStockFilters(
+  request: ImportStockFiltersRequest,
+): Promise<ImportStockFiltersResponse> {
+  if (request.file.size <= 0) {
+    throw new Error("Excel文件不能为空。");
+  }
+
+  const formData = new FormData();
+
+  formData.append("file", request.file);
+  formData.append("list_type", request.listType);
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/strategy/filter/import`, {
+      method: "POST",
+      headers: createAuthHeaders(token),
+      body: formData,
+    });
+  } catch {
+    throw new Error("无法连接导入名单接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "Excel导入失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "Excel导入失败。", response.status);
+  }
+
+  return getImportStockFiltersResponse(payload);
 }
 
 export async function scanStrategy(
@@ -712,6 +767,23 @@ function getStockFilters(payload: unknown, requestedType: StockFilterListType) {
 
     return code ? [{ id, code, name: name || code, listType }] : [];
   });
+}
+
+function getImportStockFiltersResponse(payload: unknown): ImportStockFiltersResponse {
+  const source = unwrapDataRecord(payload) ?? (isRecord(payload) ? payload : null);
+  const errors = source && Array.isArray(source.errors)
+    ? source.errors.flatMap((error) => {
+      if (typeof error !== "string") {
+        return [];
+      }
+
+      const trimmedError = error.trim();
+
+      return trimmedError ? [trimmedError] : [];
+    })
+    : [];
+
+  return { errors };
 }
 
 function getDailyKlines(payload: unknown) {

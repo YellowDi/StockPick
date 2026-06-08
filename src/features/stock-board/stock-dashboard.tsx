@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent,
   type FormEvent,
   type ReactNode,
   memo,
@@ -16,6 +17,7 @@ import {
   RiCheckboxCircleLine as CheckCircle2,
   RiDatabase2Line as Database,
   RiDeleteBinLine as Trash2,
+  RiFileExcelLine as FileExcel,
   RiFilter3Line as ListFilter,
   RiImportLine as ImportIcon,
   RiLoader4Line as LoaderCircle,
@@ -75,6 +77,7 @@ import {
   deleteSelectionRecords,
   deleteStockFilter,
   deleteStrategyConfig,
+  importStockFilters,
   listSelectionBatches,
   listSelectionRecords,
   listStockFilters,
@@ -83,6 +86,7 @@ import {
   scanStrategy,
   updateStrategyConfig,
   type DailyKline,
+  type ImportStockFiltersResponse,
   type SelectionBatch,
   type SelectionRecord,
   type StockFilter,
@@ -100,6 +104,7 @@ const daySecs = 24 * 60 * 60;
 const dailyKVisibleDays = 7;
 const axisLabelMatchThresholdSecs = daySecs / 2;
 const chartLineWidth = 2.5;
+const excelFileNamePattern = /\.(xls|xlsx)$/i;
 const mobileChartPadding = { top: 18, right: 56, bottom: 34, left: 0 };
 const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: 0 };
 const mobileViewportQuery = "(max-width: 767px)";
@@ -761,6 +766,29 @@ function useStockDashboard() {
     }
   }, [syncFilterLists]);
 
+  const importFilterExcelToList = useCallback(async (
+    file: File,
+    targetList: ReturnableListKey,
+  ): Promise<ImportStockFiltersResponse> => {
+    const result = await importStockFilters({
+      file,
+      listType: getFilterListType(targetList),
+    });
+
+    try {
+      await syncFilterLists();
+    } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : "名单同步失败。";
+
+      dispatch({ type: "set-filter-error", error: message });
+      toast.danger("名单同步失败", {
+        description: message,
+      });
+    }
+
+    return result;
+  }, [syncFilterLists]);
+
   function addStockToCandidate(stock: StockCandidate) {
     const codeKey = getComparableStockCode(stock.code);
 
@@ -1043,6 +1071,7 @@ function useStockDashboard() {
     openCandidateDialog,
     closeCandidateDialog,
     importStockToList,
+    importFilterExcelToList,
     addStockToCandidate,
     addStocksToCandidate,
     removeStockFromCandidate,
@@ -1084,6 +1113,7 @@ function StockDashboardLayout({
   openCandidateDialog,
   closeCandidateDialog,
   importStockToList,
+  importFilterExcelToList,
   addStockToCandidate,
   addStocksToCandidate,
   removeStockFromCandidate,
@@ -1296,6 +1326,7 @@ function StockDashboardLayout({
           onClose={closeMobileFilterListsDrawer}
           onActiveListChange={setMobileFilterListKey}
           onImportStock={importStockToList}
+          onImportFilterExcel={importFilterExcelToList}
           onAddToCandidate={addStockToCandidate}
           onRemoveFromCandidate={removeStockFromCandidate}
           onToggleChart={toggleSelectedStock}
@@ -1313,6 +1344,7 @@ function StockDashboardLayout({
           candidateStockCodes={candidateStockCodes}
           onClose={closeFilterListDialog}
           onImportStock={importStockToList}
+          onImportFilterExcel={importFilterExcelToList}
           onAddToCandidate={addStockToCandidate}
           onRemoveFromCandidate={removeStockFromCandidate}
           onToggleChart={toggleSelectedStock}
@@ -4489,6 +4521,10 @@ function getFilterListType(listKey: ReturnableListKey) {
   return listKey === "whitelist" ? "white" : "black";
 }
 
+function isExcelFile(file: File) {
+  return excelFileNamePattern.test(file.name);
+}
+
 function createStockFilterCandidates(
   filters: StockFilter[],
   targetList: ReturnableListKey,
@@ -4994,6 +5030,7 @@ function MobileFilterListsDrawer({
   onClose,
   onActiveListChange,
   onImportStock,
+  onImportFilterExcel,
   onAddToCandidate,
   onRemoveFromCandidate,
   onToggleChart,
@@ -5008,6 +5045,7 @@ function MobileFilterListsDrawer({
   onClose: () => void;
   onActiveListChange: (listKey: ReturnableListKey) => void;
   onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+  onImportFilterExcel: (file: File, targetList: ReturnableListKey) => Promise<ImportStockFiltersResponse>;
 } & Pick<
   StockListSharedProps,
   "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
@@ -5097,6 +5135,7 @@ function MobileFilterListsDrawer({
                         <FilterListAddStockLauncher
                           metaLabel={stockListMeta[listKey].label}
                           onOpen={() => setImportListKey(listKey)}
+                          onImportExcel={(file) => onImportFilterExcel(file, listKey)}
                         />
                       </div>
                     </Tabs.Panel>
@@ -5129,6 +5168,7 @@ function FilterListDialog({
   candidateStockCodes,
   onClose,
   onImportStock,
+  onImportFilterExcel,
   onAddToCandidate,
   onRemoveFromCandidate,
   onToggleChart,
@@ -5143,6 +5183,7 @@ function FilterListDialog({
   candidateStockCodes: Set<string>;
   onClose: () => void;
   onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+  onImportFilterExcel: (file: File, targetList: ReturnableListKey) => Promise<ImportStockFiltersResponse>;
 } & Pick<
   StockListSharedProps,
   "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
@@ -5199,6 +5240,7 @@ function FilterListDialog({
                 <FilterListAddStockLauncher
                   metaLabel={meta.label}
                   onOpen={() => setIsImportDialogOpen(true)}
+                  onImportExcel={(file) => onImportFilterExcel(file, targetList)}
                 />
               </Modal.Body>
             </Modal.Dialog>
@@ -5220,10 +5262,66 @@ function FilterListDialog({
 function FilterListAddStockLauncher({
   metaLabel,
   onOpen,
+  onImportExcel,
 }: {
   metaLabel: string;
   onOpen: () => void;
+  onImportExcel: (file: File) => Promise<ImportStockFiltersResponse>;
 }) {
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const [isExcelImporting, setIsExcelImporting] = useState(false);
+
+  const handleExcelImportClick = useCallback(() => {
+    if (!isExcelImporting) {
+      excelInputRef.current?.click();
+    }
+  }, [isExcelImporting]);
+
+  const handleExcelFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] ?? null;
+
+    input.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!isExcelFile(file)) {
+      toast.danger("Excel导入失败", {
+        description: "请选择 .xls 或 .xlsx 文件。",
+      });
+      return;
+    }
+
+    setIsExcelImporting(true);
+
+    try {
+      const result = await onImportExcel(file);
+
+      if (result.errors.length > 0) {
+        const errorPreview = result.errors.slice(0, 3).join("、");
+        const suffix = result.errors.length > 3 ? ` 等 ${result.errors.length} 项` : "";
+
+        toast.warning("Excel导入完成，存在错误列", {
+          description: `${errorPreview}${suffix}`,
+        });
+      } else {
+        toast.success(`已从Excel导入${metaLabel}`, {
+          description: file.name,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Excel导入失败。";
+
+      toast.danger("Excel导入失败", {
+        description: message,
+      });
+    } finally {
+      setIsExcelImporting(false);
+    }
+  }, [metaLabel, onImportExcel]);
+
   return (
     <section className="shrink-0 border-t border-border/60 px-5 py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -5236,10 +5334,33 @@ function FilterListAddStockLauncher({
             <p className="mt-0.5 truncate text-xs text-muted-foreground">打开搜索浮窗后添加到{metaLabel}</p>
           </div>
         </div>
-        <Button type="button" className="w-full sm:w-auto" onClick={onOpen}>
-          <Plus data-icon="inline-start" />
-          添加股票
-        </Button>
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">
+          <input
+            ref={excelInputRef}
+            type="file"
+            className="hidden"
+            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(event) => void handleExcelFileChange(event)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            isDisabled={isExcelImporting}
+            onClick={handleExcelImportClick}
+          >
+            {isExcelImporting ? (
+              <Spinner size="sm" color="current" data-icon="inline-start" />
+            ) : (
+              <FileExcel data-icon="inline-start" />
+            )}
+            从 Excel 导入
+          </Button>
+          <Button type="button" className="w-full sm:w-auto" onClick={onOpen}>
+            <Plus data-icon="inline-start" />
+            添加股票
+          </Button>
+        </div>
       </div>
     </section>
   );
