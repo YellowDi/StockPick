@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-StockPick is a Chinese A-share stock screening dashboard prototype. It is a React/TypeScript SPA that connects to a backend API at `http://192.168.2.16:1889/api/v1` for authentication, strategy scanning, stock filter lists, and selection history. The UI is entirely in Chinese.
+StockPick is a Chinese A-share stock screening dashboard prototype. It is a React/TypeScript SPA whose backend API base URL is environment-specific: local development uses `VITE_DEV_API_BASE_URL` from the untracked `.env.development.local`, while production defaults to same-origin `/api/v1`. Do not write real server IPs/domains into source or docs. The UI is entirely in Chinese.
 
 ## Commands
 

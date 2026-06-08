@@ -9,7 +9,7 @@
 
 ## 项目概览
 
-StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeScript 单页应用，连接后端 API `http://192.168.2.16:1889/api/v1`，用于登录认证、策略扫描、股票筛选列表和入选历史。界面文案全部为中文。
+StockPick 是一个中文 A 股股票筛选看板原型。当前是 React/TypeScript 单页应用，后端 API 地址按环境分流：本地开发通过未提交的 `.env.development.local` 中的 `VITE_DEV_API_BASE_URL` 配置，生产默认使用同源 `/api/v1`。不要把真实服务器 IP/域名写入源码或文档。界面文案全部为中文。
 
 ## 命令
 

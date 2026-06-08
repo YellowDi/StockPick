@@ -1,4 +1,5 @@
-const apiBaseUrl = import.meta.env.DEV ? "http://192.168.2.16:1889/api/v1" : "/api/v1";
+import { apiBaseUrl } from "./api-base-url";
+
 const authExpiredEventName = "stockpick-auth-expired";
 const authTokenStorageKey = "stockpick-auth-token";
 
