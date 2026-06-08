@@ -4681,12 +4681,12 @@ function DesktopCandidateDialog({
   return (
     <Drawer state={drawerState}>
       <Drawer.Trigger className="hidden" />
-      <Drawer.Backdrop variant="transparent">
-        <Drawer.Content placement="bottom">
-          <Drawer.Dialog className="mx-auto h-[48vh] min-h-[360px] max-h-[520px] w-[min(calc(100%-2rem),1120px)] overflow-hidden p-0">
-            <Drawer.Handle className="pt-2 pb-1" />
+      <Drawer.Backdrop variant="transparent" isDismissable={false}>
+        <Drawer.Content placement="right">
+          <Drawer.Dialog className="h-full w-[min(28rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden rounded-none border-l border-border/70 p-0">
+            <Drawer.Handle className="hidden" />
             <Drawer.CloseTrigger className="z-20" />
-            <Drawer.Header className="px-5 pb-3 pt-0">
+            <Drawer.Header className="px-5 py-4 pr-12">
               <div className="flex min-w-0 items-center gap-3">
                 <Badge.Anchor>
                   <StockSectionIconBox icon={ListFilter} active />
@@ -4702,7 +4702,7 @@ function DesktopCandidateDialog({
             </Drawer.Header>
 
             <Drawer.Body className="min-h-0 overflow-hidden p-0">
-              <div className="grid h-full min-h-0 grid-cols-2">
+              <div className="flex h-full min-h-0 flex-col">
                 <DesktopCandidateDialogColumn
                   listKey="initial"
                   title="筛选结果"
@@ -4739,7 +4739,7 @@ function DesktopCandidateDialog({
                   candidateStockCodes={candidateStockCodes}
                   emptyTitle="暂无待保存股票"
                   emptyDescription="从左侧筛选结果添加股票"
-                  className="border-l border-border/60"
+                  className="border-t border-border/60"
                   actions={(
                     <div className="flex shrink-0 items-center gap-2">
                       <Button
@@ -4810,7 +4810,7 @@ function DesktopCandidateDialogColumn({
   "chartSelection" | "candidateStockCodes" | "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart"
 >) {
   return (
-    <section className={cn("flex min-h-0 flex-col", className)}>
+    <section className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 p-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
