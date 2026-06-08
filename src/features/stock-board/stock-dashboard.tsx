@@ -109,6 +109,11 @@ const excelFileNamePattern = /\.(xls|xlsx)$/i;
 const mobileChartPadding = { top: 18, right: 56, bottom: 34, left: 0 };
 const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: 0 };
 const mobileViewportQuery = "(max-width: 767px)";
+const redListStackPreviewItems = [
+  { id: "red-list-preview-1", label: "红名单 #1", description: "主策略池", count: 18 },
+  { id: "red-list-preview-2", label: "红名单 #2", description: "观察池", count: 9 },
+  { id: "red-list-preview-3", label: "红名单 #3", description: "短线跟踪", count: 6 },
+];
 const emptyStockGroups: StockGroups = {
   initial: [],
   candidate: [],
@@ -2830,6 +2835,8 @@ function DesktopStockSidebar({
   onStrategyDelete: (id: number) => void | Promise<void>;
   onStrategyScan: () => void | Promise<void>;
 } & StockListSharedProps) {
+  const [redListStackPreviewOpen, setRedListStackPreviewOpen] = useState(false);
+
   return (
     <aside className="flex h-full min-h-0 flex-col gap-4 bg-transparent p-4">
       <Card className="shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
@@ -2931,17 +2938,114 @@ function DesktopStockSidebar({
         {...stockListProps}
       />
 
-      <Card className="mt-auto shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
-        <CardContent className="p-0">
-          <FilterListButtonGroup
-            stockGroups={stockGroups}
-            className="grid-cols-1"
-            buttonClassName="h-11 w-full bg-background/35 px-3"
-            onOpenFilterList={onOpenFilterList}
-          />
-        </CardContent>
-      </Card>
+      <div className="mt-auto flex shrink-0 flex-col gap-3">
+        <RedListStackStylePreview
+          open={redListStackPreviewOpen}
+          onOpenChange={setRedListStackPreviewOpen}
+        />
+
+        <Card className="shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
+          <CardContent className="p-0">
+            <FilterListButtonGroup
+              stockGroups={stockGroups}
+              className="grid-cols-1"
+              buttonClassName="h-11 w-full bg-background/35 px-3"
+              onOpenFilterList={onOpenFilterList}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </aside>
+  );
+}
+
+function RedListStackStylePreview({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <section className="relative isolate">
+      <div
+        id="red-list-stack-style-preview"
+        className={cn(
+          "absolute inset-x-0 bottom-[calc(100%+0.6rem)] z-20 origin-bottom transition-[opacity,transform] duration-200 ease-out",
+          open
+            ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+            : "pointer-events-none translate-y-3 scale-[0.97] opacity-0",
+        )}
+        aria-hidden={!open}
+      >
+        <div className="overflow-hidden rounded-xl border border-stock-up/25 bg-card/90 p-2 shadow-[0_20px_70px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-stock-up">红名单堆栈</div>
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">静态样式样例</div>
+            </div>
+            <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+              {redListStackPreviewItems.length}
+            </Chip>
+          </div>
+
+          <div className="mt-1 flex flex-col gap-2">
+            {redListStackPreviewItems.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                className="group/red-stack flex w-full min-w-0 items-center gap-3 rounded-lg border border-border/65 bg-background/50 p-2 text-left shadow-sm outline-none transition-[background-color,border-color,box-shadow,opacity,transform] duration-200 ease-out hover:border-stock-up/45 hover:bg-stock-up/10 hover:shadow-[0_10px_32px_rgba(248,113,113,0.12)] focus-visible:border-stock-up/60 focus-visible:ring-2 focus-visible:ring-stock-up/30"
+                style={{
+                  opacity: open ? 1 : 0,
+                  transform: open
+                    ? `translateY(0) scale(${1 - index * 0.018})`
+                    : `translateY(${18 + index * 8}px) scale(${0.94 - index * 0.018})`,
+                  transitionDelay: open ? `${index * 45}ms` : "0ms",
+                }}
+                aria-disabled="true"
+                aria-label={`${item.label} 样式预览`}
+                onClick={(event) => event.preventDefault()}
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-stock-up/30 bg-stock-up/10 text-stock-up transition-transform duration-150 group-hover/red-stack:scale-105">
+                  <ShieldCheck className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium leading-none">{item.label}</span>
+                  <span className="mt-1 block truncate text-xs text-muted-foreground">{item.description}</span>
+                </span>
+                <span className="rounded-md border border-border/60 bg-background/55 px-2 py-1 text-xs tabular-nums text-muted-foreground">
+                  {item.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className={cn(
+          "h-11 w-full min-w-0 justify-start bg-card/72 px-3 shadow-sm backdrop-blur-xl",
+          open && "border-stock-up/45 bg-stock-up/10 text-stock-up",
+        )}
+        aria-expanded={open}
+        aria-controls="red-list-stack-style-preview"
+        onClick={() => onOpenChange(!open)}
+      >
+        <ShieldCheck data-icon="inline-start" className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-left">红名单样式预览</span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {redListStackPreviewItems.length}
+        </span>
+        <ChevronRight
+          className={cn(
+            "ml-0 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+            open && "-rotate-90 text-stock-up",
+          )}
+        />
+      </Button>
+    </section>
   );
 }
 
