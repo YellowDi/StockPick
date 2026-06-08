@@ -13,12 +13,20 @@ export type StockFilter = {
   code: string;
   name: string;
   listType: StockFilterListType;
+  groupId?: number;
+};
+
+export type StockFilterGroup = {
+  groupId: number;
+  listType: StockFilterListType;
+  name: string;
 };
 
 export type AddStockFilterRequest = {
   code: string;
   name: string;
   listType: StockFilterListType;
+  groupId?: number;
 };
 
 export type AddManualSelectionRequest = {
@@ -30,10 +38,17 @@ export type AddManualSelectionRequest = {
 export type ImportStockFiltersRequest = {
   file: File;
   listType: StockFilterListType;
+  groupId?: number;
 };
 
 export type ImportStockFiltersResponse = {
   errors: string[];
+};
+
+export type SetStockFilterGroupRequest = {
+  listType: StockFilterListType;
+  name: string;
+  groupId?: number;
 };
 
 export type DailyKline = {
@@ -169,10 +184,14 @@ export async function listStocks(signal?: AbortSignal): Promise<StockInfo[]> {
 export async function listStockFilters(
   type: StockFilterListType,
   signal?: AbortSignal,
+  groupId?: number,
 ): Promise<StockFilter[]> {
   const url = new URL(`${apiBaseUrl}/strategy/filter`, window.location.origin);
 
   url.searchParams.set("type", type);
+  if (typeof groupId === "number" && Number.isFinite(groupId) && groupId > 0) {
+    url.searchParams.set("group_id", String(groupId));
+  }
 
   let response: Response;
   const token = getStoredAuthToken()?.trim();
@@ -212,6 +231,137 @@ export async function listStockFilters(
   return getStockFilters(payload, type);
 }
 
+export async function listStockFilterGroups(
+  type: StockFilterListType,
+  signal?: AbortSignal,
+): Promise<StockFilterGroup[]> {
+  const url = new URL(`${apiBaseUrl}/strategy/filter/group/list`, window.location.origin);
+
+  url.searchParams.set("type", type);
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: createAuthHeaders(token),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    throw new Error("无法连接名单分组接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "名单分组加载失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "名单分组加载失败。", response.status);
+  }
+
+  return getStockFilterGroups(payload, type);
+}
+
+export async function setStockFilterGroup(request: SetStockFilterGroupRequest): Promise<void> {
+  const name = request.name.trim();
+
+  if (!name) {
+    throw new Error("分组名称不能为空。");
+  }
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/strategy/filter/group/set`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({
+        ...(typeof request.groupId === "number" && Number.isFinite(request.groupId) && request.groupId > 0
+          ? { group_id: request.groupId }
+          : {}),
+        list_type: request.listType,
+        name,
+      }),
+    });
+  } catch {
+    throw new Error("无法连接保存名单分组接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "保存名单分组失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "保存名单分组失败。", response.status);
+  }
+}
+
+export async function deleteStockFilterGroup(groupId: number): Promise<void> {
+  if (!Number.isFinite(groupId) || groupId <= 0) {
+    throw new Error("分组ID无效。");
+  }
+
+  const url = new URL(`${apiBaseUrl}/strategy/filter/group/delete`, window.location.origin);
+
+  url.searchParams.set("group_id", String(groupId));
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: createAuthHeaders(token),
+    });
+  } catch {
+    throw new Error("无法连接删除名单分组接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "删除名单分组失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "删除名单分组失败。", response.status);
+  }
+}
+
 export async function addStockFilter(request: AddStockFilterRequest): Promise<void> {
   const code = request.code.trim();
   const name = request.name.trim();
@@ -229,6 +379,9 @@ export async function addStockFilter(request: AddStockFilterRequest): Promise<vo
       headers: createJsonAuthHeaders(token),
       body: JSON.stringify({
         code,
+        ...(typeof request.groupId === "number" && Number.isFinite(request.groupId) && request.groupId > 0
+          ? { group_id: request.groupId }
+          : {}),
         name,
         list_type: request.listType,
       }),
@@ -303,6 +456,10 @@ export async function importStockFilters(
 
   formData.append("file", request.file);
   formData.append("list_type", request.listType);
+  formData.append("mode", "incremental");
+  if (typeof request.groupId === "number" && Number.isFinite(request.groupId) && request.groupId > 0) {
+    formData.append("group_id", String(request.groupId));
+  }
 
   let response: Response;
   const token = getStoredAuthToken()?.trim();
@@ -820,11 +977,39 @@ function getStockFilters(payload: unknown, requestedType: StockFilterListType) {
     const code = typeof item.code === "string" ? item.code.trim() : "";
     const name = typeof item.name === "string" ? item.name.trim() : "";
     const id = typeof item.id === "number" ? item.id : 0;
+    const groupId = typeof item.group_id === "number" && Number.isFinite(item.group_id) && item.group_id > 0
+      ? item.group_id
+      : undefined;
     const listType = item.list_type === "black" || item.list_type === "white"
       ? item.list_type
       : requestedType;
 
-    return code ? [{ id, code, name: name || code, listType }] : [];
+    return code ? [{ id, code, name: name || code, listType, groupId }] : [];
+  });
+}
+
+function getStockFilterGroups(payload: unknown, requestedType: StockFilterListType) {
+  const seenGroupIds = new Set<number>();
+
+  return getPayloadCollection(payload).flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    const groupId = typeof item.group_id === "number" && Number.isFinite(item.group_id) && item.group_id > 0
+      ? item.group_id
+      : 0;
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    const listType = item.list_type === "black" || item.list_type === "white"
+      ? item.list_type
+      : requestedType;
+
+    if (!groupId || !name || seenGroupIds.has(groupId)) {
+      return [];
+    }
+
+    seenGroupIds.add(groupId);
+    return [{ groupId, name, listType }];
   });
 }
 

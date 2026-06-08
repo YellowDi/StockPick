@@ -29,6 +29,7 @@ export interface StockCandidate {
   records: StockDailyRecord[];
   highlight?: boolean;
   filterId?: number;
+  filterGroupId?: number;
   selectionBatchId?: number;
   selectionRecordId?: number;
   strategyResult?: StrategyScanResult;

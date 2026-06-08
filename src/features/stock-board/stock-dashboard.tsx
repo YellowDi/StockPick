@@ -23,6 +23,7 @@ import {
   RiLoader4Line as LoaderCircle,
   RiLogoutBoxRLine as LogOut,
   RiMoonLine as Moon,
+  RiPencilLine as Pencil,
   RiRefreshLine as RefreshCcw,
   RiSearchLine as Search,
   RiShieldCheckLine as ShieldCheck,
@@ -76,21 +77,25 @@ import {
   createStrategyConfig,
   deleteSelectionBatch,
   deleteSelectionRecords,
+  deleteStockFilterGroup,
   deleteStockFilter,
   deleteStrategyConfig,
   importStockFilters,
   listSelectionBatches,
   listSelectionRecords,
+  listStockFilterGroups,
   listStockFilters,
   listStocks,
   listStrategyConfigs,
   scanStrategy,
+  setStockFilterGroup,
   updateStrategyConfig,
   type DailyKline,
   type ImportStockFiltersResponse,
   type SelectionBatch,
   type SelectionRecord,
   type StockFilter,
+  type StockFilterGroup,
   type StockInfo,
   type StrategyConfigDto,
   type StrategyScanResult,
@@ -109,11 +114,7 @@ const excelFileNamePattern = /\.(xls|xlsx)$/i;
 const mobileChartPadding = { top: 18, right: 56, bottom: 34, left: 0 };
 const desktopChartPadding = { top: 28, right: 60, bottom: 52, left: 0 };
 const mobileViewportQuery = "(max-width: 767px)";
-const redListStackPreviewItems = [
-  { id: "red-list-preview-1", label: "红名单 #1", description: "主策略池", count: 18 },
-  { id: "red-list-preview-2", label: "红名单 #2", description: "观察池", count: 9 },
-  { id: "red-list-preview-3", label: "红名单 #3", description: "短线跟踪", count: 6 },
-];
+const defaultFilterGroupId = 0;
 const emptyStockGroups: StockGroups = {
   initial: [],
   candidate: [],
@@ -146,6 +147,34 @@ type ChartSelection = {
 
 type StockGroups = Record<StockListKey, StockCandidate[]>;
 type ReturnableListKey = Extract<StockListKey, "whitelist" | "blacklist">;
+type FilterGroupMeta = {
+  groupId: number;
+  listKey: ReturnableListKey;
+  name: string;
+};
+type FilterGroupView = FilterGroupMeta & {
+  stocks: StockCandidate[];
+  isDefault: boolean;
+};
+type FilterGroupsByList = Record<ReturnableListKey, FilterGroupMeta[]>;
+type FilterGroupViewsByList = Record<ReturnableListKey, FilterGroupView[]>;
+type FilterDialogTarget = {
+  listKey: ReturnableListKey;
+  groupId?: number;
+  label?: string;
+};
+type FilterGroupEditorTarget = {
+  listKey: ReturnableListKey;
+  groupId?: number;
+  initialName?: string;
+};
+type FilterGroupDeleteTarget = FilterGroupView;
+type FilterImportTarget = {
+  listKey: ReturnableListKey;
+  groupId?: number;
+  label: string;
+  targetStocks: StockCandidate[];
+};
 type SelectionBatchState = {
   id: number;
   name: string;
@@ -188,6 +217,11 @@ type StockListSharedProps = {
   onRemoveFromCandidate: (stock: StockCandidate) => void;
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
   onDeleteFromFilterList: (stock: StockCandidate, fromList: ReturnableListKey) => void | Promise<void>;
+};
+
+const emptyFilterGroupsByList: FilterGroupsByList = {
+  whitelist: [],
+  blacklist: [],
 };
 
 const initialStockImportDialogState: StockImportDialogState = {
@@ -395,6 +429,7 @@ type StockDashboardProps = {
 
 type StockDashboardState = {
   stockGroups: StockGroups;
+  filterGroups: FilterGroupsByList;
   selectionBatches: SelectionBatchState[];
   chartSelection: ChartSelection | null;
   mobileListKey: StockListKey;
@@ -403,13 +438,15 @@ type StockDashboardState = {
   mobileFilterListsDrawerOpen: boolean;
   mobileFilterListKey: ReturnableListKey;
   desktopListKey: string;
-  filterDialogList: ReturnableListKey | null;
+  filterDialogTarget: FilterDialogTarget | null;
   candidateDialogOpen: boolean;
   candidateResultAvailable: boolean;
   scanError: string | null;
   scanLoading: boolean;
   filterListsError: string | null;
   filterDeletePendingIds: number[];
+  filterGroupSavePending: boolean;
+  filterGroupDeletePendingIds: number[];
   selectionBatchesLoading: boolean;
   selectionBatchesError: string | null;
   selectionBatchesPageNum: number;
@@ -436,7 +473,7 @@ type StockDashboardAction =
   | { type: "close-mobile-filter-lists-drawer" }
   | { type: "set-mobile-filter-list"; listKey: ReturnableListKey }
   | { type: "set-desktop-list"; listKey: string }
-  | { type: "open-filter-dialog"; listKey: ReturnableListKey }
+  | { type: "open-filter-dialog"; target: FilterDialogTarget }
   | { type: "close-filter-dialog" }
   | { type: "open-candidate-dialog" }
   | { type: "close-candidate-dialog" }
@@ -444,10 +481,20 @@ type StockDashboardAction =
   | { type: "scan-success"; stocks: StockCandidate[] }
   | { type: "scan-error"; error: string }
   | { type: "set-filter-error"; error: string | null }
-  | { type: "sync-filter-lists"; whitelist: StockCandidate[]; blacklist: StockCandidate[] }
+  | {
+    type: "sync-filter-lists";
+    whitelist: StockCandidate[];
+    blacklist: StockCandidate[];
+    whitelistGroups: FilterGroupMeta[];
+    blacklistGroups: FilterGroupMeta[];
+  }
   | { type: "remove-filter-stock"; stock: StockCandidate; listKey: ReturnableListKey }
   | { type: "delete-filter-start"; filterId: number }
   | { type: "delete-filter-end"; filterId: number }
+  | { type: "save-filter-group-start" }
+  | { type: "save-filter-group-end" }
+  | { type: "delete-filter-group-start"; groupId: number }
+  | { type: "delete-filter-group-end"; groupId: number }
   | { type: "selection-batches-load-start"; pageNum: number }
   | { type: "selection-batches-load-error"; error: string }
   | { type: "sync-selection-batches"; batches: SelectionBatchState[]; pageNum: number; total: number }
@@ -475,6 +522,7 @@ type StockDashboardAction =
 
 const initialStockDashboardState: StockDashboardState = {
   stockGroups: emptyStockGroups,
+  filterGroups: emptyFilterGroupsByList,
   selectionBatches: [],
   chartSelection: null,
   mobileListKey: "initial",
@@ -483,13 +531,15 @@ const initialStockDashboardState: StockDashboardState = {
   mobileFilterListsDrawerOpen: false,
   mobileFilterListKey: "whitelist",
   desktopListKey: "initial",
-  filterDialogList: null,
+  filterDialogTarget: null,
   candidateDialogOpen: false,
   candidateResultAvailable: false,
   scanError: null,
   scanLoading: false,
   filterListsError: null,
   filterDeletePendingIds: [],
+  filterGroupSavePending: false,
+  filterGroupDeletePendingIds: [],
   selectionBatchesLoading: true,
   selectionBatchesError: null,
   selectionBatchesPageNum: 1,
@@ -570,17 +620,23 @@ function useStockDashboard() {
   }, [syncStrategyConfigs]);
 
   const syncFilterLists = useCallback(async (signal?: AbortSignal) => {
-    const [whiteFilters, blackFilters] = await Promise.all([
+    const [whiteGroups, blackGroups, whiteFilters, blackFilters] = await Promise.all([
+      listStockFilterGroups("white", signal),
+      listStockFilterGroups("black", signal),
       listStockFilters("white", signal),
       listStockFilters("black", signal),
     ]);
     const whitelist = createStockFilterCandidates(whiteFilters, "whitelist");
     const blacklist = createStockFilterCandidates(blackFilters, "blacklist");
+    const whitelistGroups = createFilterGroupMetas(whiteGroups, "whitelist");
+    const blacklistGroups = createFilterGroupMetas(blackGroups, "blacklist");
 
     dispatch({
       type: "sync-filter-lists",
       whitelist,
       blacklist,
+      whitelistGroups,
+      blacklistGroups,
     });
   }, []);
 
@@ -738,8 +794,8 @@ function useStockDashboard() {
     }
   }
 
-  const openFilterListDialog = useCallback((listKey: ReturnableListKey) => {
-    dispatch({ type: "open-filter-dialog", listKey });
+  const openFilterListDialog = useCallback((listKey: ReturnableListKey, groupId?: number, label?: string) => {
+    dispatch({ type: "open-filter-dialog", target: { listKey, groupId, label } });
   }, []);
 
   const closeFilterListDialog = useCallback(() => {
@@ -754,11 +810,12 @@ function useStockDashboard() {
     dispatch({ type: "close-candidate-dialog" });
   }, []);
 
-  const importStockToList = useCallback(async (stock: StockInfo, targetList: ReturnableListKey) => {
+  const importStockToList = useCallback(async (stock: StockInfo, targetList: ReturnableListKey, groupId?: number) => {
     await addStockFilter({
       code: stock.code,
       name: stock.name,
       listType: getFilterListType(targetList),
+      groupId,
     });
     try {
       await syncFilterLists();
@@ -800,10 +857,12 @@ function useStockDashboard() {
   const importFilterExcelToList = useCallback(async (
     file: File,
     targetList: ReturnableListKey,
+    groupId?: number,
   ): Promise<ImportStockFiltersResponse> => {
     const result = await importStockFilters({
       file,
       listType: getFilterListType(targetList),
+      groupId,
     });
 
     try {
@@ -818,6 +877,56 @@ function useStockDashboard() {
     }
 
     return result;
+  }, [syncFilterLists]);
+
+  const saveFilterGroup = useCallback(async (
+    listKey: ReturnableListKey,
+    name: string,
+    groupId?: number,
+  ) => {
+    dispatch({ type: "save-filter-group-start" });
+
+    try {
+      await setStockFilterGroup({
+        listType: getFilterListType(listKey),
+        name,
+        groupId,
+      });
+      await syncFilterLists();
+      toast.success(groupId ? "名单分组已更新" : "名单分组已创建", {
+        description: name.trim(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "保存名单分组失败。";
+
+      dispatch({ type: "set-filter-error", error: message });
+      toast.danger("保存名单分组失败", {
+        description: message,
+      });
+      throw error;
+    } finally {
+      dispatch({ type: "save-filter-group-end" });
+    }
+  }, [syncFilterLists]);
+
+  const removeFilterGroup = useCallback(async (groupId: number) => {
+    dispatch({ type: "delete-filter-group-start", groupId });
+
+    try {
+      await deleteStockFilterGroup(groupId);
+      await syncFilterLists();
+      toast.success("名单分组已删除");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "删除名单分组失败。";
+
+      dispatch({ type: "set-filter-error", error: message });
+      toast.danger("删除名单分组失败", {
+        description: message,
+      });
+      throw error;
+    } finally {
+      dispatch({ type: "delete-filter-group-end", groupId });
+    }
   }, [syncFilterLists]);
 
   function addStockToCandidate(stock: StockCandidate) {
@@ -1104,6 +1213,8 @@ function useStockDashboard() {
     importStockToList,
     importStockToSelectionBatch,
     importFilterExcelToList,
+    saveFilterGroup,
+    removeFilterGroup,
     addStockToCandidate,
     addStocksToCandidate,
     removeStockFromCandidate,
@@ -1147,6 +1258,8 @@ function StockDashboardLayout({
   importStockToList,
   importStockToSelectionBatch,
   importFilterExcelToList,
+  saveFilterGroup,
+  removeFilterGroup,
   addStockToCandidate,
   addStocksToCandidate,
   removeStockFromCandidate,
@@ -1174,6 +1287,12 @@ function StockDashboardLayout({
 }: StockDashboardProps & ReturnType<typeof useStockDashboard>) {
   const isDesktopViewport = useIsDesktopViewport();
   const [selectionDeleteTarget, setSelectionDeleteTarget] = useState<SelectionDeleteConfirmTarget | null>(null);
+  const [filterGroupEditorTarget, setFilterGroupEditorTarget] = useState<FilterGroupEditorTarget | null>(null);
+  const [filterGroupDeleteTarget, setFilterGroupDeleteTarget] = useState<FilterGroupDeleteTarget | null>(null);
+  const visibleFilterGroups = useMemo(
+    () => createFilterGroupViewsByList(visibleStockGroups, state.filterGroups),
+    [state.filterGroups, visibleStockGroups],
+  );
   const candidateResultButtonVisible = state.candidateResultAvailable
     && (visibleStockGroups.initial.length > 0 || visibleStockGroups.candidate.length > 0);
   const sharedStockListProps = {
@@ -1197,6 +1316,30 @@ function StockDashboardLayout({
     if (batch) {
       setSelectionDeleteTarget({ type: "batch", batch });
     }
+  }
+
+  function openCreateFilterGroupEditor(listKey: ReturnableListKey) {
+    setFilterGroupEditorTarget({ listKey });
+  }
+
+  function openEditFilterGroupEditor(group: FilterGroupView) {
+    if (group.isDefault) {
+      return;
+    }
+
+    setFilterGroupEditorTarget({
+      listKey: group.listKey,
+      groupId: group.groupId,
+      initialName: group.name,
+    });
+  }
+
+  function requestDeleteFilterGroup(group: FilterGroupView) {
+    if (group.isDefault) {
+      return;
+    }
+
+    setFilterGroupDeleteTarget(group);
   }
 
   return (
@@ -1248,11 +1391,13 @@ function StockDashboardLayout({
           filterListsError={state.filterListsError}
           selectionBatchesError={state.selectionBatchesError}
           stockGroups={visibleStockGroups}
+          filterGroups={visibleFilterGroups}
           selectionBatches={state.selectionBatches}
           selectionBatchesLoading={state.selectionBatchesLoading}
           selectionBatchesPageNum={state.selectionBatchesPageNum}
           selectionBatchesTotal={state.selectionBatchesTotal}
           selectionBatchDeletePendingIds={state.selectionBatchDeletePendingIds}
+          filterGroupDeletePendingIds={state.filterGroupDeletePendingIds}
           strategyConfig={state.strategyConfig}
           strategyConfigs={state.strategyConfigs}
           strategyConfigLoading={state.strategyConfigLoading}
@@ -1265,6 +1410,9 @@ function StockDashboardLayout({
           onReload={reloadStrategyScan}
           onActiveListChange={setDesktopListKey}
           onOpenFilterList={openFilterListDialog}
+          onCreateFilterGroup={openCreateFilterGroupEditor}
+          onEditFilterGroup={openEditFilterGroupEditor}
+          onDeleteFilterGroup={requestDeleteFilterGroup}
           onOpenCandidateDialog={openCandidateDialog}
           onImportStockToSelectionBatch={importStockToSelectionBatch}
           onRemoveFromHistory={requestRemoveStockFromHistory}
@@ -1354,24 +1502,34 @@ function StockDashboardLayout({
         <MobileFilterListsDrawer
           activeListKey={state.mobileFilterListKey}
           stockGroups={visibleStockGroups}
+          filterGroups={visibleFilterGroups}
           chartSelection={state.chartSelection}
           filterDeletePendingIds={state.filterDeletePendingIds}
+          filterGroupDeletePendingIds={state.filterGroupDeletePendingIds}
           selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
           candidateStockCodes={candidateStockCodes}
           onClose={closeMobileFilterListsDrawer}
           onActiveListChange={setMobileFilterListKey}
           onImportStock={importStockToList}
           onImportFilterExcel={importFilterExcelToList}
+          onCreateFilterGroup={openCreateFilterGroupEditor}
+          onEditFilterGroup={openEditFilterGroupEditor}
+          onDeleteFilterGroup={requestDeleteFilterGroup}
           onAddToCandidate={addStockToCandidate}
           onRemoveFromCandidate={removeStockFromCandidate}
           onToggleChart={toggleSelectedStock}
           onDeleteFromFilterList={deleteStockFromFilterList}
         />
       ) : null}
-      {isDesktopViewport && state.filterDialogList ? (
+      {isDesktopViewport && state.filterDialogTarget ? (
         <FilterListDialog
-          targetList={state.filterDialogList}
-          stocks={visibleStockGroups[state.filterDialogList]}
+          targetList={state.filterDialogTarget.listKey}
+          groupId={state.filterDialogTarget.groupId}
+          displayLabel={state.filterDialogTarget.label}
+          stocks={getFilterGroupStocks(
+            visibleStockGroups[state.filterDialogTarget.listKey],
+            state.filterDialogTarget.groupId,
+          )}
           stockGroups={visibleStockGroups}
           chartSelection={state.chartSelection}
           filterDeletePendingIds={state.filterDeletePendingIds}
@@ -1398,6 +1556,29 @@ function StockDashboardLayout({
         }}
         onDeleteSelectionBatch={removeSelectionBatch}
         onRemoveFromHistory={removeStockFromHistory}
+      />
+      <FilterGroupNameModal
+        target={filterGroupEditorTarget}
+        saving={state.filterGroupSavePending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFilterGroupEditorTarget(null);
+          }
+        }}
+        onSave={saveFilterGroup}
+      />
+      <FilterGroupDeleteConfirmModal
+        target={filterGroupDeleteTarget}
+        deleting={Boolean(
+          filterGroupDeleteTarget?.groupId
+          && state.filterGroupDeletePendingIds.includes(filterGroupDeleteTarget.groupId),
+        )}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFilterGroupDeleteTarget(null);
+          }
+        }}
+        onDelete={removeFilterGroup}
       />
     </main>
   );
@@ -1487,6 +1668,155 @@ function SelectionDeleteConfirmModal({
   );
 }
 
+function FilterGroupNameModal({
+  target,
+  saving,
+  onOpenChange,
+  onSave,
+}: {
+  target: FilterGroupEditorTarget | null;
+  saving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (listKey: ReturnableListKey, name: string, groupId?: number) => void | Promise<void>;
+}) {
+  const modalState = useOverlayState({ isOpen: target !== null, onOpenChange });
+  const [name, setName] = useState("");
+  const title = target?.groupId ? "重命名名单分组" : "新增名单分组";
+  const listLabel = target ? stockListMeta[target.listKey].label : "名单";
+
+  useEffect(() => {
+    setName(target?.initialName ?? "");
+  }, [target]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!target || saving) {
+      return;
+    }
+
+    await onSave(target.listKey, name, target.groupId);
+    modalState.close();
+  }
+
+  return (
+    <Modal state={modalState}>
+      <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开名单分组编辑" />
+      <Modal.Backdrop variant="blur" isDismissable={!saving}>
+        <Modal.Container size="sm" scroll="inside">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
+            <Form onSubmit={(event) => void handleSubmit(event)}>
+              <Modal.Header className="p-5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Badge.Anchor>
+                    <StockSectionIconBox icon={listIcons[target?.listKey ?? "whitelist"]} active />
+                  </Badge.Anchor>
+                  <div className="min-w-0">
+                    <Modal.Heading className="truncate text-xl text-balance">{title}</Modal.Heading>
+                    <p className="mt-1 text-sm text-muted-foreground">{listLabel}</p>
+                  </div>
+                </div>
+              </Modal.Header>
+              <Separator />
+              <Modal.Body className="p-5">
+                <TextField fullWidth value={name} onChange={setName} isRequired>
+                  <Label>分组名称</Label>
+                  <Input placeholder={`${listLabel} #1`} autoFocus />
+                </TextField>
+              </Modal.Body>
+              <Modal.Footer className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-background/55 transition-transform active:scale-[0.96]"
+                  isDisabled={saving}
+                  slot="close"
+                >
+                  取消
+                </Button>
+                <Button
+                  type="submit"
+                  className="transition-transform active:scale-[0.96]"
+                  isDisabled={saving || !name.trim()}
+                >
+                  {saving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
+                  保存
+                </Button>
+              </Modal.Footer>
+            </Form>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
+function FilterGroupDeleteConfirmModal({
+  target,
+  deleting,
+  onOpenChange,
+  onDelete,
+}: {
+  target: FilterGroupDeleteTarget | null;
+  deleting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDelete: (groupId: number) => void | Promise<void>;
+}) {
+  const modalState = useOverlayState({ isOpen: target !== null, onOpenChange });
+  const label = target?.name ?? "当前分组";
+
+  async function confirmDelete() {
+    if (!target || target.isDefault) {
+      return;
+    }
+
+    await onDelete(target.groupId);
+    modalState.close();
+  }
+
+  return (
+    <Modal state={modalState}>
+      <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开删除名单分组确认" />
+      <Modal.Backdrop variant="blur" isDismissable={!deleting}>
+        <Modal.Container size="sm" scroll="inside">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
+            <Modal.Header className="p-5">
+              <div className="flex flex-col gap-2">
+                <Modal.Heading className="text-xl text-balance">删除名单分组？</Modal.Heading>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  将删除「{label}」。删除后不可恢复。
+                </p>
+              </div>
+            </Modal.Header>
+            <Separator />
+            <Modal.Footer className="mx-0 mb-0 rounded-none border-t-0 bg-transparent p-5 sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                className="bg-background/55 transition-transform active:scale-[0.96]"
+                isDisabled={deleting}
+                slot="close"
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                className="transition-transform active:scale-[0.96]"
+                isDisabled={deleting || !target || target.isDefault}
+                onClick={() => void confirmDelete()}
+              >
+                {deleting ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
+                确认删除
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
 function stockDashboardReducer(
   state: StockDashboardState,
   action: StockDashboardAction,
@@ -1517,9 +1847,9 @@ function stockDashboardReducer(
     case "set-desktop-list":
       return { ...state, desktopListKey: action.listKey };
     case "open-filter-dialog":
-      return { ...state, filterDialogList: action.listKey };
+      return { ...state, filterDialogTarget: action.target };
     case "close-filter-dialog":
-      return { ...state, filterDialogList: null };
+      return { ...state, filterDialogTarget: null };
     case "open-candidate-dialog":
       return { ...state, candidateDialogOpen: true };
     case "close-candidate-dialog":
@@ -1533,7 +1863,7 @@ function stockDashboardReducer(
     case "set-filter-error":
       return { ...state, filterListsError: action.error };
     case "sync-filter-lists":
-      return syncFilterListsState(state, action.whitelist, action.blacklist);
+      return syncFilterListsState(state, action.whitelist, action.blacklist, action.whitelistGroups, action.blacklistGroups);
     case "remove-filter-stock":
       return removeFilterStockState(state, action.stock, action.listKey);
     case "delete-filter-start":
@@ -1548,6 +1878,23 @@ function stockDashboardReducer(
       return {
         ...state,
         filterDeletePendingIds: state.filterDeletePendingIds.filter((pendingId) => pendingId !== action.filterId),
+      };
+    case "save-filter-group-start":
+      return { ...state, filterGroupSavePending: true, filterListsError: null };
+    case "save-filter-group-end":
+      return { ...state, filterGroupSavePending: false };
+    case "delete-filter-group-start":
+      return {
+        ...state,
+        filterGroupDeletePendingIds: state.filterGroupDeletePendingIds.includes(action.groupId)
+          ? state.filterGroupDeletePendingIds
+          : [...state.filterGroupDeletePendingIds, action.groupId],
+        filterListsError: null,
+      };
+    case "delete-filter-group-end":
+      return {
+        ...state,
+        filterGroupDeletePendingIds: state.filterGroupDeletePendingIds.filter((pendingId) => pendingId !== action.groupId),
       };
     case "selection-batches-load-start":
       return {
@@ -1923,6 +2270,8 @@ function syncFilterListsState(
   state: StockDashboardState,
   whitelist: StockCandidate[],
   blacklist: StockCandidate[],
+  whitelistGroups: FilterGroupMeta[],
+  blacklistGroups: FilterGroupMeta[],
 ): StockDashboardState {
   const knownRecords = createKnownRecordsMap(state);
 
@@ -1931,11 +2280,16 @@ function syncFilterListsState(
     whitelist: whitelist.map((stock) => hydrateStockCandidate(stock, knownRecords)),
     blacklist: blacklist.map((stock) => hydrateStockCandidate(stock, knownRecords)),
   };
+  const filterGroups = {
+    whitelist: whitelistGroups,
+    blacklist: blacklistGroups,
+  };
 
   if (!state.chartSelection || (state.chartSelection.listKey !== "whitelist" && state.chartSelection.listKey !== "blacklist")) {
     return {
       ...state,
       stockGroups,
+      filterGroups,
       filterListsError: null,
     };
   }
@@ -1948,6 +2302,7 @@ function syncFilterListsState(
   return {
     ...state,
     stockGroups,
+    filterGroups,
     chartSelection,
     filterListsError: null,
   };
@@ -2776,11 +3131,13 @@ function DesktopStockSidebar({
   filterListsError,
   selectionBatchesError,
   stockGroups,
+  filterGroups,
   selectionBatches,
   selectionBatchesLoading,
   selectionBatchesPageNum,
   selectionBatchesTotal,
   selectionBatchDeletePendingIds,
+  filterGroupDeletePendingIds,
   strategyConfig,
   strategyConfigs,
   strategyConfigLoading,
@@ -2793,6 +3150,9 @@ function DesktopStockSidebar({
   onReload,
   onActiveListChange,
   onOpenFilterList,
+  onCreateFilterGroup,
+  onEditFilterGroup,
+  onDeleteFilterGroup,
   onOpenCandidateDialog,
   onImportStockToSelectionBatch,
   onRemoveFromHistory,
@@ -2808,11 +3168,13 @@ function DesktopStockSidebar({
   filterListsError: string | null;
   selectionBatchesError: string | null;
   stockGroups: StockGroups;
+  filterGroups: FilterGroupViewsByList;
   selectionBatches: SelectionBatchState[];
   selectionBatchesLoading: boolean;
   selectionBatchesPageNum: number;
   selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
+  filterGroupDeletePendingIds: number[];
   strategyConfig: StrategyConfig;
   strategyConfigs: StrategyConfig[];
   strategyConfigLoading: boolean;
@@ -2824,7 +3186,10 @@ function DesktopStockSidebar({
   onLogout: () => void;
   onReload: () => void;
   onActiveListChange: (key: string) => void;
-  onOpenFilterList: (listKey: ReturnableListKey) => void;
+  onOpenFilterList: (listKey: ReturnableListKey, groupId?: number, label?: string) => void;
+  onCreateFilterGroup: (listKey: ReturnableListKey) => void;
+  onEditFilterGroup: (group: FilterGroupView) => void;
+  onDeleteFilterGroup: (group: FilterGroupView) => void;
   onOpenCandidateDialog: () => void;
   onImportStockToSelectionBatch: (stock: StockInfo, batchId: number) => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
@@ -2835,7 +3200,7 @@ function DesktopStockSidebar({
   onStrategyDelete: (id: number) => void | Promise<void>;
   onStrategyScan: () => void | Promise<void>;
 } & StockListSharedProps) {
-  const [redListStackPreviewOpen, setRedListStackPreviewOpen] = useState(false);
+  const [filterGroupStackList, setFilterGroupStackList] = useState<ReturnableListKey | null>(null);
 
   return (
     <aside className="flex h-full min-h-0 flex-col gap-4 bg-transparent p-4">
@@ -2939,113 +3304,30 @@ function DesktopStockSidebar({
       />
 
       <div className="mt-auto flex shrink-0 flex-col gap-3">
-        <RedListStackStylePreview
-          open={redListStackPreviewOpen}
-          onOpenChange={setRedListStackPreviewOpen}
-        />
-
         <Card className="shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
           <CardContent className="p-0">
             <FilterListButtonGroup
               stockGroups={stockGroups}
+              filterGroups={filterGroups}
+              openListKey={filterGroupStackList}
+              filterGroupDeletePendingIds={filterGroupDeletePendingIds}
               className="grid-cols-1"
               buttonClassName="h-11 w-full bg-background/35 px-3"
-              onOpenFilterList={onOpenFilterList}
+              onToggleList={(listKey) => {
+                setFilterGroupStackList((current) => current === listKey ? null : listKey);
+              }}
+              onOpenFilterGroup={(group) => {
+                onOpenFilterList(group.listKey, group.groupId, group.name);
+                setFilterGroupStackList(null);
+              }}
+              onCreateFilterGroup={onCreateFilterGroup}
+              onEditFilterGroup={onEditFilterGroup}
+              onDeleteFilterGroup={onDeleteFilterGroup}
             />
           </CardContent>
         </Card>
       </div>
     </aside>
-  );
-}
-
-function RedListStackStylePreview({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <section className="relative isolate">
-      <div
-        id="red-list-stack-style-preview"
-        className={cn(
-          "absolute inset-x-0 bottom-[calc(100%+0.6rem)] z-20 origin-bottom transition-[opacity,transform] duration-200 ease-out",
-          open
-            ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-            : "pointer-events-none translate-y-3 scale-[0.97] opacity-0",
-        )}
-        aria-hidden={!open}
-      >
-        <div className="overflow-hidden rounded-xl border border-stock-up/25 bg-card/90 p-2 shadow-[0_20px_70px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-          <div className="flex items-center justify-between gap-3 px-2 py-1.5">
-            <div className="min-w-0">
-              <div className="truncate text-xs font-semibold text-stock-up">红名单堆栈</div>
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">静态样式样例</div>
-            </div>
-            <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
-              {redListStackPreviewItems.length}
-            </Chip>
-          </div>
-
-          <div className="mt-1 flex flex-col gap-2">
-            {redListStackPreviewItems.map((item, index) => (
-              <button
-                key={item.id}
-                type="button"
-                className="group/red-stack flex w-full min-w-0 items-center gap-3 rounded-lg border border-border/65 bg-background/50 p-2 text-left shadow-sm outline-none transition-[background-color,border-color,box-shadow,opacity,transform] duration-200 ease-out hover:border-stock-up/45 hover:bg-stock-up/10 hover:shadow-[0_10px_32px_rgba(248,113,113,0.12)] focus-visible:border-stock-up/60 focus-visible:ring-2 focus-visible:ring-stock-up/30"
-                style={{
-                  opacity: open ? 1 : 0,
-                  transform: open
-                    ? `translateY(0) scale(${1 - index * 0.018})`
-                    : `translateY(${18 + index * 8}px) scale(${0.94 - index * 0.018})`,
-                  transitionDelay: open ? `${index * 45}ms` : "0ms",
-                }}
-                aria-disabled="true"
-                aria-label={`${item.label} 样式预览`}
-                onClick={(event) => event.preventDefault()}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-stock-up/30 bg-stock-up/10 text-stock-up transition-transform duration-150 group-hover/red-stack:scale-105">
-                  <ShieldCheck className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium leading-none">{item.label}</span>
-                  <span className="mt-1 block truncate text-xs text-muted-foreground">{item.description}</span>
-                </span>
-                <span className="rounded-md border border-border/60 bg-background/55 px-2 py-1 text-xs tabular-nums text-muted-foreground">
-                  {item.count}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        className={cn(
-          "h-11 w-full min-w-0 justify-start bg-card/72 px-3 shadow-sm backdrop-blur-xl",
-          open && "border-stock-up/45 bg-stock-up/10 text-stock-up",
-        )}
-        aria-expanded={open}
-        aria-controls="red-list-stack-style-preview"
-        onClick={() => onOpenChange(!open)}
-      >
-        <ShieldCheck data-icon="inline-start" className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate text-left">红名单样式预览</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {redListStackPreviewItems.length}
-        </span>
-        <ChevronRight
-          className={cn(
-            "ml-0 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
-            open && "-rotate-90 text-stock-up",
-          )}
-        />
-      </Button>
-    </section>
   );
 }
 
@@ -3363,38 +3645,191 @@ function SelectionHistoryPagination({
 
 function FilterListButtonGroup({
   stockGroups,
+  filterGroups,
+  openListKey,
+  filterGroupDeletePendingIds,
   className,
   buttonClassName,
-  onOpenFilterList,
+  onToggleList,
+  onOpenFilterGroup,
+  onCreateFilterGroup,
+  onEditFilterGroup,
+  onDeleteFilterGroup,
 }: {
   stockGroups: Pick<StockGroups, "initial" | "candidate" | ReturnableListKey>;
+  filterGroups: FilterGroupViewsByList;
+  openListKey: ReturnableListKey | null;
+  filterGroupDeletePendingIds: number[];
   className?: string;
   buttonClassName?: string;
-  onOpenFilterList: (listKey: ReturnableListKey) => void;
+  onToggleList: (listKey: ReturnableListKey) => void;
+  onOpenFilterGroup: (group: FilterGroupView) => void;
+  onCreateFilterGroup: (listKey: ReturnableListKey) => void;
+  onEditFilterGroup: (group: FilterGroupView) => void;
+  onDeleteFilterGroup: (group: FilterGroupView) => void;
 }) {
   return (
     <div className={cn("grid grid-cols-2 gap-2", className)}>
       {filterListButtonOrder.map((listKey) => {
         const Icon = listIcons[listKey];
         const meta = stockListMeta[listKey];
+        const groups = filterGroups[listKey];
+        const open = openListKey === listKey;
 
         return (
-          <Button
-            key={listKey}
-            type="button"
-            variant="outline"
-            className={cn("min-w-0 justify-start", buttonClassName)}
-            aria-label={`打开${meta.label}`}
-            onClick={() => onOpenFilterList(listKey)}
-          >
-            <Icon data-icon="inline-start" className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-left">{meta.label}</span>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-              {stockGroups[listKey].length}
-            </span>
-          </Button>
+          <div key={listKey} className="relative isolate min-w-0">
+            <FilterGroupStackPanel
+              listKey={listKey}
+              groups={groups}
+              open={open}
+              deletePendingIds={filterGroupDeletePendingIds}
+              onOpenGroup={onOpenFilterGroup}
+              onCreateGroup={onCreateFilterGroup}
+              onEditGroup={onEditFilterGroup}
+              onDeleteGroup={onDeleteFilterGroup}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                "min-w-0 justify-start",
+                open && "border-ring/60 bg-secondary/70",
+                buttonClassName,
+              )}
+              aria-label={`展开${meta.label}分组`}
+              aria-expanded={open}
+              aria-controls={`filter-group-stack-${listKey}`}
+              onClick={() => onToggleList(listKey)}
+            >
+              <Icon data-icon="inline-start" className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate text-left">{meta.label}</span>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {stockGroups[listKey].length}
+              </span>
+              <ChevronRight
+                className={cn(
+                  "ml-0 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                  open && "-rotate-90",
+                )}
+              />
+            </Button>
+          </div>
         );
       })}
+    </div>
+  );
+}
+
+function FilterGroupStackPanel({
+  listKey,
+  groups,
+  open,
+  deletePendingIds,
+  onOpenGroup,
+  onCreateGroup,
+  onEditGroup,
+  onDeleteGroup,
+}: {
+  listKey: ReturnableListKey;
+  groups: FilterGroupView[];
+  open: boolean;
+  deletePendingIds: number[];
+  onOpenGroup: (group: FilterGroupView) => void;
+  onCreateGroup: (listKey: ReturnableListKey) => void;
+  onEditGroup: (group: FilterGroupView) => void;
+  onDeleteGroup: (group: FilterGroupView) => void;
+}) {
+  const meta = stockListMeta[listKey];
+
+  return (
+    <div
+      id={`filter-group-stack-${listKey}`}
+      className={cn(
+        "absolute inset-x-0 bottom-[calc(100%+0.6rem)] z-30 origin-bottom transition-[opacity,transform] duration-200 ease-out",
+        open
+          ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+          : "pointer-events-none translate-y-3 scale-[0.97] opacity-0",
+      )}
+      aria-hidden={!open}
+    >
+      <div className="overflow-hidden rounded-xl border border-border/70 bg-card/92 p-2 shadow-[0_20px_70px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold">{meta.label}分组</div>
+            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">选择分组后管理股票</div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            isIconOnly
+            className="size-8 shrink-0 rounded-md"
+            aria-label={`新增${meta.label}分组`}
+            onClick={() => onCreateGroup(listKey)}
+          >
+            <Plus />
+          </Button>
+        </div>
+        <div className="mt-1 flex flex-col gap-2">
+          {groups.map((group, index) => {
+            const deleting = group.groupId > 0 && deletePendingIds.includes(group.groupId);
+
+            return (
+              <div
+                key={`${group.listKey}:${group.groupId}`}
+                className="group/filter-group flex min-w-0 items-center gap-2 rounded-lg border border-border/65 bg-background/50 p-1 shadow-sm transition-[background-color,border-color,box-shadow,opacity,transform] duration-200 ease-out hover:border-ring/45 hover:bg-default/50"
+                style={{
+                  opacity: open ? 1 : 0,
+                  transform: open
+                    ? `translateY(0) scale(${1 - index * 0.014})`
+                    : `translateY(${18 + index * 8}px) scale(${0.94 - index * 0.014})`,
+                  transitionDelay: open ? `${index * 42}ms` : "0ms",
+                }}
+              >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-2 text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => onOpenGroup(group)}
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+                    {listKey === "whitelist" ? <ShieldCheck className="size-4" /> : <ShieldX className="size-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium leading-none">{group.name}</span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">
+                      {group.isDefault ? "默认分组" : `ID ${group.groupId}`}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-md border border-border/60 bg-background/55 px-2 py-1 text-xs tabular-nums text-muted-foreground">
+                    {group.stocks.length}
+                  </span>
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  isIconOnly
+                  className="size-8 shrink-0 rounded-md text-muted-foreground"
+                  aria-label={`重命名${group.name}`}
+                  isDisabled={group.isDefault || deleting}
+                  onClick={() => onEditGroup(group)}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  isIconOnly
+                  className="size-8 shrink-0 rounded-md text-muted-foreground hover:text-destructive"
+                  aria-label={`删除${group.name}`}
+                  isDisabled={group.isDefault || deleting}
+                  onClick={() => onDeleteGroup(group)}
+                >
+                  {deleting ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -4677,6 +5112,91 @@ function getFilterListType(listKey: ReturnableListKey) {
   return listKey === "whitelist" ? "white" : "black";
 }
 
+function createFilterGroupMetas(
+  groups: StockFilterGroup[],
+  listKey: ReturnableListKey,
+): FilterGroupMeta[] {
+  const seenGroupIds = new Set<number>();
+
+  return groups.flatMap((group) => {
+    if (!Number.isFinite(group.groupId) || group.groupId <= 0 || seenGroupIds.has(group.groupId)) {
+      return [];
+    }
+
+    const name = group.name.trim();
+
+    if (!name) {
+      return [];
+    }
+
+    seenGroupIds.add(group.groupId);
+    return [{ groupId: group.groupId, listKey, name }];
+  });
+}
+
+function createFilterGroupViews(
+  stocks: StockCandidate[],
+  groupMetas: FilterGroupMeta[],
+  listKey: ReturnableListKey,
+): FilterGroupView[] {
+  const stocksByGroupId = new Map<number, StockCandidate[]>();
+
+  for (const stock of stocks) {
+    const groupId = getFilterGroupId(stock);
+
+    stocksByGroupId.set(groupId, [...(stocksByGroupId.get(groupId) ?? []), stock]);
+  }
+
+  const views = groupMetas.map((group) => ({
+    ...group,
+    stocks: stocksByGroupId.get(group.groupId) ?? [],
+    isDefault: false,
+  }));
+  const knownGroupIds = new Set(groupMetas.map((group) => group.groupId));
+  const fallbackStocks = [
+    ...(stocksByGroupId.get(defaultFilterGroupId) ?? []),
+    ...Array.from(stocksByGroupId.entries()).flatMap(([groupId, groupStocks]) => (
+      groupId !== defaultFilterGroupId && !knownGroupIds.has(groupId) ? groupStocks : []
+    )),
+  ];
+
+  if (groupMetas.length === 0 || fallbackStocks.length > 0) {
+    views.unshift({
+      groupId: defaultFilterGroupId,
+      listKey,
+      name: groupMetas.length === 0 ? `${stockListMeta[listKey].label} #1` : "未分组",
+      stocks: fallbackStocks,
+      isDefault: true,
+    });
+  }
+
+  return views;
+}
+
+function createFilterGroupViewsByList(
+  stockGroups: StockGroups,
+  filterGroups: FilterGroupsByList,
+): FilterGroupViewsByList {
+  return {
+    whitelist: createFilterGroupViews(stockGroups.whitelist, filterGroups.whitelist, "whitelist"),
+    blacklist: createFilterGroupViews(stockGroups.blacklist, filterGroups.blacklist, "blacklist"),
+  };
+}
+
+function getFilterGroupId(stock: StockCandidate) {
+  return typeof stock.filterGroupId === "number" && Number.isFinite(stock.filterGroupId) && stock.filterGroupId > 0
+    ? stock.filterGroupId
+    : defaultFilterGroupId;
+}
+
+function getFilterGroupStocks(stocks: StockCandidate[], groupId?: number) {
+  if (typeof groupId !== "number") {
+    return stocks;
+  }
+
+  return stocks.filter((stock) => getFilterGroupId(stock) === groupId);
+}
+
 function isExcelFile(file: File) {
   return excelFileNamePattern.test(file.name);
 }
@@ -4695,6 +5215,7 @@ function createStockFilterCandidates(
       },
       targetList,
       filter.id,
+      filter.groupId,
     );
 
     if (!candidate) {
@@ -4716,6 +5237,7 @@ function createImportedStockCandidate(
   stock: StockInfo,
   targetList: ReturnableListKey,
   filterId?: number,
+  filterGroupId?: number,
 ): StockCandidate | null {
   const code = stock.code.trim();
 
@@ -4731,6 +5253,7 @@ function createImportedStockCandidate(
     list: targetList,
     records: [createImportedNoDataRecord(code, name)],
     ...(filterId && filterId > 0 ? { filterId } : {}),
+    ...(filterGroupId && filterGroupId > 0 ? { filterGroupId } : {}),
   };
 }
 
@@ -5179,14 +5702,19 @@ function DesktopCandidateDialogColumn({
 function MobileFilterListsDrawer({
   activeListKey,
   stockGroups,
+  filterGroups,
   chartSelection,
   filterDeletePendingIds,
+  filterGroupDeletePendingIds,
   selectionRecordDeletePendingIds,
   candidateStockCodes,
   onClose,
   onActiveListChange,
   onImportStock,
   onImportFilterExcel,
+  onCreateFilterGroup,
+  onEditFilterGroup,
+  onDeleteFilterGroup,
   onAddToCandidate,
   onRemoveFromCandidate,
   onToggleChart,
@@ -5194,19 +5722,24 @@ function MobileFilterListsDrawer({
 }: {
   activeListKey: ReturnableListKey;
   stockGroups: StockGroups;
+  filterGroups: FilterGroupViewsByList;
   chartSelection: ChartSelection | null;
   filterDeletePendingIds: number[];
+  filterGroupDeletePendingIds: number[];
   selectionRecordDeletePendingIds: number[];
   candidateStockCodes: Set<string>;
   onClose: () => void;
   onActiveListChange: (listKey: ReturnableListKey) => void;
-  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
-  onImportFilterExcel: (file: File, targetList: ReturnableListKey) => Promise<ImportStockFiltersResponse>;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey, groupId?: number) => Promise<void>;
+  onImportFilterExcel: (file: File, targetList: ReturnableListKey, groupId?: number) => Promise<ImportStockFiltersResponse>;
+  onCreateFilterGroup: (listKey: ReturnableListKey) => void;
+  onEditFilterGroup: (group: FilterGroupView) => void;
+  onDeleteFilterGroup: (group: FilterGroupView) => void;
 } & Pick<
   StockListSharedProps,
   "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
 >) {
-  const [importListKey, setImportListKey] = useState<ReturnableListKey | null>(null);
+  const [importTarget, setImportTarget] = useState<FilterImportTarget | null>(null);
   const drawerState = useOverlayState({
     isOpen: true,
     onOpenChange: (open) => {
@@ -5270,30 +5803,32 @@ function MobileFilterListsDrawer({
                   </Tabs.ListContainer>
                   {filterListButtonOrder.map((listKey) => (
                     <Tabs.Panel key={listKey} id={listKey} className="min-h-0 flex-1 overflow-hidden p-0">
-                      <div className="flex h-full min-h-0 flex-col">
-                        <FilterListCurrentStocks
-                          listKey={listKey}
-                          stocks={stockGroups[listKey]}
-                          className="min-h-0 flex-1 px-4 pb-4"
-                          scrollClassName="h-full max-h-none pr-2"
-                          chartSelection={chartSelection}
-                          filterDeletePendingIds={filterDeletePendingIds}
-                          selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
-                          candidateStockCodes={candidateStockCodes}
-                          onAddToCandidate={onAddToCandidate}
-                          onRemoveFromCandidate={onRemoveFromCandidate}
-                          onToggleChart={(code, nextListKey) => {
-                            onToggleChart(code, nextListKey);
-                            onClose();
-                          }}
-                          onDeleteFromFilterList={onDeleteFromFilterList}
-                        />
-                        <FilterListAddStockLauncher
-                          metaLabel={stockListMeta[listKey].label}
-                          onOpen={() => setImportListKey(listKey)}
-                          onImportExcel={(file) => onImportFilterExcel(file, listKey)}
-                        />
-                      </div>
+                      <MobileFilterGroupPanel
+                        listKey={listKey}
+                        groups={filterGroups[listKey]}
+                        chartSelection={chartSelection}
+                        filterDeletePendingIds={filterDeletePendingIds}
+                        filterGroupDeletePendingIds={filterGroupDeletePendingIds}
+                        selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                        candidateStockCodes={candidateStockCodes}
+                        onCreateFilterGroup={onCreateFilterGroup}
+                        onEditFilterGroup={onEditFilterGroup}
+                        onDeleteFilterGroup={onDeleteFilterGroup}
+                        onImportStock={(group) => setImportTarget({
+                          listKey: group.listKey,
+                          groupId: group.groupId,
+                          label: group.name,
+                          targetStocks: group.stocks,
+                        })}
+                        onImportFilterExcel={(file, group) => onImportFilterExcel(file, group.listKey, group.groupId)}
+                        onAddToCandidate={onAddToCandidate}
+                        onRemoveFromCandidate={onRemoveFromCandidate}
+                        onToggleChart={(code, nextListKey) => {
+                          onToggleChart(code, nextListKey);
+                          onClose();
+                        }}
+                        onDeleteFromFilterList={onDeleteFromFilterList}
+                      />
                     </Tabs.Panel>
                   ))}
                 </Tabs>
@@ -5302,11 +5837,14 @@ function MobileFilterListsDrawer({
           </Drawer.Content>
         </Drawer.Backdrop>
       </Drawer>
-      {importListKey ? (
+      {importTarget ? (
         <FilterStockImportDrawer
-          targetList={importListKey}
+          targetList={importTarget.listKey}
+          groupId={importTarget.groupId}
+          targetLabel={importTarget.label}
+          targetStocks={importTarget.targetStocks}
           stockGroups={stockGroups}
-          onClose={() => setImportListKey(null)}
+          onClose={() => setImportTarget(null)}
           onImportStock={onImportStock}
         />
       ) : null}
@@ -5314,8 +5852,138 @@ function MobileFilterListsDrawer({
   );
 }
 
+function MobileFilterGroupPanel({
+  listKey,
+  groups,
+  chartSelection,
+  filterDeletePendingIds,
+  filterGroupDeletePendingIds,
+  selectionRecordDeletePendingIds,
+  candidateStockCodes,
+  onCreateFilterGroup,
+  onEditFilterGroup,
+  onDeleteFilterGroup,
+  onImportStock,
+  onImportFilterExcel,
+  onAddToCandidate,
+  onRemoveFromCandidate,
+  onToggleChart,
+  onDeleteFromFilterList,
+}: {
+  listKey: ReturnableListKey;
+  groups: FilterGroupView[];
+  filterGroupDeletePendingIds: number[];
+  onCreateFilterGroup: (listKey: ReturnableListKey) => void;
+  onEditFilterGroup: (group: FilterGroupView) => void;
+  onDeleteFilterGroup: (group: FilterGroupView) => void;
+  onImportStock: (group: FilterGroupView) => void;
+  onImportFilterExcel: (file: File, group: FilterGroupView) => Promise<ImportStockFiltersResponse>;
+} & StockListSharedProps) {
+  const meta = stockListMeta[listKey];
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="truncate text-sm font-semibold">{meta.label}分组</h3>
+            <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+              {groups.length}
+            </Chip>
+          </div>
+          <p className="mt-1 truncate text-xs text-muted-foreground">按分组管理名单股票</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 shrink-0 bg-background/45 px-3"
+          onClick={() => onCreateFilterGroup(listKey)}
+        >
+          <Plus data-icon="inline-start" />
+          新增分组
+        </Button>
+      </div>
+      <ScrollShadow orientation="vertical" className="min-h-0 flex-1 px-4 pb-4 pt-3">
+        <div className="flex flex-col gap-3">
+          {groups.map((group) => {
+            const deleting = group.groupId > 0 && filterGroupDeletePendingIds.includes(group.groupId);
+
+            return (
+              <section
+                key={`${group.listKey}:${group.groupId}`}
+                className="overflow-hidden rounded-xl border border-border/65 bg-surface/70 shadow-sm"
+              >
+                <div className="flex min-w-0 items-center justify-between gap-2 border-b border-border/55 px-3 py-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+                      {listKey === "whitelist" ? <ShieldCheck className="size-4" /> : <ShieldX className="size-4" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium leading-none">{group.name}</span>
+                      <span className="mt-1 block truncate text-xs text-muted-foreground">
+                        {group.isDefault ? "默认分组" : `ID ${group.groupId}`}
+                      </span>
+                    </span>
+                    <Chip size="sm" variant="soft" className="shrink-0 tabular-nums">
+                      {group.stocks.length}
+                    </Chip>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    isIconOnly
+                    className="size-8 shrink-0 rounded-md text-muted-foreground"
+                    aria-label={`重命名${group.name}`}
+                    isDisabled={group.isDefault || deleting}
+                    onClick={() => onEditFilterGroup(group)}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    isIconOnly
+                    className="size-8 shrink-0 rounded-md text-muted-foreground hover:text-destructive"
+                    aria-label={`删除${group.name}`}
+                    isDisabled={group.isDefault || deleting}
+                    onClick={() => onDeleteFilterGroup(group)}
+                  >
+                    {deleting ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
+                  </Button>
+                </div>
+                <FilterListCurrentStocks
+                  listKey={listKey}
+                  stocks={group.stocks}
+                  emptyLabel={group.name}
+                  className="px-3 py-3"
+                  scrollClassName="max-h-52 pr-2"
+                  chartSelection={chartSelection}
+                  filterDeletePendingIds={filterDeletePendingIds}
+                  selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
+                  candidateStockCodes={candidateStockCodes}
+                  onAddToCandidate={onAddToCandidate}
+                  onRemoveFromCandidate={onRemoveFromCandidate}
+                  onToggleChart={onToggleChart}
+                  onDeleteFromFilterList={onDeleteFromFilterList}
+                />
+                <FilterListAddStockLauncher
+                  metaLabel={group.name}
+                  onOpen={() => onImportStock(group)}
+                  onImportExcel={(file) => onImportFilterExcel(file, group)}
+                />
+              </section>
+            );
+          })}
+        </div>
+      </ScrollShadow>
+    </div>
+  );
+}
+
 function FilterListDialog({
   targetList,
+  groupId,
+  displayLabel,
   stocks: currentStocks,
   stockGroups,
   chartSelection,
@@ -5331,6 +5999,8 @@ function FilterListDialog({
   onDeleteFromFilterList,
 }: {
   targetList: ReturnableListKey;
+  groupId?: number;
+  displayLabel?: string;
   stocks: StockCandidate[];
   stockGroups: StockGroups;
   chartSelection: ChartSelection | null;
@@ -5338,8 +6008,8 @@ function FilterListDialog({
   selectionRecordDeletePendingIds: number[];
   candidateStockCodes: Set<string>;
   onClose: () => void;
-  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
-  onImportFilterExcel: (file: File, targetList: ReturnableListKey) => Promise<ImportStockFiltersResponse>;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey, groupId?: number) => Promise<void>;
+  onImportFilterExcel: (file: File, targetList: ReturnableListKey, groupId?: number) => Promise<ImportStockFiltersResponse>;
 } & Pick<
   StockListSharedProps,
   "onAddToCandidate" | "onRemoveFromCandidate" | "onToggleChart" | "onDeleteFromFilterList"
@@ -5355,6 +6025,7 @@ function FilterListDialog({
   });
   const meta = stockListMeta[targetList];
   const Icon = listIcons[targetList];
+  const label = displayLabel ?? meta.label;
 
   return (
     <>
@@ -5373,7 +6044,7 @@ function FilterListDialog({
                     <StockCountBadge count={currentStocks.length} active />
                   </Badge.Anchor>
                   <div className="min-w-0">
-                    <Modal.Heading className="truncate text-xl text-balance">{meta.label}</Modal.Heading>
+                    <Modal.Heading className="truncate text-xl text-balance">{label}</Modal.Heading>
                     <p className="mt-1 text-sm text-muted-foreground">管理名单股票，支持添加和删除</p>
                   </div>
                 </div>
@@ -5383,6 +6054,7 @@ function FilterListDialog({
                 <FilterListCurrentStocks
                   listKey={targetList}
                   stocks={currentStocks}
+                  emptyLabel={label}
                   chartSelection={chartSelection}
                   filterDeletePendingIds={filterDeletePendingIds}
                   selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
@@ -5394,9 +6066,9 @@ function FilterListDialog({
                 />
 
                 <FilterListAddStockLauncher
-                  metaLabel={meta.label}
+                  metaLabel={label}
                   onOpen={() => setIsImportDialogOpen(true)}
-                  onImportExcel={(file) => onImportFilterExcel(file, targetList)}
+                  onImportExcel={(file) => onImportFilterExcel(file, targetList, groupId)}
                 />
               </Modal.Body>
             </Modal.Dialog>
@@ -5406,6 +6078,9 @@ function FilterListDialog({
       {isImportDialogOpen ? (
         <FilterStockImportDialog
           targetList={targetList}
+          groupId={groupId}
+          targetLabel={label}
+          targetStocks={currentStocks}
           stockGroups={stockGroups}
           onClose={() => setIsImportDialogOpen(false)}
           onImportStock={onImportStock}
@@ -5524,21 +6199,28 @@ function FilterListAddStockLauncher({
 
 function FilterStockImportDrawer({
   targetList,
+  groupId,
+  targetLabel,
+  targetStocks,
   stockGroups,
   onClose,
   onImportStock,
 }: {
   targetList: ReturnableListKey;
+  groupId?: number;
+  targetLabel?: string;
+  targetStocks?: StockCandidate[];
   stockGroups: StockGroups;
   onClose: () => void;
-  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey, groupId?: number) => Promise<void>;
 }) {
   const meta = stockListMeta[targetList];
+  const label = targetLabel ?? meta.label;
   const oppositeList = getOppositeReturnableListKey(targetList);
   const importDialog = useStockImportDialog(
     targetList,
-    meta.label,
-    onImportStock,
+    label,
+    (stock, listKey) => onImportStock(stock, listKey, groupId),
     "添加名单失败",
     "添加名单失败。",
   );
@@ -5582,7 +6264,7 @@ function FilterStockImportDrawer({
                   <ImportIcon className="size-4" />
                 </span>
                 <div className="min-w-0">
-                  <Drawer.Heading className="truncate text-lg text-balance">添加到{meta.label}</Drawer.Heading>
+                  <Drawer.Heading className="truncate text-lg text-balance">添加到{label}</Drawer.Heading>
                   <p className="mt-1 truncate text-sm text-muted-foreground">搜索股票后选择是否添加</p>
                 </div>
               </div>
@@ -5599,7 +6281,7 @@ function FilterStockImportDrawer({
               />
               {hasLoaded && !isLoading && !error ? (
                 <StockImportSummary
-                  listLabel={meta.label}
+                  listLabel={label}
                   filteredCount={filteredStocks.length}
                 />
               ) : null}
@@ -5607,7 +6289,7 @@ function FilterStockImportDrawer({
                 <StockImportError message={importError} />
               ) : null}
               <StockImportResults
-                metaLabel={meta.label}
+                metaLabel={label}
                 stocks={importStocks}
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
@@ -5615,7 +6297,7 @@ function FilterStockImportDrawer({
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
-                targetStocks={stockGroups[targetList]}
+                targetStocks={targetStocks ?? stockGroups[targetList]}
                 oppositeList={oppositeList}
                 oppositeStocks={stockGroups[oppositeList]}
                 onImportStock={handleImportStock}
@@ -5630,21 +6312,28 @@ function FilterStockImportDrawer({
 
 function FilterStockImportDialog({
   targetList,
+  groupId,
+  targetLabel,
+  targetStocks,
   stockGroups,
   onClose,
   onImportStock,
 }: {
   targetList: ReturnableListKey;
+  groupId?: number;
+  targetLabel?: string;
+  targetStocks?: StockCandidate[];
   stockGroups: StockGroups;
   onClose: () => void;
-  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
+  onImportStock: (stock: StockInfo, targetList: ReturnableListKey, groupId?: number) => Promise<void>;
 }) {
   const meta = stockListMeta[targetList];
+  const label = targetLabel ?? meta.label;
   const oppositeList = getOppositeReturnableListKey(targetList);
   const importDialog = useStockImportDialog(
     targetList,
-    meta.label,
-    onImportStock,
+    label,
+    (stock, listKey) => onImportStock(stock, listKey, groupId),
     "添加名单失败",
     "添加名单失败。",
   );
@@ -5676,8 +6365,8 @@ function FilterStockImportDialog({
 
   return (
     <Modal state={modalState}>
-      <Modal.Trigger className="sr-only" aria-label={`打开添加到${meta.label}弹窗`}>
-        打开添加到{meta.label}弹窗
+      <Modal.Trigger className="sr-only" aria-label={`打开添加到${label}弹窗`}>
+        打开添加到{label}弹窗
       </Modal.Trigger>
       <Modal.Backdrop variant="blur">
         <Modal.Container size="lg" scroll="inside">
@@ -5689,7 +6378,7 @@ function FilterStockImportDialog({
                   <ImportIcon className="size-4" />
                 </span>
                 <div className="min-w-0">
-                  <Modal.Heading className="truncate text-xl text-balance">添加到{meta.label}</Modal.Heading>
+                  <Modal.Heading className="truncate text-xl text-balance">添加到{label}</Modal.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">搜索股票后选择是否添加</p>
                 </div>
               </div>
@@ -5707,7 +6396,7 @@ function FilterStockImportDialog({
               />
               {hasLoaded && !isLoading && !error ? (
                 <StockImportSummary
-                  listLabel={meta.label}
+                  listLabel={label}
                   filteredCount={filteredStocks.length}
                 />
               ) : null}
@@ -5715,7 +6404,7 @@ function FilterStockImportDialog({
                 <StockImportError message={importError} />
               ) : null}
               <StockImportResults
-                metaLabel={meta.label}
+                metaLabel={label}
                 stocks={importStocks}
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
@@ -5723,7 +6412,7 @@ function FilterStockImportDialog({
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
-                targetStocks={stockGroups[targetList]}
+                targetStocks={targetStocks ?? stockGroups[targetList]}
                 oppositeList={oppositeList}
                 oppositeStocks={stockGroups[oppositeList]}
                 onImportStock={handleImportStock}
@@ -5841,6 +6530,7 @@ function SelectionStockImportDialog({
 function FilterListCurrentStocks({
   listKey,
   stocks,
+  emptyLabel,
   className,
   scrollClassName,
   chartSelection,
@@ -5854,10 +6544,12 @@ function FilterListCurrentStocks({
 }: {
   listKey: ReturnableListKey;
   stocks: StockCandidate[];
+  emptyLabel?: string;
   className?: string;
   scrollClassName?: string;
 } & StockListSharedProps) {
   const meta = stockListMeta[listKey];
+  const label = emptyLabel ?? meta.label;
 
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col px-5 pb-5", className)}>
@@ -5888,7 +6580,7 @@ function FilterListCurrentStocks({
       ) : (
         <div className="flex min-h-24 flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-background/30 text-center text-sm">
           <div className="font-medium">暂无股票</div>
-          <div className="text-xs text-muted-foreground">点击添加股票后搜索添加到{meta.label}</div>
+          <div className="text-xs text-muted-foreground">点击添加股票后搜索添加到{label}</div>
         </div>
       )}
     </section>
