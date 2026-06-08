@@ -71,6 +71,7 @@ import {
 import { stockListMeta } from "@/data/stock-list-meta";
 import {
   addStockFilter,
+  addManualSelection,
   addSelection,
   createStrategyConfig,
   deleteSelectionBatch,
@@ -766,6 +767,31 @@ function useStockDashboard() {
     }
   }, [syncFilterLists]);
 
+  const importStockToSelectionBatch = useCallback(async (stock: StockInfo, batchId: number) => {
+    const targetBatch = state.selectionBatches.find((batch) => batch.id === batchId);
+
+    if (!targetBatch) {
+      throw new Error("历史选股列表不存在。");
+    }
+
+    await addManualSelection({
+      batchId,
+      code: stock.code,
+      name: stock.name,
+    });
+
+    try {
+      await syncSelectionBatches(state.selectionBatchesPageNum);
+    } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : "历史选股同步失败。";
+
+      dispatch({ type: "selection-batches-load-error", error: message });
+      toast.danger("历史选股同步失败", {
+        description: message,
+      });
+    }
+  }, [state.selectionBatches, state.selectionBatchesPageNum, syncSelectionBatches]);
+
   const importFilterExcelToList = useCallback(async (
     file: File,
     targetList: ReturnableListKey,
@@ -1071,6 +1097,7 @@ function useStockDashboard() {
     openCandidateDialog,
     closeCandidateDialog,
     importStockToList,
+    importStockToSelectionBatch,
     importFilterExcelToList,
     addStockToCandidate,
     addStocksToCandidate,
@@ -1113,6 +1140,7 @@ function StockDashboardLayout({
   openCandidateDialog,
   closeCandidateDialog,
   importStockToList,
+  importStockToSelectionBatch,
   importFilterExcelToList,
   addStockToCandidate,
   addStocksToCandidate,
@@ -1233,6 +1261,7 @@ function StockDashboardLayout({
           onActiveListChange={setDesktopListKey}
           onOpenFilterList={openFilterListDialog}
           onOpenCandidateDialog={openCandidateDialog}
+          onImportStockToSelectionBatch={importStockToSelectionBatch}
           onRemoveFromHistory={requestRemoveStockFromHistory}
           onDeleteSelectionBatch={requestRemoveSelectionBatch}
           onSelectionHistoryPageChange={changeSelectionHistoryPage}
@@ -1309,6 +1338,7 @@ function StockDashboardLayout({
           chartSelection={state.chartSelection}
           selectionRecordDeletePendingIds={state.selectionRecordDeletePendingIds}
           onClose={closeMobileSelectionHistoryDrawer}
+          onImportStockToSelectionBatch={importStockToSelectionBatch}
           onRemoveFromHistory={requestRemoveStockFromHistory}
           onDeleteSelectionBatch={requestRemoveSelectionBatch}
           onToggleChart={toggleSelectedStock}
@@ -2759,6 +2789,7 @@ function DesktopStockSidebar({
   onActiveListChange,
   onOpenFilterList,
   onOpenCandidateDialog,
+  onImportStockToSelectionBatch,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
   onSelectionHistoryPageChange,
@@ -2790,6 +2821,7 @@ function DesktopStockSidebar({
   onActiveListChange: (key: string) => void;
   onOpenFilterList: (listKey: ReturnableListKey) => void;
   onOpenCandidateDialog: () => void;
+  onImportStockToSelectionBatch: (stock: StockInfo, batchId: number) => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onSelectionHistoryPageChange: (pageNum: number) => void;
@@ -2892,6 +2924,7 @@ function DesktopStockSidebar({
         selectionBatchesTotal={selectionBatchesTotal}
         selectionBatchDeletePendingIds={selectionBatchDeletePendingIds}
         onActiveListChange={onActiveListChange}
+        onImportStockToSelectionBatch={onImportStockToSelectionBatch}
         onRemoveFromHistory={onRemoveFromHistory}
         onDeleteSelectionBatch={onDeleteSelectionBatch}
         onSelectionHistoryPageChange={onSelectionHistoryPageChange}
@@ -2922,6 +2955,7 @@ function DesktopStockDisclosureGroup({
   chartSelection,
   selectionRecordDeletePendingIds,
   onActiveListChange,
+  onImportStockToSelectionBatch,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
   onSelectionHistoryPageChange,
@@ -2934,6 +2968,7 @@ function DesktopStockDisclosureGroup({
   selectionBatchesTotal: number;
   selectionBatchDeletePendingIds: number[];
   onActiveListChange: (key: string) => void;
+  onImportStockToSelectionBatch: (stock: StockInfo, batchId: number) => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onSelectionHistoryPageChange: (pageNum: number) => void;
@@ -2970,6 +3005,7 @@ function DesktopStockDisclosureGroup({
             chartSelection={chartSelection}
             selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
             deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
+            onImportStockToSelectionBatch={onImportStockToSelectionBatch}
             onDeleteSelectionBatch={onDeleteSelectionBatch}
             onRemoveFromHistory={onRemoveFromHistory}
             onToggleChart={onToggleChart}
@@ -2991,6 +3027,7 @@ function SelectionBatchDisclosureItem({
   chartSelection,
   selectionRecordDeletePendingIds,
   deletePending,
+  onImportStockToSelectionBatch,
   onDeleteSelectionBatch,
   onRemoveFromHistory,
   onToggleChart,
@@ -2998,99 +3035,111 @@ function SelectionBatchDisclosureItem({
   batch: SelectionBatchState;
   expanded: boolean;
   deletePending: boolean;
+  onImportStockToSelectionBatch: (stock: StockInfo, batchId: number) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
 } & Pick<StockListSharedProps, "chartSelection" | "selectionRecordDeletePendingIds" | "onToggleChart">) {
   const value = getSelectionBatchDisclosureValue(batch.id);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   return (
-    <Disclosure
-      id={value}
-      className={cn(
-        "overflow-hidden rounded-[min(32px,var(--radius-3xl))] border border-border/60 bg-surface/70 px-3 shadow-sm",
-        expanded && "bg-surface",
-      )}
-    >
-      <Disclosure.Heading className="flex min-w-0">
-        <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
-          <StockDisclosureTitle
-            icon={CheckCircle2}
-            title={batch.name}
-            description={`历史选股${batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}`}
-            count={batch.isLoading ? "..." : batch.stocks.length || batch.total}
-            active
-          />
-        </Disclosure.Trigger>
-      </Disclosure.Heading>
+    <>
+      <Disclosure
+        id={value}
+        className={cn(
+          "overflow-hidden rounded-[min(32px,var(--radius-3xl))] border border-border/60 bg-surface/70 px-3 shadow-sm",
+          expanded && "bg-surface",
+        )}
+      >
+        <Disclosure.Heading className="flex min-w-0">
+          <Disclosure.Trigger className="group/disclosure-trigger flex min-w-0 flex-1 items-center gap-3 rounded-none border-0 px-0 py-3 text-left hover:no-underline active:scale-[0.99]">
+            <StockDisclosureTitle
+              icon={CheckCircle2}
+              title={batch.name}
+              description={`历史选股${batch.createdAt ? ` · ${formatDisplayDateTime(batch.createdAt)}` : ""}`}
+              count={batch.isLoading ? "..." : batch.stocks.length || batch.total}
+              active
+            />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
 
-      <Disclosure.Content className="overflow-hidden">
-        <div className="pb-3">
-          {batch.error ? (
-            <div className="flex min-h-20 flex-col justify-center gap-1 px-1 text-left">
-              <div className="text-sm font-medium text-destructive">记录加载失败</div>
-              <div className="text-xs text-muted-foreground text-pretty">{batch.error}</div>
-            </div>
-          ) : batch.isLoading ? (
-            <StockListSkeleton count={3} action={false} />
-          ) : batch.stocks.length > 0 ? (
-            <ScrollShadow orientation="vertical" className="max-h-64 pr-2">
-              <div className="flex w-full flex-col gap-2">
-                {batch.stocks.map((stock) => (
-                  <StockListButton
-                    key={stock.selectionRecordId ?? stock.code}
-                    stock={stock}
-                    active={
-                      chartSelection?.listKey === "selected"
-                      && chartSelection.selectionBatchId === batch.id
-                      && chartSelection.code === stock.code
-                    }
-                    onClick={() => onToggleChart(stock.code, "selected", batch.id)}
-                    action={getStockListAction({
-                      stock,
-                      listKey: "selected",
-                      candidateStockCodes: new Set(),
-                      filterDeletePendingIds: [],
-                      selectionRecordDeletePendingIds,
-                      onAddToCandidate: () => undefined,
-                      onRemoveFromCandidate: () => undefined,
-                      onRemoveFromHistory,
-                      onDeleteFromFilterList: () => undefined,
-                    })}
-                  />
-                ))}
+        <Disclosure.Content className="overflow-hidden">
+          <div className="pb-3">
+            {batch.error ? (
+              <div className="flex min-h-20 flex-col justify-center gap-1 px-1 text-left">
+                <div className="text-sm font-medium text-destructive">记录加载失败</div>
+                <div className="text-xs text-muted-foreground text-pretty">{batch.error}</div>
               </div>
-            </ScrollShadow>
-          ) : (
-            <DesktopStockListEmptyState listKey="selected" />
-          )}
-          <div className="mt-3 grid grid-cols-2 gap-2 px-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 w-full border-destructive/35 bg-background/45 text-destructive hover:bg-destructive/10"
-              aria-label={`删除已选列表：${batch.name}`}
-              isDisabled={deletePending}
-              onClick={() => void onDeleteSelectionBatch(batch.id)}
-            >
-              {deletePending ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
-              删除已选列表
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 w-full bg-background/45"
-              aria-label={`添加股票到历史选股：${batch.name}`}
-              isDisabled
-            >
-              <Plus data-icon="inline-start" />
-              添加股票
-            </Button>
+            ) : batch.isLoading ? (
+              <StockListSkeleton count={3} action={false} />
+            ) : batch.stocks.length > 0 ? (
+              <ScrollShadow orientation="vertical" className="max-h-64 pr-2">
+                <div className="flex w-full flex-col gap-2">
+                  {batch.stocks.map((stock) => (
+                    <StockListButton
+                      key={stock.selectionRecordId ?? stock.code}
+                      stock={stock}
+                      active={
+                        chartSelection?.listKey === "selected"
+                        && chartSelection.selectionBatchId === batch.id
+                        && chartSelection.code === stock.code
+                      }
+                      onClick={() => onToggleChart(stock.code, "selected", batch.id)}
+                      action={getStockListAction({
+                        stock,
+                        listKey: "selected",
+                        candidateStockCodes: new Set(),
+                        filterDeletePendingIds: [],
+                        selectionRecordDeletePendingIds,
+                        onAddToCandidate: () => undefined,
+                        onRemoveFromCandidate: () => undefined,
+                        onRemoveFromHistory,
+                        onDeleteFromFilterList: () => undefined,
+                      })}
+                    />
+                  ))}
+                </div>
+              </ScrollShadow>
+            ) : (
+              <DesktopStockListEmptyState listKey="selected" />
+            )}
+            <div className="mt-3 grid grid-cols-2 gap-2 px-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full border-destructive/35 bg-background/45 text-destructive hover:bg-destructive/10"
+                aria-label={`删除已选列表：${batch.name}`}
+                isDisabled={deletePending}
+                onClick={() => void onDeleteSelectionBatch(batch.id)}
+              >
+                {deletePending ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
+                删除已选列表
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full bg-background/45"
+                aria-label={`添加股票到历史选股：${batch.name}`}
+                isDisabled={batch.isLoading}
+                onClick={() => setImportDialogOpen(true)}
+              >
+                <Plus data-icon="inline-start" />
+                添加股票
+              </Button>
+            </div>
           </div>
-        </div>
-      </Disclosure.Content>
-    </Disclosure>
+        </Disclosure.Content>
+      </Disclosure>
+      {importDialogOpen ? (
+        <SelectionStockImportDialog
+          batch={batch}
+          onClose={() => setImportDialogOpen(false)}
+          onImportStock={onImportStockToSelectionBatch}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -3894,6 +3943,7 @@ function MobileSelectionHistoryDrawer({
   chartSelection,
   selectionRecordDeletePendingIds,
   onClose,
+  onImportStockToSelectionBatch,
   onRemoveFromHistory,
   onDeleteSelectionBatch,
   onToggleChart,
@@ -3907,6 +3957,7 @@ function MobileSelectionHistoryDrawer({
   chartSelection: ChartSelection | null;
   selectionRecordDeletePendingIds: number[];
   onClose: () => void;
+  onImportStockToSelectionBatch: (stock: StockInfo, batchId: number) => void | Promise<void>;
   onRemoveFromHistory: (stock: StockCandidate) => void | Promise<void>;
   onDeleteSelectionBatch: (id: number) => void | Promise<void>;
   onToggleChart: (code: string, listKey: StockListKey, selectionBatchId?: number) => void;
@@ -3971,6 +4022,7 @@ function MobileSelectionHistoryDrawer({
                         chartSelection={chartSelection}
                         selectionRecordDeletePendingIds={selectionRecordDeletePendingIds}
                         deletePending={selectionBatchDeletePendingIds.includes(batch.id)}
+                        onImportStockToSelectionBatch={onImportStockToSelectionBatch}
                         onDeleteSelectionBatch={onDeleteSelectionBatch}
                         onRemoveFromHistory={onRemoveFromHistory}
                         onToggleChart={(code, listKey, selectionBatchId) => {
@@ -5377,7 +5429,15 @@ function FilterStockImportDrawer({
   onClose: () => void;
   onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
 }) {
-  const importDialog = useStockImportDialog(targetList, onImportStock);
+  const meta = stockListMeta[targetList];
+  const oppositeList = getOppositeReturnableListKey(targetList);
+  const importDialog = useStockImportDialog(
+    targetList,
+    meta.label,
+    onImportStock,
+    "添加名单失败",
+    "添加名单失败。",
+  );
   const drawerState = useOverlayState({
     isOpen: true,
     onOpenChange: (open) => {
@@ -5387,8 +5447,6 @@ function FilterStockImportDrawer({
     },
   });
   const {
-    meta,
-    oppositeList,
     codeQuery,
     nameQuery,
     stocks: importStocks,
@@ -5445,10 +5503,7 @@ function FilterStockImportDrawer({
                 <StockImportError message={importError} />
               ) : null}
               <StockImportResults
-                targetList={targetList}
-                oppositeList={oppositeList}
                 metaLabel={meta.label}
-                stockGroups={stockGroups}
                 stocks={importStocks}
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
@@ -5456,6 +5511,9 @@ function FilterStockImportDrawer({
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
+                targetStocks={stockGroups[targetList]}
+                oppositeList={oppositeList}
+                oppositeStocks={stockGroups[oppositeList]}
                 onImportStock={handleImportStock}
               />
             </Drawer.Body>
@@ -5477,7 +5535,15 @@ function FilterStockImportDialog({
   onClose: () => void;
   onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>;
 }) {
-  const importDialog = useStockImportDialog(targetList, onImportStock);
+  const meta = stockListMeta[targetList];
+  const oppositeList = getOppositeReturnableListKey(targetList);
+  const importDialog = useStockImportDialog(
+    targetList,
+    meta.label,
+    onImportStock,
+    "添加名单失败",
+    "添加名单失败。",
+  );
   const modalState = useOverlayState({
     isOpen: true,
     onOpenChange: (open) => {
@@ -5487,8 +5553,6 @@ function FilterStockImportDialog({
     },
   });
   const {
-    meta,
-    oppositeList,
     codeQuery,
     nameQuery,
     stocks: importStocks,
@@ -5547,10 +5611,7 @@ function FilterStockImportDialog({
                 <StockImportError message={importError} />
               ) : null}
               <StockImportResults
-                targetList={targetList}
-                oppositeList={oppositeList}
                 metaLabel={meta.label}
-                stockGroups={stockGroups}
                 stocks={importStocks}
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
@@ -5558,6 +5619,111 @@ function FilterStockImportDialog({
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
+                targetStocks={stockGroups[targetList]}
+                oppositeList={oppositeList}
+                oppositeStocks={stockGroups[oppositeList]}
+                onImportStock={handleImportStock}
+              />
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
+function SelectionStockImportDialog({
+  batch,
+  onClose,
+  onImportStock,
+}: {
+  batch: SelectionBatchState;
+  onClose: () => void;
+  onImportStock: (stock: StockInfo, batchId: number) => void | Promise<void>;
+}) {
+  const importDialog = useStockImportDialog(
+    batch.id,
+    batch.name,
+    onImportStock,
+    "添加历史选股失败",
+    "添加历史选股失败。",
+  );
+  const modalState = useOverlayState({
+    isOpen: true,
+    onOpenChange: (open) => {
+      if (!open) {
+        onClose();
+      }
+    },
+  });
+  const {
+    codeQuery,
+    nameQuery,
+    stocks: importStocks,
+    hasLoaded,
+    isLoading,
+    error,
+    importPendingCode,
+    importError,
+    filteredStocks,
+    visibleStocks,
+    setCodeQuery,
+    setNameQuery,
+    handleSearch,
+    handleResetSearch,
+    handleImportStock,
+  } = importDialog;
+
+  return (
+    <Modal state={modalState}>
+      <Modal.Trigger className="sr-only" aria-label={`打开添加到${batch.name}弹窗`}>
+        打开添加到{batch.name}弹窗
+      </Modal.Trigger>
+      <Modal.Backdrop variant="blur">
+        <Modal.Container size="lg" scroll="inside">
+          <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+            <Modal.CloseTrigger className="z-20" />
+            <Modal.Header className="p-5 pr-12">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/55 text-muted-foreground">
+                  <ImportIcon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <Modal.Heading className="truncate text-xl text-balance">添加到{batch.name}</Modal.Heading>
+                  <p className="mt-1 text-sm text-muted-foreground">搜索股票后添加到当前历史选股</p>
+                </div>
+              </div>
+            </Modal.Header>
+
+            <Modal.Body className="flex max-h-[min(78vh,680px)] min-h-0 flex-col overflow-hidden p-0">
+              <StockImportSearchForm
+                codeQuery={codeQuery}
+                nameQuery={nameQuery}
+                isLoading={isLoading}
+                onCodeQueryChange={setCodeQuery}
+                onNameQueryChange={setNameQuery}
+                onSearch={handleSearch}
+                onReset={handleResetSearch}
+              />
+              {hasLoaded && !isLoading && !error ? (
+                <StockImportSummary
+                  listLabel={batch.name}
+                  filteredCount={filteredStocks.length}
+                />
+              ) : null}
+              {importError ? (
+                <StockImportError message={importError} />
+              ) : null}
+              <StockImportResults
+                metaLabel={batch.name}
+                stocks={importStocks}
+                visibleStocks={visibleStocks}
+                hasLoaded={hasLoaded}
+                isLoading={isLoading}
+                error={error}
+                importPendingCode={importPendingCode}
+                className="min-h-0 flex-1"
+                targetStocks={batch.stocks}
                 onImportStock={handleImportStock}
               />
             </Modal.Body>
@@ -5625,9 +5791,12 @@ function FilterListCurrentStocks({
   );
 }
 
-function useStockImportDialog(
-  targetList: ReturnableListKey,
-  onImportStock: (stock: StockInfo, targetList: ReturnableListKey) => Promise<void>,
+function useStockImportDialog<TTarget>(
+  target: TTarget,
+  targetLabel: string,
+  onImportStock: (stock: StockInfo, target: TTarget) => void | Promise<void>,
+  errorTitle: string,
+  errorFallback: string,
 ) {
   const requestIdRef = useRef(0);
   const [dialogState, setDialogState] = useState<StockImportDialogState>(initialStockImportDialogState);
@@ -5643,8 +5812,6 @@ function useStockImportDialog(
     importPendingCode,
     importError,
   } = dialogState;
-  const meta = stockListMeta[targetList];
-  const oppositeList = getOppositeReturnableListKey(targetList);
   const filteredStocks = useMemo(() => {
     const normalizedCodeQuery = getComparableStockCode(appliedCodeQuery);
     const normalizedNameQuery = appliedNameQuery.trim().toLowerCase();
@@ -5771,32 +5938,30 @@ function useStockImportDialog(
     }));
 
     try {
-      await onImportStock(stock, targetList);
+      await onImportStock(stock, target);
       setDialogState((current) => ({
         ...current,
         importPendingCode: null,
         importError: null,
       }));
-      toast.success(`已添加到${meta.label}`, {
+      toast.success(`已添加到${targetLabel}`, {
         description: `${stock.name} ${stock.code}`,
       });
     } catch (importError) {
-      const message = importError instanceof Error ? importError.message : "添加名单失败。";
+      const message = importError instanceof Error ? importError.message : errorFallback;
 
       setDialogState((current) => ({
         ...current,
         importPendingCode: null,
         importError: message,
       }));
-      toast.danger("添加名单失败", {
+      toast.danger(errorTitle, {
         description: message,
       });
     }
-  }, [meta.label, onImportStock, targetList]);
+  }, [errorFallback, errorTitle, onImportStock, target, targetLabel]);
 
   return {
-    meta,
-    oppositeList,
     codeQuery,
     nameQuery,
     stocks,
@@ -5906,10 +6071,7 @@ type StockImportResultRow = {
 };
 
 const StockImportResults = memo(function StockImportResults({
-  targetList,
-  oppositeList,
   metaLabel,
-  stockGroups,
   stocks,
   visibleStocks,
   hasLoaded,
@@ -5917,12 +6079,12 @@ const StockImportResults = memo(function StockImportResults({
   error,
   importPendingCode,
   className,
+  targetStocks,
+  oppositeList,
+  oppositeStocks,
   onImportStock,
 }: {
-  targetList: ReturnableListKey;
-  oppositeList: ReturnableListKey;
   metaLabel: string;
-  stockGroups: StockGroups;
   stocks: StockInfo[];
   visibleStocks: StockInfo[];
   hasLoaded: boolean;
@@ -5930,16 +6092,19 @@ const StockImportResults = memo(function StockImportResults({
   error: string | null;
   importPendingCode: string | null;
   className?: string;
+  targetStocks: StockCandidate[];
+  oppositeList?: ReturnableListKey;
+  oppositeStocks?: StockCandidate[];
   onImportStock: (stock: StockInfo) => void | Promise<void>;
 }) {
   const containerClassName = cn("min-h-[320px] overflow-y-auto px-5 pb-5", className);
   const targetListCodes = useMemo(
-    () => createStockCodeSet(stockGroups[targetList]),
-    [stockGroups, targetList],
+    () => createStockCodeSet(targetStocks),
+    [targetStocks],
   );
   const oppositeListCodes = useMemo(
-    () => createStockCodeSet(stockGroups[oppositeList]),
-    [stockGroups, oppositeList],
+    () => createStockCodeSet(oppositeStocks ?? []),
+    [oppositeStocks],
   );
   const resultRows = useMemo<StockImportResultRow[]>(
     () => visibleStocks.map((stock) => {
@@ -6021,13 +6186,13 @@ const StockImportResultItem = memo(function StockImportResultItem({
   onImportStock,
 }: {
   row: StockImportResultRow;
-  oppositeList: ReturnableListKey;
+  oppositeList?: ReturnableListKey;
   metaLabel: string;
   importDisabled: boolean;
   onImportStock: (stock: StockInfo) => void | Promise<void>;
 }) {
   const { stock, inTargetList, inOppositeList, isImporting } = row;
-  const importTitle = inOppositeList ? "移入名单" : "添加到名单";
+  const importTitle = oppositeList ? (inOppositeList ? "移入名单" : "添加到名单") : "添加股票";
 
   return (
     <Surface
@@ -6044,7 +6209,7 @@ const StockImportResultItem = memo(function StockImportResultItem({
             已在{metaLabel}
           </Chip>
         ) : null}
-        {inOppositeList && !inTargetList ? (
+        {oppositeList && inOppositeList && !inTargetList ? (
           <Chip size="sm" variant="soft" color="warning" className="self-start">
             已在{stockListMeta[oppositeList].label}
           </Chip>

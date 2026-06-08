@@ -21,6 +21,12 @@ export type AddStockFilterRequest = {
   listType: StockFilterListType;
 };
 
+export type AddManualSelectionRequest = {
+  batchId: number;
+  code: string;
+  name: string;
+};
+
 export type ImportStockFiltersRequest = {
   file: File;
   listType: StockFilterListType;
@@ -556,6 +562,59 @@ export async function addSelection(results: StrategyScanResult[]): Promise<void>
 
   if (apiStatus !== null && apiStatus !== 0) {
     throw new ApiError(getErrorMessage(payload) ?? "添加选股批次失败。", response.status);
+  }
+}
+
+export async function addManualSelection(request: AddManualSelectionRequest): Promise<void> {
+  const batchId = request.batchId;
+  const code = request.code.trim();
+  const name = request.name.trim();
+
+  if (!Number.isFinite(batchId) || batchId <= 0) {
+    throw new Error("选股批次ID无效。");
+  }
+
+  if (!code) {
+    throw new Error("股票代码不能为空。");
+  }
+
+  let response: Response;
+  const token = getStoredAuthToken()?.trim();
+
+  try {
+    response = await fetch(`${apiBaseUrl}/selection/add/manual`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({
+        results: [
+          {
+            batch_id: batchId,
+            code,
+            name,
+          },
+        ],
+      }),
+    });
+  } catch {
+    throw new Error("无法连接手动添加选股接口，请确认后端服务或跨域配置。");
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? "手动添加选股失败。";
+
+    if (isAuthFailureStatus(response.status)) {
+      notifyAuthExpired();
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const apiStatus = getApiStatus(payload);
+
+  if (apiStatus !== null && apiStatus !== 0) {
+    throw new ApiError(getErrorMessage(payload) ?? "手动添加选股失败。", response.status);
   }
 }
 
