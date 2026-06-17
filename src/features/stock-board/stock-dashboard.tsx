@@ -7046,56 +7046,60 @@ const StockImportResults = memo(function StockImportResults({
   }
 
   return (
-    <div className={containerClassName}>
-      {resultRows.length > 0 ? (
-        <div className="flex w-full flex-col gap-2">
-          {resultRows.map((row) => (
-            <StockImportResultItem
-              key={row.stock.code}
-              row={row}
-              oppositeList={oppositeList}
-              metaLabel={metaLabel}
-              importDisabled={importDisabled}
-              onImportStock={onImportStock}
-            />
-          ))}
-          {pageCount > 1 ? (
-            <div className="flex items-center justify-between border-t border-border/60 px-1 pt-3">
-              <span className="text-xs text-muted-foreground">
-                共 {total} 条，第 {pageNum}/{pageCount} 页
-              </span>
-              <Pagination className="mx-0 w-auto justify-end">
-                <Pagination.Content>
-                  <Pagination.Item>
-                    <Pagination.Link
-                      isDisabled={pageNum <= 1 || isLoadingMore}
-                      aria-label="上一页"
-                      className={cn(pageNum <= 1 && "pointer-events-none opacity-50")}
-                      onPress={() => onPageChange(pageNum - 1)}
-                    >
-                      <ChevronLeft data-icon="inline-start" />
-                    </Pagination.Link>
-                  </Pagination.Item>
-                  <Pagination.Item>
-                    <Pagination.Link
-                      isDisabled={pageNum >= pageCount || isLoadingMore}
-                      aria-label="下一页"
-                      className={cn(pageNum >= pageCount && "pointer-events-none opacity-50")}
-                      onPress={() => onPageChange(pageNum + 1)}
-                    >
-                      <ChevronRight data-icon="inline-start" />
-                    </Pagination.Link>
-                  </Pagination.Item>
-                </Pagination.Content>
-              </Pagination>
-            </div>
-          ) : null}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className={cn("flex-1 overflow-y-auto px-5 pb-5", className)}>
+        {resultRows.length > 0 ? (
+          <div className="flex w-full flex-col gap-2">
+            {resultRows.map((row) => (
+              <StockImportResultItem
+                key={row.stock.code}
+                row={row}
+                oppositeList={oppositeList}
+                metaLabel={metaLabel}
+                importDisabled={importDisabled}
+                onImportStock={onImportStock}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState className="flex min-h-48 items-center justify-center text-center text-muted-foreground">
+            暂无匹配股票
+          </EmptyState>
+        )}
+      </div>
+      {pageCount > 1 ? (
+        <div className="shrink-0 border-t border-border/60 px-5 py-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              共 {total} 条，第 {pageNum}/{pageCount} 页
+            </span>
+            <Pagination className="mx-0 w-auto justify-end">
+              <Pagination.Content>
+                <Pagination.Item>
+                  <Pagination.Link
+                    isDisabled={pageNum <= 1 || isLoadingMore}
+                    aria-label="上一页"
+                    className={cn(pageNum <= 1 && "pointer-events-none opacity-50")}
+                    onPress={() => onPageChange(pageNum - 1)}
+                  >
+                    <ChevronLeft data-icon="inline-start" />
+                  </Pagination.Link>
+                </Pagination.Item>
+                <Pagination.Item>
+                  <Pagination.Link
+                    isDisabled={pageNum >= pageCount || isLoadingMore}
+                    aria-label="下一页"
+                    className={cn(pageNum >= pageCount && "pointer-events-none opacity-50")}
+                    onPress={() => onPageChange(pageNum + 1)}
+                  >
+                    <ChevronRight data-icon="inline-start" />
+                  </Pagination.Link>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination>
+          </div>
         </div>
-      ) : (
-        <EmptyState className="flex min-h-48 items-center justify-center text-center text-muted-foreground">
-          暂无匹配股票
-        </EmptyState>
-      )}
+      ) : null}
     </div>
   );
 });
