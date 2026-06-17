@@ -197,20 +197,14 @@ export async function listStockFilters(
   signal?: AbortSignal,
   groupId?: number,
 ): Promise<StockFilter[]> {
-  const url = new URL(`${apiBaseUrl}/strategy/filter`, window.location.origin);
-
-  url.searchParams.set("type", type);
-  if (typeof groupId === "number" && Number.isFinite(groupId) && groupId > 0) {
-    url.searchParams.set("group_id", String(groupId));
-  }
-
   let response: Response;
   const token = getStoredAuthToken()?.trim();
 
   try {
-    response = await fetch(url, {
+    response = await fetch(`${apiBaseUrl}/strategy/filter`, {
       method: "POST",
-      headers: createAuthHeaders(token),
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify(createStockFilterListRequestBody(type, groupId)),
       signal,
     });
   } catch (error) {
@@ -246,17 +240,14 @@ export async function listStockFilterGroups(
   type: StockFilterListType,
   signal?: AbortSignal,
 ): Promise<StockFilterGroup[]> {
-  const url = new URL(`${apiBaseUrl}/strategy/filter/group/list`, window.location.origin);
-
-  url.searchParams.set("type", type);
-
   let response: Response;
   const token = getStoredAuthToken()?.trim();
 
   try {
-    response = await fetch(url, {
-      method: "GET",
-      headers: createAuthHeaders(token),
+    response = await fetch(`${apiBaseUrl}/strategy/filter/group/list`, {
+      method: "POST",
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify(createStockFilterGroupListRequestBody(type)),
       signal,
     });
   } catch (error) {
@@ -560,7 +551,8 @@ export async function listStrategyConfigs(signal?: AbortSignal): Promise<Strateg
   try {
     response = await fetch(`${apiBaseUrl}/strategy/config`, {
       method: "POST",
-      headers: createAuthHeaders(token),
+      headers: createJsonAuthHeaders(token),
+      body: JSON.stringify({ page_num: 1, page_size: 200 }),
       signal,
     });
   } catch (error) {
@@ -1005,7 +997,7 @@ function getStockListPaged(payload: unknown): PagedResponse<StockInfo> {
 }
 
 function getStockFilters(payload: unknown, requestedType: StockFilterListType) {
-  const list = getDataList(payload);
+  const list = getPayloadCollection(payload);
 
   return list.flatMap((item) => {
     if (!isRecord(item)) {
@@ -1285,14 +1277,6 @@ function getSelectionRecord(payload: unknown): SelectionRecord | null {
   return result;
 }
 
-function getDataList(payload: unknown) {
-  return Array.isArray(payload)
-    ? payload
-    : isRecord(payload) && Array.isArray(payload.data)
-      ? payload.data
-      : [];
-}
-
 function getPayloadList(payload: unknown) {
   if (Array.isArray(payload)) {
     return payload;
@@ -1381,6 +1365,23 @@ function createStrategyConfigRequestBody(config: StrategyConfigDto) {
   }
 
   return body;
+}
+
+function createStockFilterListRequestBody(type: StockFilterListType, groupId?: number) {
+  return {
+    type,
+    ...(typeof groupId === "number" && Number.isFinite(groupId) && groupId > 0 ? { group_id: groupId } : {}),
+    page_num: 1,
+    page_size: 200,
+  };
+}
+
+function createStockFilterGroupListRequestBody(type: StockFilterListType) {
+  return {
+    type,
+    page_num: 1,
+    page_size: 200,
+  };
 }
 
 function createSelectionBatchListRequestBody(request: SelectionBatchListRequest) {
