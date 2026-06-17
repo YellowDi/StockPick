@@ -5409,7 +5409,7 @@ function getStockListAction({
   };
 }
 
-function StockListButton({
+const StockListButton = memo(function StockListButton({
   stock,
   active,
   onClick,
@@ -5426,7 +5426,7 @@ function StockListButton({
     <Surface
       variant="transparent"
       className={cn(
-        "group/stock-item flex w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border bg-background/40 p-1 transition-[background-color,border-color]",
+        "group/stock-item flex w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border bg-background/40 p-1 transition-[background-color,border-color] [content-visibility:auto] [contain-intrinsic-size:52px]",
         active
           ? "border-ring/70 bg-secondary/80"
           : "border-transparent hover:border-border/80 hover:bg-default/50 focus-within:bg-default/50 [&:has(button:hover)]:bg-default/50",
@@ -5481,7 +5481,7 @@ function StockListButton({
       ) : null}
     </Surface>
   );
-}
+});
 
 function DesktopCandidateDialog({
   stockGroups,
@@ -6550,6 +6550,7 @@ function FilterListCurrentStocks({
 } & StockListSharedProps) {
   const meta = stockListMeta[listKey];
   const label = emptyLabel ?? meta.label;
+  const activeCode = chartSelection?.listKey === listKey ? chartSelection.code : null;
 
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col px-5 pb-5", className)}>
@@ -6560,7 +6561,7 @@ function FilterListCurrentStocks({
               <StockListButton
                 key={stock.code}
                 stock={stock}
-                active={chartSelection?.listKey === listKey && chartSelection.code === stock.code}
+                active={activeCode === stock.code}
                 onClick={() => onToggleChart(stock.code, listKey)}
                 action={getStockListAction({
                   stock,
