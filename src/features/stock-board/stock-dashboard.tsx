@@ -3210,6 +3210,30 @@ function DesktopStockSidebar({
 } & StockListSharedProps) {
   const [filterGroupStackList, setFilterGroupStackList] = useState<ReturnableListKey | null>(null);
 
+  const blurFilterGroupStackFocus = useCallback((listKey: ReturnableListKey | null) => {
+    if (!listKey || typeof document === "undefined") {
+      return;
+    }
+
+    const panel = document.getElementById(`filter-group-stack-${listKey}`);
+    const activeElement = document.activeElement;
+
+    if (panel && activeElement instanceof HTMLElement && panel.contains(activeElement)) {
+      activeElement.blur();
+    }
+  }, []);
+
+  const toggleFilterGroupStack = useCallback((listKey: ReturnableListKey) => {
+    blurFilterGroupStackFocus(filterGroupStackList);
+    setFilterGroupStackList((current) => current === listKey ? null : listKey);
+  }, [blurFilterGroupStackFocus, filterGroupStackList]);
+
+  const openFilterGroup = useCallback((group: FilterGroupView) => {
+    blurFilterGroupStackFocus(group.listKey);
+    onOpenFilterList(group.listKey, group.groupId, group.name);
+    setFilterGroupStackList(null);
+  }, [blurFilterGroupStackFocus, onOpenFilterList]);
+
   return (
     <aside className="flex h-full min-h-0 flex-col gap-4 bg-transparent p-4">
       <Card className="shrink-0 bg-card/72 p-3 shadow-sm backdrop-blur-xl">
@@ -3321,13 +3345,8 @@ function DesktopStockSidebar({
               filterGroupDeletePendingIds={filterGroupDeletePendingIds}
               className="grid-cols-1"
               buttonClassName="h-11 w-full bg-background/35 px-3"
-              onToggleList={(listKey) => {
-                setFilterGroupStackList((current) => current === listKey ? null : listKey);
-              }}
-              onOpenFilterGroup={(group) => {
-                onOpenFilterList(group.listKey, group.groupId, group.name);
-                setFilterGroupStackList(null);
-              }}
+              onToggleList={toggleFilterGroupStack}
+              onOpenFilterGroup={openFilterGroup}
               onCreateFilterGroup={onCreateFilterGroup}
               onEditFilterGroup={onEditFilterGroup}
               onDeleteFilterGroup={onDeleteFilterGroup}
@@ -6038,7 +6057,7 @@ function FilterListDialog({
   return (
     <>
       <Modal state={modalState}>
-        <Modal.Trigger className="sr-only" aria-label={`打开${meta.label}弹窗`}>
+        <Modal.Trigger className="sr-only" tabIndex={-1} aria-label={`打开${meta.label}弹窗`}>
           打开{meta.label}弹窗
         </Modal.Trigger>
         <Modal.Backdrop variant="blur">
@@ -6394,7 +6413,7 @@ function FilterStockImportDialog({
 
   return (
     <Modal state={modalState}>
-      <Modal.Trigger className="sr-only" aria-label={`打开添加到${label}弹窗`}>
+      <Modal.Trigger className="sr-only" tabIndex={-1} aria-label={`打开添加到${label}弹窗`}>
         打开添加到{label}弹窗
       </Modal.Trigger>
       <Modal.Backdrop variant="blur">
