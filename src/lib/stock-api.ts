@@ -140,7 +140,14 @@ export type PagedResponse<T> = {
   total: number;
 };
 
-export async function listStocks(signal?: AbortSignal): Promise<StockInfo[]> {
+export type StockListRequest = {
+  code?: string;
+  name?: string;
+  page_num?: number;
+  page_size?: number;
+};
+
+export async function listStocks(request?: StockListRequest, signal?: AbortSignal): Promise<PagedResponse<StockInfo>> {
   const url = new URL(`${apiBaseUrl}/stock/list`, window.location.origin);
 
   let response: Response;
@@ -149,7 +156,11 @@ export async function listStocks(signal?: AbortSignal): Promise<StockInfo[]> {
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: createAuthHeaders(token),
+      headers: {
+        ...createAuthHeaders(token),
+        "Content-Type": "application/json",
+      },
+      body: request ? JSON.stringify(request) : undefined,
       signal,
     });
   } catch (error) {
@@ -178,7 +189,7 @@ export async function listStocks(signal?: AbortSignal): Promise<StockInfo[]> {
     throw new ApiError(getErrorMessage(payload) ?? "股票列表加载失败。", response.status);
   }
 
-  return getStockList(payload);
+  return getStockListPaged(payload);
 }
 
 export async function listStockFilters(
@@ -951,10 +962,31 @@ async function readJson(response: Response) {
   }
 }
 
-function getStockList(payload: unknown) {
-  const list = getDataList(payload);
+function getStockListPaged(payload: unknown): PagedResponse<StockInfo> {
+  if (!isRecord(payload)) {
+    return { list: [], page_num: 1, page_size: 0, total: 0 };
+  }
 
-  return list.flatMap((item) => {
+  // 后端返回格式: { code, msg, data: { list: [...], page_num, page_size, total } }
+  // 也可能直接是: { list: [...], page_num, page_size, total }
+  let rawData: unknown[] = [];
+  let pageInfo: Record<string, unknown> = payload;
+
+  if (isRecord(payload.data)) {
+    // 嵌套格式: payload.data.list
+    pageInfo = payload.data;
+    if (Array.isArray(payload.data.list)) {
+      rawData = payload.data.list;
+    }
+  } else if (Array.isArray(payload.data)) {
+    // 直接格式: payload.data 是数组
+    rawData = payload.data;
+  } else if (Array.isArray(payload.list)) {
+    // 直接格式: payload.list
+    rawData = payload.list;
+  }
+
+  const list = rawData.flatMap((item: unknown) => {
     if (!isRecord(item)) {
       return [];
     }
@@ -964,6 +996,12 @@ function getStockList(payload: unknown) {
 
     return code ? [{ code, name: name || code }] : [];
   });
+
+  const page_num = typeof pageInfo.page_num === "number" ? pageInfo.page_num : 1;
+  const page_size = typeof pageInfo.page_size === "number" ? pageInfo.page_size : list.length;
+  const total = typeof pageInfo.total === "number" ? pageInfo.total : list.length;
+
+  return { list, page_num, page_size, total };
 }
 
 function getStockFilters(payload: unknown, requestedType: StockFilterListType) {

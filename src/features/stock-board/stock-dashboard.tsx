@@ -195,9 +195,13 @@ type StockImportDialogState = {
   stocks: StockInfo[];
   hasLoaded: boolean;
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
   importPendingCode: string | null;
   importError: string | null;
+  pageNum: number;
+  pageSize: number;
+  total: number;
 };
 
 type StockListAction = {
@@ -232,9 +236,13 @@ const initialStockImportDialogState: StockImportDialogState = {
   stocks: [],
   hasLoaded: false,
   isLoading: true,
+  isLoadingMore: false,
   error: null,
   importPendingCode: null,
   importError: null,
+  pageNum: 1,
+  pageSize: 50,
+  total: 0,
 };
 
 const listIcons = {
@@ -6238,16 +6246,20 @@ function FilterStockImportDrawer({
     stocks: importStocks,
     hasLoaded,
     isLoading,
+    isLoadingMore,
     error,
     importPendingCode,
     importError,
     filteredStocks,
     visibleStocks,
+    total,
+    hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
+    loadMore,
   } = importDialog;
 
   return (
@@ -6294,13 +6306,17 @@ function FilterStockImportDrawer({
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
                 isLoading={isLoading}
+                isLoadingMore={isLoadingMore}
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
                 targetStocks={targetStocks ?? stockGroups[targetList]}
                 oppositeList={oppositeList}
                 oppositeStocks={stockGroups[oppositeList]}
+                total={total}
+                hasMore={hasMore}
                 onImportStock={handleImportStock}
+                onLoadMore={loadMore}
               />
             </Drawer.Body>
           </Drawer.Dialog>
@@ -6351,16 +6367,20 @@ function FilterStockImportDialog({
     stocks: importStocks,
     hasLoaded,
     isLoading,
+    isLoadingMore,
     error,
     importPendingCode,
     importError,
     filteredStocks,
     visibleStocks,
+    total,
+    hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
+    loadMore,
   } = importDialog;
 
   return (
@@ -6409,13 +6429,17 @@ function FilterStockImportDialog({
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
                 isLoading={isLoading}
+                isLoadingMore={isLoadingMore}
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
                 targetStocks={targetStocks ?? stockGroups[targetList]}
                 oppositeList={oppositeList}
                 oppositeStocks={stockGroups[oppositeList]}
+                total={total}
+                hasMore={hasMore}
                 onImportStock={handleImportStock}
+                onLoadMore={loadMore}
               />
             </Modal.Body>
           </Modal.Dialog>
@@ -6455,16 +6479,20 @@ function SelectionStockImportDialog({
     stocks: importStocks,
     hasLoaded,
     isLoading,
+    isLoadingMore,
     error,
     importPendingCode,
     importError,
     filteredStocks,
     visibleStocks,
+    total,
+    hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
+    loadMore,
   } = importDialog;
 
   return (
@@ -6513,11 +6541,15 @@ function SelectionStockImportDialog({
                 visibleStocks={visibleStocks}
                 hasLoaded={hasLoaded}
                 isLoading={isLoading}
+                isLoadingMore={isLoadingMore}
                 error={error}
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
                 targetStocks={batch.stocks}
+                total={total}
+                hasMore={hasMore}
                 onImportStock={handleImportStock}
+                onLoadMore={loadMore}
               />
             </Modal.Body>
           </Modal.Dialog>
@@ -6605,9 +6637,13 @@ function useStockImportDialog<TTarget>(
     stocks,
     hasLoaded,
     isLoading,
+    isLoadingMore,
     error,
     importPendingCode,
     importError,
+    pageNum,
+    pageSize,
+    total,
   } = dialogState;
   const filteredStocks = useMemo(() => {
     const normalizedCodeQuery = getComparableStockCode(appliedCodeQuery);
@@ -6627,6 +6663,7 @@ function useStockImportDialog<TTarget>(
     });
   }, [appliedCodeQuery, appliedNameQuery, stocks]);
   const visibleStocks = filteredStocks;
+  const hasMore = stocks.length < total;
 
   const cancelActiveStockLoad = useCallback(() => {
     requestIdRef.current += 1;
@@ -6648,25 +6685,32 @@ function useStockImportDialog<TTarget>(
     }));
   }, []);
 
-  const loadStocks = useCallback(async (signal?: AbortSignal) => {
+  const loadStocks = useCallback(async (isLoadMore = false, signal?: AbortSignal) => {
     const requestId = requestIdRef.current + 1;
 
     requestIdRef.current = requestId;
     setDialogState((current) => ({
       ...current,
-      hasLoaded: false,
-      isLoading: true,
+      hasLoaded: isLoadMore ? current.hasLoaded : false,
+      isLoading: !isLoadMore,
+      isLoadingMore: isLoadMore,
       error: null,
     }));
 
     try {
-      const stockList = await listStocks(signal);
+      const currentPage = isLoadMore ? dialogState.pageNum + 1 : 1;
+      const response = await listStocks({
+        page_num: currentPage,
+        page_size: dialogState.pageSize,
+      }, signal);
 
       if (requestId === requestIdRef.current) {
         setDialogState((current) => ({
           ...current,
-          stocks: stockList,
+          stocks: isLoadMore ? [...current.stocks, ...response.list] : response.list,
           hasLoaded: true,
+          pageNum: response.page_num,
+          total: response.total,
         }));
       }
     } catch (loadError) {
@@ -6677,8 +6721,8 @@ function useStockImportDialog<TTarget>(
       if (requestId === requestIdRef.current) {
         setDialogState((current) => ({
           ...current,
-          stocks: [],
-          hasLoaded: false,
+          stocks: isLoadMore ? current.stocks : [],
+          hasLoaded: isLoadMore ? current.hasLoaded : false,
           error: loadError instanceof Error ? loadError.message : "股票列表加载失败。",
         }));
       }
@@ -6687,15 +6731,22 @@ function useStockImportDialog<TTarget>(
         setDialogState((current) => ({
           ...current,
           isLoading: false,
+          isLoadingMore: false,
         }));
       }
     }
-  }, [requestIdRef]);
+  }, []);
+
+  const loadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore) {
+      void loadStocks(true);
+    }
+  }, [isLoadingMore, hasMore, loadStocks]);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    void loadStocks(controller.signal);
+    void loadStocks(false, controller.signal);
 
     return () => {
       controller.abort();
@@ -6764,16 +6815,22 @@ function useStockImportDialog<TTarget>(
     stocks,
     hasLoaded,
     isLoading,
+    isLoadingMore,
     error,
     importPendingCode,
     importError,
     filteredStocks,
     visibleStocks,
+    pageNum,
+    pageSize,
+    total,
+    hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
+    loadMore,
   };
 }
 
@@ -6873,26 +6930,34 @@ const StockImportResults = memo(function StockImportResults({
   visibleStocks,
   hasLoaded,
   isLoading,
+  isLoadingMore,
   error,
   importPendingCode,
   className,
   targetStocks,
   oppositeList,
   oppositeStocks,
+  total,
+  hasMore,
   onImportStock,
+  onLoadMore,
 }: {
   metaLabel: string;
   stocks: StockInfo[];
   visibleStocks: StockInfo[];
   hasLoaded: boolean;
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
   importPendingCode: string | null;
   className?: string;
   targetStocks: StockCandidate[];
   oppositeList?: ReturnableListKey;
   oppositeStocks?: StockCandidate[];
+  total: number;
+  hasMore: boolean;
   onImportStock: (stock: StockInfo) => void | Promise<void>;
+  onLoadMore: () => void;
 }) {
   const containerClassName = cn("min-h-[320px] overflow-y-auto px-5 pb-5", className);
   const targetListCodes = useMemo(
@@ -6965,6 +7030,24 @@ const StockImportResults = memo(function StockImportResults({
               onImportStock={onImportStock}
             />
           ))}
+          {hasMore ? (
+            <div className="flex justify-center py-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 bg-background/45"
+                isDisabled={isLoadingMore}
+                onClick={onLoadMore}
+              >
+                {isLoadingMore ? (
+                  <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <Plus data-icon="inline-start" />
+                )}
+                加载更多 {stocks.length}/{total}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <EmptyState className="flex min-h-48 items-center justify-center text-center text-muted-foreground">
