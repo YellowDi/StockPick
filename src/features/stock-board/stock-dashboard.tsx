@@ -4672,7 +4672,7 @@ function MobileBottomActions({
   return (
     <div className="mobile-bottom-actions">
       <div className="mobile-bottom-actions__inner">
-        <div className="grid w-full grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
+        <div className="grid w-full grid-cols-3 gap-2">
           <Button
             type="button"
             variant="outline"
