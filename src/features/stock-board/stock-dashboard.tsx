@@ -6252,14 +6252,17 @@ function FilterStockImportDrawer({
     importError,
     filteredStocks,
     visibleStocks,
+    pageNum,
+    pageSize,
     total,
+    pageCount,
     hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
-    loadMore,
+    goToPage,
   } = importDialog;
 
   return (
@@ -6313,10 +6316,13 @@ function FilterStockImportDrawer({
                 targetStocks={targetStocks ?? stockGroups[targetList]}
                 oppositeList={oppositeList}
                 oppositeStocks={stockGroups[oppositeList]}
+                pageNum={pageNum}
+                pageSize={pageSize}
                 total={total}
+                pageCount={pageCount}
                 hasMore={hasMore}
                 onImportStock={handleImportStock}
-                onLoadMore={loadMore}
+                onPageChange={goToPage}
               />
             </Drawer.Body>
           </Drawer.Dialog>
@@ -6373,14 +6379,17 @@ function FilterStockImportDialog({
     importError,
     filteredStocks,
     visibleStocks,
+    pageNum,
+    pageSize,
     total,
+    pageCount,
     hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
-    loadMore,
+    goToPage,
   } = importDialog;
 
   return (
@@ -6436,10 +6445,13 @@ function FilterStockImportDialog({
                 targetStocks={targetStocks ?? stockGroups[targetList]}
                 oppositeList={oppositeList}
                 oppositeStocks={stockGroups[oppositeList]}
+                pageNum={pageNum}
+                pageSize={pageSize}
                 total={total}
+                pageCount={pageCount}
                 hasMore={hasMore}
                 onImportStock={handleImportStock}
-                onLoadMore={loadMore}
+                onPageChange={goToPage}
               />
             </Modal.Body>
           </Modal.Dialog>
@@ -6485,14 +6497,17 @@ function SelectionStockImportDialog({
     importError,
     filteredStocks,
     visibleStocks,
+    pageNum,
+    pageSize,
     total,
+    pageCount,
     hasMore,
     setCodeQuery,
     setNameQuery,
     handleSearch,
     handleResetSearch,
     handleImportStock,
-    loadMore,
+    goToPage,
   } = importDialog;
 
   return (
@@ -6546,10 +6561,13 @@ function SelectionStockImportDialog({
                 importPendingCode={importPendingCode}
                 className="min-h-0 flex-1"
                 targetStocks={batch.stocks}
+                pageNum={pageNum}
+                pageSize={pageSize}
                 total={total}
+                pageCount={pageCount}
                 hasMore={hasMore}
                 onImportStock={handleImportStock}
-                onLoadMore={loadMore}
+                onPageChange={goToPage}
               />
             </Modal.Body>
           </Modal.Dialog>
@@ -6685,29 +6703,28 @@ function useStockImportDialog<TTarget>(
     }));
   }, []);
 
-  const loadStocks = useCallback(async (isLoadMore = false, signal?: AbortSignal) => {
+  const loadStocks = useCallback(async (pageNum: number, signal?: AbortSignal) => {
     const requestId = requestIdRef.current + 1;
 
     requestIdRef.current = requestId;
     setDialogState((current) => ({
       ...current,
-      hasLoaded: isLoadMore ? current.hasLoaded : false,
-      isLoading: !isLoadMore,
-      isLoadingMore: isLoadMore,
+      hasLoaded: current.hasLoaded && current.pageNum !== pageNum,
+      isLoading: !current.hasLoaded,
+      isLoadingMore: current.hasLoaded && current.pageNum !== pageNum,
       error: null,
     }));
 
     try {
-      const currentPage = isLoadMore ? dialogState.pageNum + 1 : 1;
       const response = await listStocks({
-        page_num: currentPage,
+        page_num: pageNum,
         page_size: dialogState.pageSize,
       }, signal);
 
       if (requestId === requestIdRef.current) {
         setDialogState((current) => ({
           ...current,
-          stocks: isLoadMore ? [...current.stocks, ...response.list] : response.list,
+          stocks: response.list,
           hasLoaded: true,
           pageNum: response.page_num,
           total: response.total,
@@ -6721,8 +6738,6 @@ function useStockImportDialog<TTarget>(
       if (requestId === requestIdRef.current) {
         setDialogState((current) => ({
           ...current,
-          stocks: isLoadMore ? current.stocks : [],
-          hasLoaded: isLoadMore ? current.hasLoaded : false,
           error: loadError instanceof Error ? loadError.message : "股票列表加载失败。",
         }));
       }
@@ -6735,18 +6750,26 @@ function useStockImportDialog<TTarget>(
         }));
       }
     }
-  }, []);
+  }, [dialogState.pageSize]);
 
   const loadMore = useCallback(() => {
     if (!isLoadingMore && hasMore) {
-      void loadStocks(true);
+      void loadStocks(pageNum + 1);
     }
-  }, [isLoadingMore, hasMore, loadStocks]);
+  }, [isLoadingMore, hasMore, loadStocks, pageNum]);
+
+  const pageCount = Math.ceil(total / pageSize);
+
+  const goToPage = useCallback((page: number) => {
+    if (page >= 1 && page <= pageCount) {
+      void loadStocks(page);
+    }
+  }, [loadStocks, pageCount]);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    void loadStocks(false, controller.signal);
+    void loadStocks(1, controller.signal);
 
     return () => {
       controller.abort();
@@ -6824,6 +6847,7 @@ function useStockImportDialog<TTarget>(
     pageNum,
     pageSize,
     total,
+    pageCount,
     hasMore,
     setCodeQuery,
     setNameQuery,
@@ -6831,6 +6855,7 @@ function useStockImportDialog<TTarget>(
     handleResetSearch,
     handleImportStock,
     loadMore,
+    goToPage,
   };
 }
 
@@ -6937,10 +6962,11 @@ const StockImportResults = memo(function StockImportResults({
   targetStocks,
   oppositeList,
   oppositeStocks,
+  pageNum,
   total,
-  hasMore,
+  pageCount,
   onImportStock,
-  onLoadMore,
+  onPageChange,
 }: {
   metaLabel: string;
   stocks: StockInfo[];
@@ -6954,10 +6980,13 @@ const StockImportResults = memo(function StockImportResults({
   targetStocks: StockCandidate[];
   oppositeList?: ReturnableListKey;
   oppositeStocks?: StockCandidate[];
+  pageNum: number;
+  pageSize: number;
   total: number;
+  pageCount: number;
   hasMore: boolean;
   onImportStock: (stock: StockInfo) => void | Promise<void>;
-  onLoadMore: () => void;
+  onPageChange: (page: number) => void;
 }) {
   const containerClassName = cn("min-h-[320px] overflow-y-auto px-5 pb-5", className);
   const targetListCodes = useMemo(
@@ -7030,22 +7059,35 @@ const StockImportResults = memo(function StockImportResults({
               onImportStock={onImportStock}
             />
           ))}
-          {hasMore ? (
-            <div className="flex justify-center py-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9 bg-background/45"
-                isDisabled={isLoadingMore}
-                onClick={onLoadMore}
-              >
-                {isLoadingMore ? (
-                  <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <Plus data-icon="inline-start" />
-                )}
-                加载更多 {stocks.length}/{total}
-              </Button>
+          {pageCount > 1 ? (
+            <div className="flex items-center justify-between border-t border-border/60 px-1 pt-3">
+              <span className="text-xs text-muted-foreground">
+                共 {total} 条，第 {pageNum}/{pageCount} 页
+              </span>
+              <Pagination className="mx-0 w-auto justify-end">
+                <Pagination.Content>
+                  <Pagination.Item>
+                    <Pagination.Link
+                      isDisabled={pageNum <= 1 || isLoadingMore}
+                      aria-label="上一页"
+                      className={cn(pageNum <= 1 && "pointer-events-none opacity-50")}
+                      onPress={() => onPageChange(pageNum - 1)}
+                    >
+                      <ChevronLeft data-icon="inline-start" />
+                    </Pagination.Link>
+                  </Pagination.Item>
+                  <Pagination.Item>
+                    <Pagination.Link
+                      isDisabled={pageNum >= pageCount || isLoadingMore}
+                      aria-label="下一页"
+                      className={cn(pageNum >= pageCount && "pointer-events-none opacity-50")}
+                      onPress={() => onPageChange(pageNum + 1)}
+                    >
+                      <ChevronRight data-icon="inline-start" />
+                    </Pagination.Link>
+                  </Pagination.Item>
+                </Pagination.Content>
+              </Pagination>
             </div>
           ) : null}
         </div>
