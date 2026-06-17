@@ -6665,12 +6665,11 @@ function useStockImportDialog<TTarget>(
   errorFallback: string,
 ) {
   const requestIdRef = useRef(0);
+  const appliedQueryRef = useRef({ code: "", name: "" });
   const [dialogState, setDialogState] = useState<StockImportDialogState>(initialStockImportDialogState);
   const {
     codeQuery,
     nameQuery,
-    appliedCodeQuery,
-    appliedNameQuery,
     stocks,
     hasLoaded,
     isLoading,
@@ -6682,23 +6681,7 @@ function useStockImportDialog<TTarget>(
     pageSize,
     total,
   } = dialogState;
-  const filteredStocks = useMemo(() => {
-    const normalizedCodeQuery = getComparableStockCode(appliedCodeQuery);
-    const normalizedNameQuery = appliedNameQuery.trim().toLowerCase();
-
-    if (!normalizedCodeQuery && !normalizedNameQuery) {
-      return stocks;
-    }
-
-    return stocks.filter((stock) => {
-      const matchesCode = !normalizedCodeQuery
-        || getComparableStockCode(stock.code).includes(normalizedCodeQuery);
-      const matchesName = !normalizedNameQuery
-        || stock.name.toLowerCase().includes(normalizedNameQuery);
-
-      return matchesCode && matchesName;
-    });
-  }, [appliedCodeQuery, appliedNameQuery, stocks]);
+  const filteredStocks = stocks;
   const visibleStocks = filteredStocks;
   const hasMore = stocks.length < total;
 
@@ -6722,20 +6705,29 @@ function useStockImportDialog<TTarget>(
     }));
   }, []);
 
-  const loadStocks = useCallback(async (pageNum: number, signal?: AbortSignal) => {
+  const loadStocks = useCallback(async (
+    pageNum: number,
+    signal?: AbortSignal,
+    query?: { code?: string; name?: string },
+    forceLoading = false,
+  ) => {
     const requestId = requestIdRef.current + 1;
+    const code = query?.code?.trim() ?? appliedQueryRef.current.code;
+    const name = query?.name?.trim() ?? appliedQueryRef.current.name;
 
     requestIdRef.current = requestId;
     setDialogState((current) => ({
       ...current,
       hasLoaded: current.hasLoaded && current.pageNum !== pageNum,
-      isLoading: !current.hasLoaded,
-      isLoadingMore: current.hasLoaded && current.pageNum !== pageNum,
+      isLoading: forceLoading || !current.hasLoaded,
+      isLoadingMore: !forceLoading && current.hasLoaded && current.pageNum !== pageNum,
       error: null,
     }));
 
     try {
       const response = await listStocks({
+        ...(code ? { code } : {}),
+        ...(name ? { name } : {}),
         page_num: pageNum,
         page_size: dialogState.pageSize,
       }, signal);
@@ -6798,16 +6790,21 @@ function useStockImportDialog<TTarget>(
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const nextCodeQuery = codeQuery.trim();
+    const nextNameQuery = nameQuery.trim();
 
+    appliedQueryRef.current = { code: nextCodeQuery, name: nextNameQuery };
     setDialogState((current) => ({
       ...current,
-      appliedCodeQuery: current.codeQuery.trim(),
-      appliedNameQuery: current.nameQuery.trim(),
+      appliedCodeQuery: nextCodeQuery,
+      appliedNameQuery: nextNameQuery,
       importError: null,
     }));
+    void loadStocks(1, undefined, { code: nextCodeQuery, name: nextNameQuery }, true);
   }
 
   const handleResetSearch = useCallback(() => {
+    appliedQueryRef.current = { code: "", name: "" };
     setDialogState((current) => ({
       ...current,
       codeQuery: "",
@@ -6816,7 +6813,8 @@ function useStockImportDialog<TTarget>(
       appliedNameQuery: "",
       importError: null,
     }));
-  }, []);
+    void loadStocks(1, undefined, { code: "", name: "" }, true);
+  }, [loadStocks]);
 
   const handleImportStock = useCallback(async (stock: StockInfo) => {
     const stockCodeKey = getComparableStockCode(stock.code);
