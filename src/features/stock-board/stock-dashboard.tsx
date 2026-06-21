@@ -1638,7 +1638,7 @@ function SelectionDeleteConfirmModal({
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开删除历史选股确认" />
-      <Modal.Backdrop variant="blur" isDismissable={!deleting}>
+      <Modal.Backdrop variant="opaque" isDismissable={!deleting}>
         <Modal.Container size="sm" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
             <Modal.Header className="p-5">
@@ -1710,7 +1710,7 @@ function FilterGroupNameModal({
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开名单分组编辑" />
-      <Modal.Backdrop variant="blur" isDismissable={!saving}>
+      <Modal.Backdrop variant="opaque" isDismissable={!saving}>
         <Modal.Container size="sm" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
             <Form onSubmit={(event) => void handleSubmit(event)}>
@@ -1785,7 +1785,7 @@ function FilterGroupDeleteConfirmModal({
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开删除名单分组确认" />
-      <Modal.Backdrop variant="blur" isDismissable={!deleting}>
+      <Modal.Backdrop variant="opaque" isDismissable={!deleting}>
         <Modal.Container size="sm" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
             <Modal.Header className="p-5">
@@ -6060,7 +6060,7 @@ function FilterListDialog({
         <Modal.Trigger className="sr-only" tabIndex={-1} aria-label={`打开${meta.label}弹窗`}>
           打开{meta.label}弹窗
         </Modal.Trigger>
-        <Modal.Backdrop variant="blur">
+        <Modal.Backdrop variant="opaque">
           <Modal.Container size="lg" scroll="inside">
             <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
               <Modal.CloseTrigger className="z-20" />
@@ -6416,7 +6416,7 @@ function FilterStockImportDialog({
       <Modal.Trigger className="sr-only" tabIndex={-1} aria-label={`打开添加到${label}弹窗`}>
         打开添加到{label}弹窗
       </Modal.Trigger>
-      <Modal.Backdrop variant="blur">
+      <Modal.Backdrop variant="opaque">
         <Modal.Container size="lg" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
             <Modal.CloseTrigger className="z-20" />
@@ -6534,7 +6534,7 @@ function SelectionStockImportDialog({
       <Modal.Trigger className="sr-only" aria-label={`打开添加到${batch.name}弹窗`}>
         打开添加到{batch.name}弹窗
       </Modal.Trigger>
-      <Modal.Backdrop variant="blur">
+      <Modal.Backdrop variant="opaque">
         <Modal.Container size="lg" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl">
             <Modal.CloseTrigger className="z-20" />

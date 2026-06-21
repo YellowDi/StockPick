@@ -159,7 +159,7 @@ export function StrategySwitchButton({
           </Chip>
         </Button>
 
-        <Modal.Backdrop variant="blur">
+        <Modal.Backdrop variant="opaque">
           <Modal.Container size="lg" scroll="inside">
             <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
               <Modal.CloseTrigger />
@@ -333,7 +333,7 @@ export function StrategyConfigEditorModal({
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开策略配置表单" />
-      <Modal.Backdrop variant="blur">
+      <Modal.Backdrop variant="opaque">
         <Modal.Container size="lg" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-xl md:max-w-2xl">
             <Modal.CloseTrigger />
@@ -411,7 +411,7 @@ export function StrategyDeleteConfirmModal({
   return (
     <Modal state={modalState}>
       <Modal.Trigger className="sr-only" tabIndex={-1} aria-label="打开删除策略确认" />
-      <Modal.Backdrop variant="blur" isDismissable={!deleting}>
+      <Modal.Backdrop variant="opaque" isDismissable={!deleting}>
         <Modal.Container size="sm" scroll="inside">
           <Modal.Dialog className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0">
             <Modal.Header className="p-5">
